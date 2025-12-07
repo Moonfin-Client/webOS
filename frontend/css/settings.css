@@ -1,0 +1,220 @@
+/*
+ * Settings Page Styles
+ * Android TV-inspired settings layout
+ */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
+    background: #0d0d0d;
+    color: #fff;
+    overflow: hidden;
+}
+
+/* Settings Layout */
+.settings-container {
+    display: flex;
+    margin-top: 100px;
+    height: calc(100vh - 100px);
+}
+
+/* Settings Sidebar */
+.settings-sidebar {
+    width: 350px;
+    background: rgba(20, 20, 20, 0.95);
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 40px 0;
+    overflow-y: auto;
+}
+
+.settings-category {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 25px 40px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-left: 4px solid transparent;
+}
+
+.settings-category.focused {
+    background: rgba(109, 74, 255, 0.2);
+    border-left-color: #6d4aff;
+}
+
+.category-icon {
+    font-size: 32px;
+    width: 40px;
+    text-align: center;
+}
+
+.category-label {
+    font-size: 22px;
+    font-weight: 500;
+}
+
+/* Settings Content */
+.settings-content {
+    flex: 1;
+    padding: 40px 60px;
+    overflow-y: auto;
+}
+
+.settings-panel {
+    display: none;
+}
+
+.settings-panel.active {
+    display: block;
+}
+
+.settings-panel h1 {
+    font-size: 48px;
+    font-weight: 700;
+    margin-bottom: 40px;
+    color: #fff;
+}
+
+.settings-group {
+    margin-bottom: 50px;
+}
+
+.settings-group h2 {
+    font-size: 28px;
+    font-weight: 600;
+    margin-bottom: 25px;
+    color: rgba(255, 255, 255, 0.7);
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Setting Items */
+.setting-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 25px 30px;
+    margin-bottom: 15px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 2px solid transparent;
+}
+
+.setting-item.focused {
+    background: rgba(109, 74, 255, 0.2);
+    border-color: #6d4aff;
+    transform: scale(1.02);
+}
+
+.setting-item.non-interactive {
+    cursor: default;
+    opacity: 0.7;
+}
+
+.setting-item.non-interactive.focused {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: transparent;
+    transform: none;
+}
+
+.setting-label {
+    flex: 1;
+}
+
+.setting-title {
+    font-size: 24px;
+    font-weight: 500;
+    margin-bottom: 5px;
+}
+
+.setting-description {
+    font-size: 18px;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.setting-value {
+    font-size: 22px;
+    color: #6d4aff;
+    font-weight: 500;
+    padding: 8px 20px;
+    background: rgba(109, 74, 255, 0.1);
+    border-radius: 6px;
+}
+
+.setting-item.focused .setting-value {
+    background: rgba(109, 74, 255, 0.3);
+    color: #fff;
+}
+
+.action-item .setting-value {
+    background: rgba(255, 59, 48, 0.1);
+    color: #ff3b30;
+}
+
+.action-item.focused .setting-value {
+    background: rgba(255, 59, 48, 0.3);
+    color: #fff;
+}
+
+/* Scrollbar */
+.settings-sidebar::-webkit-scrollbar,
+.settings-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.settings-sidebar::-webkit-scrollbar-track,
+.settings-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.settings-sidebar::-webkit-scrollbar-thumb,
+.settings-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+
+.settings-sidebar::-webkit-scrollbar-thumb:hover,
+.settings-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* Dialog/Modal styles (for future use) */
+.setting-dialog {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #1a1a1a;
+    padding: 40px;
+    border-radius: 12px;
+    box-shadow: 0 10px 50px rgba(0, 0, 0, 0.8);
+    z-index: 200;
+    min-width: 500px;
+    display: none;
+}
+
+.setting-dialog.active {
+    display: block;
+}
+
+.dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 199;
+    display: none;
+}
+
+.dialog-overlay.active {
+    display: block;
+}

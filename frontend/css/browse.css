@@ -1,0 +1,451 @@
+* {
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+}
+
+body {
+    font-family: -apple-system, "Helvetica", system-ui, BlinkMacSystemFont, "Segoe UI", "Roboto", sans-serif;
+    background: #0a0a0a;
+    color: #ffffff;
+}
+
+/* Main Content */
+.main-content {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-top: 0;
+}
+
+/* Featured Banner */
+.featured-banner {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    margin-bottom: 20px;
+    overflow: hidden;
+    transition: opacity 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+    border: 4px solid transparent;
+}
+
+.featured-banner.focused {
+    border-color: #00a4dc;
+    box-shadow: 0 0 30px rgba(0, 164, 220, 0.5);
+}
+
+.featured-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    transition: opacity 0.8s ease-in-out;
+}
+
+.featured-backdrop img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.featured-logo {
+    position: absolute;
+    top: 180px;
+    left: 60px;
+    max-width: 450px;
+    max-height: 180px;
+    object-fit: contain;
+    z-index: 10;
+    filter: drop-shadow(2px 4px 12px rgba(0, 0, 0, 0.8));
+}
+
+.featured-title {
+    position: absolute;
+    top: 180px;
+    left: 60px;
+    font-size: 64px;
+    font-weight: 700;
+    margin: 0;
+    text-shadow: 2px 2px 12px rgba(0, 0, 0, 0.9);
+    line-height: 1.1;
+    z-index: 10;
+    max-width: 800px;
+}
+
+.featured-content {
+    position: absolute;
+    bottom: 80px;
+    left: 60px;
+    max-width: 750px;
+    z-index: 2;
+}
+
+.featured-info-box {
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 16px;
+    padding: 24px 28px;
+    backdrop-filter: blur(10px);
+}
+
+.featured-meta {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 16px;
+    align-items: center;
+}
+
+.meta-item {
+    font-size: 20px;
+    color: rgba(255, 255, 255, 0.9);
+    display: none;
+}
+
+.meta-item:not(:last-child)::after {
+    content: '•';
+    margin-left: 15px;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.featured-overview {
+    font-size: 22px;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.95);
+    margin: 0;
+    max-height: 6.6em;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+}
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.9);
+    margin: 0 0 30px 0;
+    text-shadow: 1px 1px 6px rgba(0, 0, 0, 0.9);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.featured-buttons {
+    display: flex;
+    gap: 18px;
+}
+
+.btn-play,
+.btn-info {
+    padding: 16px 42px;
+    font-size: 28px;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    outline: none;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.btn-play {
+    background: #ffffff;
+    color: #000000;
+}
+
+.btn-play:hover,
+.btn-play:focus,
+.btn-play.focused {
+    background: #e6e6e6;
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(255, 255, 255, 0.3);
+}
+
+.btn-info {
+    background: rgba(109, 109, 110, 0.7);
+    color: #ffffff;
+    backdrop-filter: blur(10px);
+}
+
+.btn-info:hover,
+.btn-info:focus,
+.btn-info.focused {
+    background: rgba(109, 109, 110, 0.85);
+    transform: scale(1.05);
+}
+
+/* Carousel navigation buttons */
+.carousel-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 60px;
+    height: 60px;
+    background: rgba(0, 0, 0, 0.6);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    z-index: 10;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(10px);
+    outline: none;
+}
+
+.carousel-nav:hover,
+.carousel-nav:focus {
+    background: rgba(0, 0, 0, 0.8);
+    transform: translateY(-50%) scale(1.1);
+}
+
+.carousel-nav-left {
+    left: 20px;
+}
+
+.carousel-nav-right {
+    right: 20px;
+}
+
+.carousel-nav svg {
+    width: 32px;
+    height: 32px;
+    fill: #ffffff;
+}
+
+/* Carousel Indicators */
+.featured-indicators {
+    position: absolute;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 10px;
+    z-index: 10;
+    background: rgba(0, 0, 0, 0.5);
+    padding: 12px 20px;
+    border-radius: 25px;
+    backdrop-filter: blur(10px);
+}
+
+.indicator-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    transition: all 0.3s ease;
+}
+
+.indicator-dot.active {
+    background: #ffffff;
+}
+
+/* Content Rows */
+.content-rows {
+    padding: 0 60px 60px 60px;
+}
+
+.content-row {
+    margin-bottom: 50px;
+    overflow: visible;
+}
+
+.row-title {
+    font-size: 32px;
+    font-weight: 600;
+    margin: 0 0 20px 0;
+    color: #ffffff;
+}
+
+.row-scroller {
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    scroll-behavior: smooth;
+    padding: 30px 0;
+}
+
+.row-scroller::-webkit-scrollbar {
+    display: none;
+}
+
+.row-items {
+    display: flex;
+    gap: 16px;
+    padding: 0 60px;
+}
+
+/* Item Cards */
+.item-card {
+    flex: 0 0 auto;
+    width: 240px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    outline: none;
+    border-radius: 8px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.05);
+    border: 3px solid transparent;
+}
+
+.item-card.focused {
+    transform: scale(1.15);
+    z-index: 10;
+    box-shadow: 0 8px 30px rgba(0, 164, 220, 0.6);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: #00a4dc;
+}
+
+.item-card:hover {
+    transform: scale(1.1);
+    z-index: 10;
+    box-shadow: 0 8px 30px rgba(0, 164, 220, 0.4);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.item-image {
+    width: 100%;
+    height: 360px;
+    object-fit: cover;
+    display: block;
+    border-radius: 8px 8px 0 0;
+}
+
+.item-title {
+    padding: 12px 12px 16px 12px;
+    font-size: 20px;
+    font-weight: 500;
+    color: #ffffff;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Loading Indicator */
+.loading-indicator {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: calc(100vh - 80px);
+}
+
+.spinner {
+    width: 80px;
+    height: 80px;
+    border: 6px solid rgba(255, 255, 255, 0.1);
+    border-top-color: #00a4dc;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.loading-indicator p {
+    margin-top: 30px;
+    font-size: 28px;
+    color: #b3b3b3;
+}
+
+/* Error Display */
+.error-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: calc(100vh - 80px);
+    padding: 40px;
+    text-align: center;
+}
+
+.error-display h2 {
+    font-size: 40px;
+    color: #ff6b6b;
+    margin: 0 0 20px 0;
+}
+
+.error-display p {
+    font-size: 26px;
+    color: #b3b3b3;
+    margin-bottom: 40px;
+}
+
+.btn-primary,
+.btn-secondary {
+    padding: 18px 40px;
+    font-size: 26px;
+    font-weight: 600;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    outline: none;
+    margin: 0 10px;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #00a4dc 0%, #0077b6 100%);
+    color: #ffffff;
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+    background: linear-gradient(135deg, #00b8f5 0%, #0088cc 100%);
+    transform: scale(1.05);
+}
+
+.btn-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.btn-secondary:hover,
+.btn-secondary:focus {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: scale(1.05);
+}
+
+/* Scrollbar styling for webkit browsers */
+.main-content::-webkit-scrollbar {
+    width: 12px;
+}
+
+.main-content::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.3);
+}
+
+.main-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+}
+
+.main-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* Focus states */
+*:focus {
+    outline: none;
+}

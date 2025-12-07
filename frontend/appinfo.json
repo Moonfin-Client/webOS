@@ -1,16 +1,26 @@
 {
+    "id": "org.moonfin.webos",
+    "version": "1.0.0",
+    "vendor": "Moonfin",
+    "type": "web",
+    "main": "browse.html",
+    "title": "Moonfin",
     "appDescription": "A webOS client to connect to a Jellyfin Server instance and stream media.",
     "icon": "assets/icon-80.png",
-    "main": "index.html",
+    "largeIcon": "assets/icon-130.png",
     "bgImage": "assets/splash.png",
-    "title": "Jellyfin",
-    "type": "web",
-    "version": "1.2.2",
     "splashBackground": "assets/splash.png",
     "bgColor": "#000b25",
-    "vendor": "Jellyfin Project",
-    "largeIcon": "assets/icon-130.png",
     "iconColor": "#000b25",
-    "id": "org.jellyfin.webos",
-    "disableBackHistoryAPI": true
+    "disableBackHistoryAPI": true,
+    "requiredPermissions": [
+        "time.query",
+        "activity.operation"
+    ],
+    "resolution": "1920x1080",
+    "allowVideoCapture": false,
+    "allowAudioCapture": false,
+    "network": {
+        "networkType": "any"
+    }
 }

@@ -30,8 +30,11 @@ const JELLYFIN_DISCOVERY_MESSAGE = "who is JellyfinServer?";
 
 const SCAN_INTERVAL = 15 * 1000;
 const SCAN_ON_START = true;
+const ENABLE_IP_SCAN = true; // Fallback to IP scanning if broadcast discovery fails
 
 var scanresult = {};
+var ipScanInProgress = false;
+var scannedIPs = new Set();
 
 function sendScanResults(server_id) {
 	console.log("Sending responses, subscription count=" + Object.keys(subscriptions).length);
@@ -83,6 +86,126 @@ function sendJellyfinDiscovery() {
 	// 	client6.send(msg, 0, msg.length, 7359, "ff08::1"); // All organization-local nodes
 	// }
 
+	// Start IP scanning as fallback if enabled
+	if (ENABLE_IP_SCAN && !ipScanInProgress) {
+		startIPScan();
+	}
+}
+
+// Get local network info for scanning
+function getLocalNetworkPrefix() {
+	var os = require('os');
+	var interfaces = os.networkInterfaces();
+	
+	for (var name in interfaces) {
+		var iface = interfaces[name];
+		for (var i = 0; i < iface.length; i++) {
+			var alias = iface[i];
+			// Skip internal, IPv6, and loopback addresses
+			if (alias.family === 'IPv4' && !alias.internal && alias.address.indexOf('169.254') !== 0) {
+				// Extract network prefix (e.g., "192.168.1" from "192.168.1.100")
+				var parts = alias.address.split('.');
+				return parts[0] + '.' + parts[1] + '.' + parts[2];
+			}
+		}
+	}
+	return '192.168.1'; // Default fallback
+}
+
+// Check a single IP for Jellyfin server
+function checkIP(ip) {
+	if (scannedIPs.has(ip)) {
+		return; // Already checked this IP
+	}
+	scannedIPs.add(ip);
+	
+	var http = require('http');
+	var ports = [8096, 8920]; // Common Jellyfin ports
+	var schemes = ['http', 'https'];
+	
+	ports.forEach(function(port) {
+		schemes.forEach(function(scheme) {
+			var url = scheme + '://' + ip + ':' + port + '/System/Info/Public';
+			
+			var req = http.get(url, { timeout: 2000 }, function(res) {
+				var data = '';
+				
+				res.on('data', function(chunk) {
+					data += chunk;
+				});
+				
+				res.on('end', function() {
+					try {
+						var serverInfo = JSON.parse(data);
+						if (serverInfo.ProductName && serverInfo.ProductName.toLowerCase().indexOf('jellyfin') !== -1) {
+							// Found a Jellyfin server!
+							var serverId = serverInfo.Id || ip + ':' + port;
+							scanresult[serverId] = {
+								Id: serverId,
+								Name: serverInfo.ServerName || 'Jellyfin Server',
+								Address: scheme + '://' + ip + ':' + port,
+								source: {
+									address: ip,
+									port: port,
+									method: 'ip-scan'
+								}
+							};
+							console.log('Found Jellyfin server at ' + ip + ':' + port);
+							sendScanResults(serverId);
+						}
+					} catch (err) {
+						// Not a valid JSON response, skip
+					}
+				});
+			});
+			
+			req.on('error', function() {
+				// Ignore connection errors
+			});
+			
+			req.on('timeout', function() {
+				req.abort();
+			});
+		});
+	});
+}
+
+// Scan subnet for Jellyfin servers
+function startIPScan() {
+	if (ipScanInProgress) {
+		return;
+	}
+	
+	ipScanInProgress = true;
+	scannedIPs.clear();
+	console.log('Starting IP subnet scan...');
+	
+	var networkPrefix = getLocalNetworkPrefix();
+	console.log('Scanning network: ' + networkPrefix + '.0/24');
+	
+	// Scan all IPs in the subnet (1-254)
+	var currentIP = 1;
+	
+	function scanNext() {
+		if (currentIP > 254) {
+			console.log('IP scan complete. Scanned ' + scannedIPs.size + ' addresses.');
+			ipScanInProgress = false;
+			return;
+		}
+		
+		var ip = networkPrefix + '.' + currentIP;
+		checkIP(ip);
+		currentIP++;
+		
+		// Don't overwhelm the network - scan in batches with delays
+		if (currentIP % 10 === 0) {
+			setTimeout(scanNext, 100);
+		} else {
+			scanNext();
+		}
+	}
+	
+	scanNext();
 }
 
 function discoverInitial() {

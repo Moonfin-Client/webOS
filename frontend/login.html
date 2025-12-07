@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jellyfin for webOS - Login</title>
+    <link rel="stylesheet" href="css/login.css">
+    <script src="webOSTVjs-1.2.11/webOSTV.js" charset="utf-8"></script>
+    <script src="webOSTVjs-1.2.11/webOSTV-dev.js" charset="utf-8"></script>
+    <script src="js/storage.js" charset="utf-8"></script>
+    <script src="js/ajax.js" charset="utf-8"></script>
+    <script src="js/keycodes.js" charset="utf-8"></script>
+    <script src="js/jellyfin-api.js" charset="utf-8"></script>
+    <script src="js/login.js" charset="utf-8"></script>
+</head>
+<body>
+    <div class="container">
+
+        <div class="logo-section">
+            <img src="assets/banner-dark.png" alt="Jellyfin">
+        </div>
+
+        <div id="statusMessage" class="status-message" style="display: none;"></div>
+        <div id="errorMessage" class="error-message" style="display: none;"></div>
+
+        <div class="content-wrapper">
+            
+            <div class="section" id="discoveredServersSection" style="display: none;">
+                <h2>Discovered Servers</h2>
+                <ul id="serverList" class="server-list">
+                    <!-- Populated by JavaScript -->
+                </ul>
+            </div>
+
+            <div class="section" id="manualServerSection">
+                <h2>Connect to Server</h2>
+                <div class="form-group">
+                    <label for="serverUrl">Server Address</label>
+                    <input 
+                        type="text" 
+                        id="serverUrl" 
+                        placeholder="192.168.1.100 or jellyfin.example.com (port auto-added)"
+                        tabindex="0"
+                        class="input-field"
+                    >
+                    <div class="button-group">
+                        <button id="connectBtn" class="btn btn-primary" tabindex="0">Test Connection</button>
+                        <button id="discoverBtn" class="btn btn-secondary" tabindex="0">Discover Servers</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Login Form (hidden until connected) -->
+            <div class="section" id="loginForm" style="display: none;">
+                <h2>Login</h2>
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input 
+                        type="text" 
+                        id="username" 
+                        placeholder="Enter your username"
+                        tabindex="0"
+                        class="input-field"
+                    >
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input 
+                        type="password" 
+                        id="password" 
+                        placeholder="Enter your password"
+                        tabindex="0"
+                        class="input-field"
+                    >
+                </div>
+                <div class="button-group">
+                    <button id="loginBtn" class="btn btn-primary" tabindex="0">Login</button>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="helper-text">
+            <p>Need help? Make sure your Jellyfin server is running and accessible on your network.</p>
+            <p>Use the remote to navigate and press OK to select.</p>
+        </div>
+    </div>
+
+    <script>
+        // webOS specific keyboard handling
+        document.addEventListener('keydown', function(evt) {
+            evt = evt || window.event;
+            
+            // Handle back button on webOS remote
+            if (evt.keyCode === 461) {
+                webOS.platformBack();
+            }
+            
+            // Navigate between focusable elements with arrow keys
+            var focusableElements = 'input:not([disabled]), button:not([disabled]), .server-item';
+            var focusable = Array.from(document.querySelectorAll(focusableElements))
+                .filter(function(el) {
+                    return el.offsetWidth > 0 && el.offsetHeight > 0;
+                });
+            
+            var currentIndex = focusable.indexOf(document.activeElement);
+            
+            if (evt.keyCode === 38) { // Up arrow
+                evt.preventDefault();
+                if (currentIndex > 0) {
+                    focusable[currentIndex - 1].focus();
+                }
+            } else if (evt.keyCode === 40) { // Down arrow
+                evt.preventDefault();
+                if (currentIndex < focusable.length - 1) {
+                    focusable[currentIndex + 1].focus();
+                }
+            }
+        });
+    </script>
+</body>
+</html>

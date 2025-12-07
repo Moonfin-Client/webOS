@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - Jellyfin</title>
+    <link rel="stylesheet" href="css/navbar.css">
+    <link rel="stylesheet" href="css/settings.css">
+    <script src="js/webOSTV.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/ajax.js"></script>
+    <script src="js/jellyfin-api.js"></script>
+    <script src="js/navbar.js"></script>
+</head>
+<body>
+    <!-- Navbar will be loaded here by navbar.js -->
+
+    <!-- Settings Content -->
+
+    <div class="settings-container">
+        <!-- Settings Sidebar -->
+        <div class="settings-sidebar" id="settingsSidebar">
+            <div class="settings-category focused" data-category="general">
+                <div class="category-icon">⚙</div>
+                <div class="category-label">General</div>
+            </div>
+            <div class="settings-category" data-category="playback">
+                <div class="category-icon">▶</div>
+                <div class="category-label">Playback</div>
+            </div>
+            <div class="settings-category" data-category="display">
+                <div class="category-icon">🖥</div>
+                <div class="category-label">Display</div>
+            </div>
+            <div class="settings-category" data-category="account">
+                <div class="category-icon">👤</div>
+                <div class="category-label">Account</div>
+            </div>
+            <div class="settings-category" data-category="about">
+                <div class="category-icon">ℹ</div>
+                <div class="category-label">About</div>
+            </div>
+        </div>
+
+        <!-- Settings Content Area -->
+        <div class="settings-content" id="settingsContent">
+            <!-- General Settings -->
+            <div class="settings-panel active" id="generalPanel">
+                <h1>General Settings</h1>
+                
+                <div class="settings-group">
+                    <h2>Home Screen</h2>
+                    
+                    <div class="setting-item" data-setting="homeSections" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Home Sections</div>
+                            <div class="setting-description">Choose which sections appear on the home screen</div>
+                        </div>
+                        <div class="setting-value">Configure</div>
+                    </div>
+                    
+                    <div class="setting-item" data-setting="autoLogin" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Auto Login</div>
+                            <div class="setting-description">Automatically sign in on startup</div>
+                        </div>
+                        <div class="setting-value" id="autoLoginValue">Off</div>
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <h2>Interface</h2>
+                    
+                    <div class="setting-item" data-setting="clockDisplay" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Clock Display</div>
+                            <div class="setting-description">Show clock in the interface</div>
+                        </div>
+                        <div class="setting-value" id="clockDisplayValue">12-Hour</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Playback Settings -->
+            <div class="settings-panel" id="playbackPanel">
+                <h1>Playback Settings</h1>
+                
+                <div class="settings-group">
+                    <h2>Video</h2>
+                    
+                    <div class="setting-item" data-setting="maxBitrate" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Maximum Bitrate</div>
+                            <div class="setting-description">Limit streaming quality to reduce bandwidth</div>
+                        </div>
+                        <div class="setting-value" id="maxBitrateValue">Auto</div>
+                    </div>
+                    
+                    <div class="setting-item" data-setting="skipIntro" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Skip Intro</div>
+                            <div class="setting-description">Automatically skip intros when detected</div>
+                        </div>
+                        <div class="setting-value" id="skipIntroValue">On</div>
+                    </div>
+                    
+                    <div class="setting-item" data-setting="autoPlay" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Auto Play Next</div>
+                            <div class="setting-description">Automatically play the next episode</div>
+                        </div>
+                        <div class="setting-value" id="autoPlayValue">On</div>
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <h2>Audio</h2>
+                    
+                    <div class="setting-item" data-setting="audioLanguage" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Preferred Audio Language</div>
+                            <div class="setting-description">Default audio track language</div>
+                        </div>
+                        <div class="setting-value" id="audioLanguageValue">English</div>
+                    </div>
+                    
+                    <div class="setting-item" data-setting="subtitleLanguage" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Preferred Subtitle Language</div>
+                            <div class="setting-description">Default subtitle track language</div>
+                        </div>
+                        <div class="setting-value" id="subtitleLanguageValue">None</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Display Settings -->
+            <div class="settings-panel" id="displayPanel">
+                <h1>Display Settings</h1>
+                
+                <div class="settings-group">
+                    <h2>Appearance</h2>
+                    
+                    <div class="setting-item" data-setting="theme" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Theme</div>
+                            <div class="setting-description">Choose the app theme</div>
+                        </div>
+                        <div class="setting-value" id="themeValue">Dark</div>
+                    </div>
+                    
+                    <div class="setting-item" data-setting="backdrop" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Backdrop</div>
+                            <div class="setting-description">Show background images while browsing</div>
+                        </div>
+                        <div class="setting-value" id="backdropValue">On</div>
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <h2>Content</h2>
+                    
+                    <div class="setting-item" data-setting="carouselSpeed" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Featured Carousel Speed</div>
+                            <div class="setting-description">Time between carousel transitions</div>
+                        </div>
+                        <div class="setting-value" id="carouselSpeedValue">8 seconds</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Account Settings -->
+            <div class="settings-panel" id="accountPanel">
+                <h1>Account Settings</h1>
+                
+                <div class="settings-group">
+                    <h2>User</h2>
+                    
+                    <div class="setting-item" data-setting="username" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Username</div>
+                            <div class="setting-description">Current logged in user</div>
+                        </div>
+                        <div class="setting-value" id="usernameValue">-</div>
+                    </div>
+                    
+                    <div class="setting-item" data-setting="server" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Server</div>
+                            <div class="setting-description">Connected server address</div>
+                        </div>
+                        <div class="setting-value" id="serverValue">-</div>
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <h2>Actions</h2>
+                    
+                    <div class="setting-item action-item" data-setting="clearCache" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Clear Cache</div>
+                            <div class="setting-description">Remove cached data and images</div>
+                        </div>
+                        <div class="setting-value">Clear</div>
+                    </div>
+                    
+                    <div class="setting-item action-item" data-setting="logout" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Sign Out</div>
+                            <div class="setting-description">Sign out of your account</div>
+                        </div>
+                        <div class="setting-value">Sign Out</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- About Settings -->
+            <div class="settings-panel" id="aboutPanel">
+                <h1>About</h1>
+                
+                <div class="settings-group">
+                    <h2>Application</h2>
+                    
+                    <div class="setting-item non-interactive">
+                        <div class="setting-label">
+                            <div class="setting-title">Version</div>
+                            <div class="setting-description">Current app version</div>
+                        </div>
+                        <div class="setting-value">1.0.0</div>
+                    </div>
+                    
+                    <div class="setting-item non-interactive">
+                        <div class="setting-label">
+                            <div class="setting-title">Platform</div>
+                            <div class="setting-description">webOS 23</div>
+                        </div>
+                        <div class="setting-value">LG Smart TV</div>
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <h2>Server</h2>
+                    
+                    <div class="setting-item non-interactive">
+                        <div class="setting-label">
+                            <div class="setting-title">Server Version</div>
+                            <div class="setting-description">Jellyfin server version</div>
+                        </div>
+                        <div class="setting-value" id="serverVersionValue">-</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/settings.js"></script>
+</body>
+</html>

@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moonfin for webOS - Media Details</title>
+    <link rel="stylesheet" href="css/details.css">
+    <script src="webOSTVjs-1.2.11/webOSTV.js" charset="utf-8"></script>
+    <script src="webOSTVjs-1.2.11/webOSTV-dev.js" charset="utf-8"></script>
+    <script src="js/storage.js" charset="utf-8"></script>
+    <script src="js/ajax.js" charset="utf-8"></script>
+    <script src="js/keycodes.js" charset="utf-8"></script>
+    <script src="js/jellyfin-api.js" charset="utf-8"></script>
+    <script src="js/details.js" charset="utf-8"></script>
+</head>
+<body>
+    <!-- Backdrop Background -->
+    <div class="backdrop-container">
+        <img id="backdropImage" class="backdrop-image" src="" alt="">
+        <div class="backdrop-gradient"></div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="details-container">
+        
+        <!-- Header with Poster and Main Info -->
+        <div class="details-header">
+            <div class="poster-section">
+                <img id="posterImage" class="poster-image" src="" alt="">
+            </div>
+            
+            <div class="info-section">
+                <h1 id="itemTitle" class="item-title"></h1>
+                
+                <!-- Android TV-style Metadata Info Row -->
+                <div class="info-row">
+                    <!-- Community Rating -->
+                    <div id="communityRating" class="info-badge" style="display: none;">
+                        <span class="icon-star">⭐</span>
+                        <span id="ratingValue"></span>
+                    </div>
+                    
+                    <!-- Critic Rating -->
+                    <div id="criticRating" class="info-badge" style="display: none;">
+                        <span id="criticIcon"></span>
+                        <span id="criticValue"></span>
+                    </div>
+                    
+                    <!-- Year -->
+                    <div id="itemYear" class="info-badge" style="display: none;"></div>
+                    
+                    <!-- Official Rating (PG, R, TV-MA, etc.) -->
+                    <div id="officialRating" class="info-badge info-badge-pill" style="display: none;"></div>
+                    
+                    <!-- Runtime -->
+                    <div id="itemRuntime" class="info-badge" style="display: none;">
+                        <span class="icon-time">⏱</span>
+                        <span id="runtimeValue"></span>
+                    </div>
+                    
+                    <!-- Resolution -->
+                    <div id="itemResolution" class="info-badge info-badge-pill" style="display: none;"></div>
+                    
+                    <!-- Video Codec -->
+                    <div id="videoCodec" class="info-badge info-badge-pill" style="display: none;"></div>
+                    
+                    <!-- Audio Codec -->
+                    <div id="audioCodec" class="info-badge info-badge-pill" style="display: none;"></div>
+                    
+                    <!-- Subtitles -->
+                    <div id="subtitles" class="info-badge info-badge-pill" style="display: none;">CC</div>
+                </div>
+                
+                <!-- Genres Row -->
+                <div class="genres-row">
+                    <span id="itemGenres" class="genres-text"></span>
+                </div>
+                
+                <p id="itemOverview" class="item-overview"></p>
+                
+                <!-- Action Buttons -->
+                <div class="action-buttons">
+                    <button id="playBtn" class="btn-action btn-play" tabindex="0">
+                        <span class="btn-icon">▶</span>
+                        <span class="btn-text">Play</span>
+                    </button>
+                    <button id="resumeBtn" class="btn-action btn-resume" style="display: none;" tabindex="0">
+                        <span class="btn-icon">▶</span>
+                        <span class="btn-text">Resume</span>
+                    </button>
+                    <button id="trailerBtn" class="btn-action btn-secondary" style="display: none;" tabindex="0">
+                        <span class="btn-icon">🎬</span>
+                        <span class="btn-text">Trailer</span>
+                    </button>
+                    <button id="favoriteBtn" class="btn-action btn-secondary" tabindex="0">
+                        <span class="btn-icon" id="favoriteIcon">♡</span>
+                        <span class="btn-text">Favorite</span>
+                    </button>
+                    <button id="markPlayedBtn" class="btn-action btn-secondary" tabindex="0">
+                        <span class="btn-icon">✓</span>
+                        <span class="btn-text" id="playedText">Mark Played</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Additional Information -->
+        <div class="details-body">
+            
+            <!-- Cast & Crew -->
+            <div id="castSection" class="section" style="display: none;">
+                <h2 class="section-title">Cast & Crew</h2>
+                <div class="cast-scroller">
+                    <div id="castList" class="cast-list">
+                        <!-- Cast items will be added here -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Seasons (for TV Shows) -->
+            <div id="seasonsSection" class="section" style="display: none;">
+                <h2 class="section-title">Seasons</h2>
+                <div class="seasons-scroller">
+                    <div id="seasonsList" class="seasons-list">
+                        <!-- Season items will be added here -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Episodes (for Seasons) -->
+            <div id="episodesSection" class="section" style="display: none;">
+                <h2 class="section-title">Episodes</h2>
+                <div id="episodesList" class="episodes-list">
+                    <!-- Episode items will be added here -->
+                </div>
+            </div>
+            
+            <!-- Similar Items -->
+            <div id="similarSection" class="section" style="display: none;">
+                <h2 class="section-title">More Like This</h2>
+                <div class="similar-scroller">
+                    <div id="similarList" class="similar-list">
+                        <!-- Similar items will be added here -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Extras -->
+            <div id="extrasSection" class="section" style="display: none;">
+                <h2 class="section-title">Extras</h2>
+                <div class="extras-scroller">
+                    <div id="extrasList" class="extras-list">
+                        <!-- Extra items will be added here -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Technical Details -->
+            <div id="technicalSection" class="section" style="display: none;">
+                <h2 class="section-title">Details</h2>
+                <div class="technical-info">
+                    <div id="technicalDetails" class="technical-details">
+                        <!-- Technical details will be added here -->
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+        
+    </div>
+
+    <!-- Loading Indicator -->
+    <div id="loadingIndicator" class="loading-indicator">
+        <div class="spinner"></div>
+        <p>Loading details...</p>
+    </div>
+
+    <!-- Error Display -->
+    <div id="errorDisplay" class="error-display" style="display: none;">
+        <h2>Unable to load details</h2>
+        <p id="errorText"></p>
+        <button id="backBtn" class="btn-primary" tabindex="0">Go Back</button>
+    </div>
+</body>
+</html>

@@ -29,3 +29,22 @@ Thumbs.db
 node_modules/
 build/
 yarn.lock
+package-lock.json
+
+# IDE & Editors
+.vscode/
+.idea/
+*.code-workspace
+
+# OS Files
+.DS_Store
+*.log
+
+# Build artifacts
+dist/
+*.ipk
+!org.moonfin.webos_*.ipk
+
+# Development
+.env
+.env.local
