@@ -489,6 +489,10 @@ var BrowseController = (function() {
         
         if (view === 'home' && elements.homeBtn) {
             elements.homeBtn.classList.add('active');
+            // Show featured banner for home view
+            if (elements.featuredBanner) {
+                elements.featuredBanner.style.display = '';
+            }
             loadHomeContent();
         } else if (view === 'movies' && elements.moviesBtn) {
             elements.moviesBtn.classList.add('active');
@@ -560,35 +564,128 @@ var BrowseController = (function() {
     }
 
     function loadLibraryContent(libraryId, libraryName, collectionType) {
-        JellyfinAPI.Logger.info('Loading library content:', libraryName);
+        JellyfinAPI.Logger.info('Loading library content:', libraryName, 'Type:', collectionType);
         showLoading();
         stopCarouselAutoPlay();
         clearRows();
-        var requestUrl = auth.serverAddress + '/Users/' + auth.userId + '/Items?ParentId=' + libraryId + 
-                        '&Limit=50&Fields=PrimaryImageAspectRatio,Overview,Genres,CommunityRating,OfficialRating&ImageTypeLimit=1&SortBy=SortName&SortOrder=Ascending';
         
-        ajax.request(requestUrl, {
-            method: 'GET',
-            headers: {
-                'X-Emby-Authorization': JellyfinAPI.getAuthHeader(auth.accessToken)
-            },
-            success: function(response) {
-                if (response && response.Items && response.Items.length > 0) {
-                    var rowsToLoad = [{
-                        title: libraryName,
-                        items: response.Items
-                    }];
-                    loadContent(rowsToLoad);
-                } else {
-                    hideLoading();
-                    showError('No items found in ' + libraryName);
-                }
-            },
-            error: function(err) {
-                JellyfinAPI.Logger.error('Failed to load library content:', err);
-                showError('Failed to load ' + libraryName);
-            }
-        });
+        // Hide featured banner for library views (Android TV doesn't show featured banner in library views)
+        if (elements.featuredBanner) {
+            elements.featuredBanner.style.display = 'none';
+        }
+        
+        var rowsToLoad = [];
+        
+        // Build rows based on collection type (matching Android TV structure)
+        if (collectionType === 'movies') {
+            // Continue Watching (Resume)
+            rowsToLoad.push({
+                title: 'Continue Watching',
+                type: 'resume',
+                parentId: libraryId,
+                itemType: 'Movie'
+            });
+            
+            // Latest
+            rowsToLoad.push({
+                title: 'Latest Movies',
+                type: 'latest',
+                parentId: libraryId,
+                itemType: 'Movie'
+            });
+            
+            // Favorites
+            rowsToLoad.push({
+                title: 'Favorites',
+                type: 'favorites',
+                parentId: libraryId,
+                itemType: 'Movie'
+            });
+            
+            // Collections (Box Sets)
+            rowsToLoad.push({
+                title: 'Collections',
+                type: 'collections',
+                parentId: libraryId
+            });
+            
+        } else if (collectionType === 'tvshows') {
+            // Continue Watching (Resume Episodes)
+            rowsToLoad.push({
+                title: 'Continue Watching',
+                type: 'resume',
+                parentId: libraryId,
+                itemType: 'Episode'
+            });
+            
+            // Next Up
+            rowsToLoad.push({
+                title: 'Next Up',
+                type: 'nextup',
+                parentId: libraryId
+            });
+            
+            // Latest Episodes
+            rowsToLoad.push({
+                title: 'Latest Episodes',
+                type: 'latest',
+                parentId: libraryId,
+                itemType: 'Episode',
+                groupItems: true
+            });
+            
+            // Favorites
+            rowsToLoad.push({
+                title: 'Favorite Shows',
+                type: 'favorites',
+                parentId: libraryId,
+                itemType: 'Series'
+            });
+            
+        } else if (collectionType === 'music') {
+            // Latest Albums
+            rowsToLoad.push({
+                title: 'Latest Albums',
+                type: 'latest',
+                parentId: libraryId,
+                itemType: 'Audio',
+                groupItems: true
+            });
+            
+            // Recently Played
+            rowsToLoad.push({
+                title: 'Recently Played',
+                type: 'recentlyplayed',
+                parentId: libraryId,
+                itemType: 'Audio'
+            });
+            
+            // Favorites
+            rowsToLoad.push({
+                title: 'Favorite Albums',
+                type: 'favorites',
+                parentId: libraryId,
+                itemType: 'MusicAlbum'
+            });
+            
+            // Playlists
+            rowsToLoad.push({
+                title: 'Playlists',
+                type: 'playlists',
+                parentId: libraryId
+            });
+            
+        } else {
+            // Generic library view - just show all items
+            rowsToLoad.push({
+                title: libraryName,
+                type: 'all',
+                parentId: libraryId
+            });
+        }
+        
+        // Load all rows
+        loadRows(rowsToLoad);
     }
 
     function loadMoviesContent() {
@@ -650,9 +747,10 @@ var BrowseController = (function() {
         var params = {
             userId: auth.userId,
             limit: 20,
-            fields: 'PrimaryImageAspectRatio,BasicSyncInfo,ProductionYear,Overview',
+            fields: 'PrimaryImageAspectRatio,BasicSyncInfo,ProductionYear,Overview,Genres',
             imageTypeLimit: 1,
-            enableImageTypes: 'Primary,Backdrop,Thumb'
+            enableImageTypes: 'Primary,Backdrop,Thumb',
+            recursive: true
         };
         
         if (rowDef.parentId) {
@@ -663,23 +761,78 @@ var BrowseController = (function() {
             params.includeItemTypes = rowDef.itemType;
         }
         
+        if (rowDef.groupItems) {
+            params.groupItems = true;
+        }
+        
         var endpoint = '';
+        
+        // Match Android TV row types
         if (rowDef.type === 'resume') {
+            // Continue Watching
             endpoint = '/Users/' + auth.userId + '/Items/Resume';
+            params.filters = 'IsResumable';
+            params.sortBy = 'DatePlayed';
+            params.sortOrder = 'Descending';
+            params.limit = 12;
+            
+        } else if (rowDef.type === 'nextup') {
+            // Next Up (TV Shows)
+            endpoint = '/Shows/NextUp';
+            params.limit = 12;
+            
         } else if (rowDef.type === 'latest') {
+            // Latest Items
             endpoint = '/Users/' + auth.userId + '/Items/Latest';
             params.limit = 16;
+            if (rowDef.groupItems) {
+                params.groupItems = true;
+            }
+            
         } else if (rowDef.type === 'favorites') {
+            // Favorites
             endpoint = '/Users/' + auth.userId + '/Items';
             params.filters = 'IsFavorite';
-        } else {
+            params.sortBy = 'SortName';
+            params.sortOrder = 'Ascending';
+            params.limit = 50;
+            
+        } else if (rowDef.type === 'collections') {
+            // Collections/Box Sets (exclude from regular browsing per Android TV)
             endpoint = '/Users/' + auth.userId + '/Items';
-            params.sortBy = 'DateCreated,SortName';
+            params.includeItemTypes = 'BoxSet';
+            params.sortBy = 'SortName';
+            params.sortOrder = 'Ascending';
+            params.limit = 50;
+            delete params.recursive; // Box sets are at parent level
+            
+        } else if (rowDef.type === 'playlists') {
+            // Playlists
+            endpoint = '/Users/' + auth.userId + '/Items';
+            params.includeItemTypes = 'Playlist';
+            params.sortBy = 'DateCreated';
             params.sortOrder = 'Descending';
+            params.limit = 50;
+            
+        } else if (rowDef.type === 'recentlyplayed') {
+            // Recently Played
+            endpoint = '/Users/' + auth.userId + '/Items';
+            params.filters = 'IsPlayed';
+            params.sortBy = 'DatePlayed';
+            params.sortOrder = 'Descending';
+            params.limit = 50;
+            
+        } else {
+            // Generic 'all' items view
+            endpoint = '/Users/' + auth.userId + '/Items';
+            params.sortBy = 'SortName';
+            params.sortOrder = 'Ascending';
+            params.limit = 100;
         }
         
         JellyfinAPI.getItems(auth.serverAddress, auth.accessToken, endpoint, params, function(err, data) {
             if (err || !data || !data.Items || data.Items.length === 0) {
+                JellyfinAPI.Logger.warn('No items for row:', rowDef.title);
                 if (callback) callback(false);
                 return;
             }
@@ -695,7 +848,7 @@ var BrowseController = (function() {
             userId: auth.userId,
             limit: 10,
             includeItemTypes: 'Movie,Series',
-            excludeItemTypes: 'BoxSet,CollectionFolder',
+            filters: 'IsNotFolder',
             sortBy: 'Random',
             fields: 'Overview,ProductionYear,OfficialRating,RunTimeTicks,Genres',
             imageTypeLimit: 1,

@@ -80,32 +80,76 @@
                 
                 <!-- Action Buttons -->
                 <div class="action-buttons">
-                    <button id="playBtn" class="btn-action btn-play" tabindex="0">
-                        <span class="btn-icon">▶</span>
-                        <span class="btn-text">Play</span>
-                    </button>
-                    <button id="resumeBtn" class="btn-action btn-resume" style="display: none;" tabindex="0">
-                        <span class="btn-icon">▶</span>
-                        <span class="btn-text">Resume</span>
-                    </button>
-                    <button id="trailerBtn" class="btn-action btn-secondary" style="display: none;" tabindex="0">
-                        <span class="btn-icon">🎬</span>
-                        <span class="btn-text">Trailer</span>
-                    </button>
-                    <button id="favoriteBtn" class="btn-action btn-secondary" tabindex="0">
-                        <span class="btn-icon" id="favoriteIcon">♡</span>
-                        <span class="btn-text">Favorite</span>
-                    </button>
-                    <button id="markPlayedBtn" class="btn-action btn-secondary" tabindex="0">
-                        <span class="btn-icon">✓</span>
-                        <span class="btn-text" id="playedText">Mark Played</span>
-                    </button>
+                    <div class="btn-wrapper" id="playBtnWrapper">
+                        <button id="playBtn" class="btn-action btn-play" tabindex="0">
+                            <img src="assets/play.png" alt="Play">
+                        </button>
+                        <span class="btn-label">Play</span>
+                    </div>
+                    <div class="btn-wrapper" style="display: none;" id="resumeBtnWrapper">
+                        <button id="resumeBtn" class="btn-action btn-secondary" tabindex="0">
+                            <img src="assets/resume.png" alt="Resume">
+                        </button>
+                        <span class="btn-label">Resume</span>
+                    </div>
+                    <div class="btn-wrapper" style="display: none;" id="shuffleBtnWrapper">
+                        <button id="shuffleBtn" class="btn-action btn-secondary" tabindex="0">
+                            <img src="assets/shuffle.png" alt="Shuffle">
+                        </button>
+                        <span class="btn-label">Shuffle</span>
+                    </div>
+                    <div class="btn-wrapper" style="display: none;" id="trailerBtnWrapper">
+                        <button id="trailerBtn" class="btn-action btn-secondary" tabindex="0">
+                            <img src="assets/trailer.png" alt="Trailer">
+                        </button>
+                        <span class="btn-label">Trailer</span>
+                    </div>
+                    <div class="btn-wrapper">
+                        <button id="favoriteBtn" class="btn-action btn-secondary" tabindex="0">
+                            <img id="favoriteIcon" src="assets/heart.png" alt="Favorite">
+                        </button>
+                        <span class="btn-label">Favorite</span>
+                    </div>
+                    <div class="btn-wrapper">
+                        <button id="markPlayedBtn" class="btn-action btn-secondary" tabindex="0">
+                            <img src="assets/watched.png" alt="Watched">
+                        </button>
+                        <span class="btn-label" id="playedText">Watched</span>
+                    </div>
+                    <div class="btn-wrapper" style="display: none;" id="audioBtnWrapper">
+                        <button id="audioBtn" class="btn-action btn-secondary" tabindex="0">
+                            <img src="assets/masks.png" alt="Audio">
+                        </button>
+                        <span class="btn-label">Audio</span>
+                    </div>
+                    <div class="btn-wrapper" style="display: none;" id="subtitleBtnWrapper">
+                        <button id="subtitleBtn" class="btn-action btn-secondary" tabindex="0">
+                            <img src="assets/subtitle.png" alt="Subtitles">
+                        </button>
+                        <span class="btn-label">Subtitles</span>
+                    </div>
+                    <div class="btn-wrapper" style="display: none;" id="moreBtnWrapper">
+                        <button id="moreBtn" class="btn-action btn-secondary" tabindex="0">
+                            <img src="assets/more.png" alt="More">
+                        </button>
+                        <span class="btn-label">More</span>
+                    </div>
                 </div>
             </div>
         </div>
 
         <!-- Additional Information -->
         <div class="details-body">
+            
+            <!-- Next Up (for TV Series) -->
+            <div id="nextUpSection" class="section" style="display: none;">
+                <h2 class="section-title">Next Up</h2>
+                <div class="nextup-scroller">
+                    <div id="nextUpList" class="nextup-list">
+                        <!-- Next up episodes will be added here -->
+                    </div>
+                </div>
+            </div>
             
             <!-- Cast & Crew -->
             <div id="castSection" class="section" style="display: none;">

@@ -60,12 +60,28 @@ var DetailsController = (function() {
             criticValue: document.getElementById('criticValue'),
             itemOverview: document.getElementById('itemOverview'),
             playBtn: document.getElementById('playBtn'),
+            playBtnWrapper: document.getElementById('playBtnWrapper'),
+            playBtnImage: document.querySelector('#playBtn img'),
+            playBtnLabel: document.querySelector('#playBtnWrapper .btn-label'),
             resumeBtn: document.getElementById('resumeBtn'),
+            resumeBtnWrapper: document.getElementById('resumeBtnWrapper'),
+            resumeBtnLabel: document.querySelector('#resumeBtnWrapper .btn-label'),
+            shuffleBtn: document.getElementById('shuffleBtn'),
+            shuffleBtnWrapper: document.getElementById('shuffleBtnWrapper'),
             trailerBtn: document.getElementById('trailerBtn'),
+            trailerBtnWrapper: document.getElementById('trailerBtnWrapper'),
             favoriteBtn: document.getElementById('favoriteBtn'),
             favoriteIcon: document.getElementById('favoriteIcon'),
             markPlayedBtn: document.getElementById('markPlayedBtn'),
             playedText: document.getElementById('playedText'),
+            audioBtn: document.getElementById('audioBtn'),
+            audioBtnWrapper: document.getElementById('audioBtnWrapper'),
+            subtitleBtn: document.getElementById('subtitleBtn'),
+            subtitleBtnWrapper: document.getElementById('subtitleBtnWrapper'),
+            moreBtn: document.getElementById('moreBtn'),
+            moreBtnWrapper: document.getElementById('moreBtnWrapper'),
+            nextUpSection: document.getElementById('nextUpSection'),
+            nextUpList: document.getElementById('nextUpList'),
             castSection: document.getElementById('castSection'),
             castList: document.getElementById('castList'),
             seasonsSection: document.getElementById('seasonsSection'),
@@ -92,6 +108,9 @@ var DetailsController = (function() {
         if (elements.resumeBtn) {
             elements.resumeBtn.addEventListener('click', handleResume);
         }
+        if (elements.shuffleBtn) {
+            elements.shuffleBtn.addEventListener('click', handleShuffle);
+        }
         if (elements.trailerBtn) {
             elements.trailerBtn.addEventListener('click', handleTrailer);
         }
@@ -100,6 +119,15 @@ var DetailsController = (function() {
         }
         if (elements.markPlayedBtn) {
             elements.markPlayedBtn.addEventListener('click', handleMarkPlayed);
+        }
+        if (elements.audioBtn) {
+            elements.audioBtn.addEventListener('click', handleAudio);
+        }
+        if (elements.subtitleBtn) {
+            elements.subtitleBtn.addEventListener('click', handleSubtitles);
+        }
+        if (elements.moreBtn) {
+            elements.moreBtn.addEventListener('click', handleMore);
         }
         if (elements.backBtn) {
             elements.backBtn.addEventListener('click', goBack);
@@ -117,7 +145,8 @@ var DetailsController = (function() {
         }
 
         var buttons = Array.from(document.querySelectorAll('.action-buttons .btn-action')).filter(function(btn) {
-            return btn.style.display !== 'none';
+            var wrapper = btn.closest('.btn-wrapper');
+            return !wrapper || wrapper.style.display !== 'none';
         });
 
         switch (evt.keyCode) {
@@ -267,20 +296,88 @@ var DetailsController = (function() {
         
         if (itemData.UserData) {
             if (itemData.UserData.IsFavorite) {
-                elements.favoriteIcon.textContent = '♥';
+                elements.favoriteIcon.classList.add('favorited');
+            } else {
+                elements.favoriteIcon.classList.remove('favorited');
             }
             
             if (itemData.UserData.Played) {
                 elements.playedText.textContent = 'Mark Unplayed';
             }
             
+            // Handle play/resume button display
             if (itemData.UserData.PlaybackPositionTicks > 0) {
-                elements.resumeBtn.style.display = 'inline-flex';
+                // Media has been started - show resume button with time and play from beginning
+                var minutes = Math.round(itemData.UserData.PlaybackPositionTicks / 600000000);
+                var hours = Math.floor(minutes / 60);
+                var mins = minutes % 60;
+                var timeText = hours > 0 ? hours + 'h ' + mins + 'm' : mins + 'm';
+                
+                // Change play button to "Play from beginning"
+                if (elements.playBtnImage && elements.playBtnLabel) {
+                    elements.playBtnImage.src = 'assets/restart.png';
+                    elements.playBtnLabel.textContent = 'Play from beginning';
+                }
+                
+                // Show resume button with time
+                if (elements.resumeBtnWrapper && elements.resumeBtnLabel) {
+                    elements.resumeBtnWrapper.style.display = 'flex';
+                    elements.resumeBtnLabel.textContent = 'Resume from ' + timeText;
+                    
+                    // Move resume button to first position
+                    var actionButtons = elements.resumeBtnWrapper.parentElement;
+                    if (actionButtons && elements.playBtnWrapper) {
+                        actionButtons.insertBefore(elements.resumeBtnWrapper, elements.playBtnWrapper);
+                    }
+                }
+            } else {
+                // Media not started - show regular play button
+                if (elements.playBtnImage && elements.playBtnLabel) {
+                    elements.playBtnImage.src = 'assets/play.png';
+                    elements.playBtnLabel.textContent = 'Play';
+                }
+                // Hide resume button
+                if (elements.resumeBtnWrapper) {
+                    elements.resumeBtnWrapper.style.display = 'none';
+                }
             }
         }
         
         if (itemData.LocalTrailerCount > 0 || (itemData.RemoteTrailers && itemData.RemoteTrailers.length > 0)) {
-            elements.trailerBtn.style.display = 'inline-flex';
+            if (elements.trailerBtnWrapper) {
+                elements.trailerBtnWrapper.style.display = 'flex';
+            }
+        }
+        
+        // Show shuffle button for collections, series, playlists, and folders
+        if (itemData.Type === 'Series' || itemData.Type === 'Season' || 
+            itemData.Type === 'BoxSet' || itemData.Type === 'Playlist' || 
+            itemData.Type === 'Folder' || itemData.Type === 'CollectionFolder') {
+            if (elements.shuffleBtnWrapper) {
+                elements.shuffleBtnWrapper.style.display = 'flex';
+            }
+        }
+        
+        // Show audio button if multiple audio tracks are available
+        if (itemData.MediaSources && itemData.MediaSources.length > 0) {
+            var mediaSource = itemData.MediaSources[0];
+            if (mediaSource.MediaStreams) {
+                var audioStreams = mediaSource.MediaStreams.filter(function(s) { return s.Type === 'Audio'; });
+                if (audioStreams.length > 1 && elements.audioBtnWrapper) {
+                    elements.audioBtnWrapper.style.display = 'flex';
+                }
+                
+                // Show subtitle button if subtitles are available
+                var subtitleStreams = mediaSource.MediaStreams.filter(function(s) { return s.Type === 'Subtitle'; });
+                if (subtitleStreams.length > 0 && elements.subtitleBtnWrapper) {
+                    elements.subtitleBtnWrapper.style.display = 'flex';
+                }
+            }
+        }
+        
+        // Always show more button for additional options
+        if (elements.moreBtnWrapper) {
+            elements.moreBtnWrapper.style.display = 'flex';
         }
         
         setTimeout(function() {
@@ -302,6 +399,10 @@ var DetailsController = (function() {
     }
 
     function loadAdditionalContent() {
+        if (itemData.Type === 'Series') {
+            loadNextUp();
+        }
+        
         if (itemData.People && itemData.People.length > 0) {
             displayCast(itemData.People);
         }
@@ -321,6 +422,7 @@ var DetailsController = (function() {
         people.slice(0, 20).forEach(function(person) {
             var castCard = document.createElement('div');
             castCard.className = 'cast-card';
+            castCard.setAttribute('tabindex', '0');
             
             var img = document.createElement('img');
             img.className = 'cast-image';
@@ -342,7 +444,121 @@ var DetailsController = (function() {
             castCard.appendChild(name);
             castCard.appendChild(role);
             
+            castCard.addEventListener('click', function() {
+                window.location.href = 'details.html?id=' + person.Id;
+            });
+            
             elements.castList.appendChild(castCard);
+        });
+    }
+
+    function loadNextUp() {
+        var params = {
+            userId: auth.userId,
+            seriesId: itemData.Id,
+            fields: 'Overview,PrimaryImageAspectRatio,SeriesInfo,MediaStreams',
+            enableImages: true,
+            enableUserData: true,
+            limit: 1
+        };
+        
+        var endpoint = '/Shows/NextUp';
+        
+        JellyfinAPI.getItems(auth.serverAddress, auth.accessToken, endpoint, params, function(err, data) {
+            if (err || !data || !data.Items || data.Items.length === 0) {
+                return;
+            }
+            
+            var firstEpisode = data.Items[0];
+            
+            // If we have a next up episode, fetch all episodes from that season starting from this episode
+            if (firstEpisode.SeasonId && firstEpisode.IndexNumber) {
+                var episodeParams = {
+                    userId: auth.userId,
+                    seasonId: firstEpisode.SeasonId,
+                    fields: 'Overview,PrimaryImageAspectRatio,SeriesInfo,MediaStreams',
+                    startItemId: firstEpisode.Id,
+                    limit: 50
+                };
+                
+                var episodesEndpoint = '/Shows/' + firstEpisode.SeasonId + '/Episodes';
+                
+                JellyfinAPI.getItems(auth.serverAddress, auth.accessToken, episodesEndpoint, episodeParams, function(err2, episodeData) {
+                    if (!err2 && episodeData && episodeData.Items && episodeData.Items.length > 0) {
+                        // Filter to only unwatched episodes
+                        var unwatchedEpisodes = episodeData.Items.filter(function(ep) {
+                            return !ep.UserData || !ep.UserData.Played;
+                        });
+                        
+                        if (unwatchedEpisodes.length > 0) {
+                            displayNextUp(unwatchedEpisodes);
+                        } else {
+                            displayNextUp([firstEpisode]);
+                        }
+                    } else {
+                        displayNextUp([firstEpisode]);
+                    }
+                });
+            } else {
+                displayNextUp([firstEpisode]);
+            }
+        });
+    }
+
+    function displayNextUp(episodes) {
+        elements.nextUpSection.style.display = 'block';
+        elements.nextUpList.innerHTML = '';
+        
+        episodes.forEach(function(episode) {
+            var card = document.createElement('div');
+            card.className = 'nextup-card';
+            card.setAttribute('tabindex', '0');
+            
+            var img = document.createElement('img');
+            img.className = 'nextup-image';
+            
+            // Use episode thumbnail if available, otherwise use series backdrop
+            if (episode.ImageTags && episode.ImageTags.Primary) {
+                img.src = auth.serverAddress + '/Items/' + episode.Id + '/Images/Primary?quality=90&maxWidth=420';
+            } else if (episode.SeriesPrimaryImageTag && episode.SeriesId) {
+                img.src = auth.serverAddress + '/Items/' + episode.SeriesId + '/Images/Primary?quality=90&maxWidth=420';
+            }
+            
+            var title = document.createElement('div');
+            title.className = 'nextup-title';
+            title.textContent = episode.Name;
+            
+            var info = document.createElement('div');
+            info.className = 'nextup-info';
+            var seasonEpisode = 'S' + (episode.ParentIndexNumber || 0) + ':E' + (episode.IndexNumber || 0);
+            info.textContent = seasonEpisode;
+            if (episode.SeriesName) {
+                info.textContent = episode.SeriesName + ' - ' + seasonEpisode;
+            }
+            
+            card.appendChild(img);
+            card.appendChild(title);
+            card.appendChild(info);
+            
+            // Add progress bar if episode is partially watched
+            if (episode.UserData && episode.UserData.PlaybackPositionTicks > 0 && episode.RunTimeTicks) {
+                var progressContainer = document.createElement('div');
+                progressContainer.className = 'nextup-progress';
+                
+                var progressBar = document.createElement('div');
+                progressBar.className = 'nextup-progress-bar';
+                var percentage = (episode.UserData.PlaybackPositionTicks / episode.RunTimeTicks) * 100;
+                progressBar.style.width = percentage + '%';
+                
+                progressContainer.appendChild(progressBar);
+                card.appendChild(progressContainer);
+            }
+            
+            card.addEventListener('click', function() {
+                window.location.href = 'details.html?id=' + episode.Id;
+            });
+            
+            elements.nextUpList.appendChild(card);
         });
     }
 
@@ -476,7 +692,82 @@ var DetailsController = (function() {
 
     function handleTrailer() {
         JellyfinAPI.Logger.info('Trailer clicked for item:', itemData.Id);
-        alert('Trailer playback not yet implemented');
+        
+        // First, try to play local trailer file (like Roku does)
+        var endpoint = '/Users/' + auth.userId + '/Items/' + itemData.Id + '/LocalTrailers';
+        
+        JellyfinAPI.getItems(auth.serverAddress, auth.accessToken, endpoint, {}, function(err, localTrailers) {
+            if (!err && localTrailers && localTrailers.length > 0) {
+                // Local trailer found, play it
+                JellyfinAPI.Logger.success('Local trailer found, playing:', localTrailers[0].Id);
+                alert('Local trailer playback not yet implemented. Trailer ID: ' + localTrailers[0].Id);
+                return;
+            }
+            
+            // No local trailer, check for remote trailers (YouTube URLs)
+            if (itemData.RemoteTrailers && itemData.RemoteTrailers.length > 0) {
+                var trailerUrl = itemData.RemoteTrailers[0].Url;
+                JellyfinAPI.Logger.info('No local trailer, using remote trailer:', trailerUrl);
+                
+                // Extract YouTube video ID from URL
+                var videoId = extractYouTubeVideoId(trailerUrl);
+                if (videoId) {
+                    openYouTubeApp(videoId);
+                } else {
+                    alert('Invalid YouTube trailer URL');
+                }
+            } else {
+                JellyfinAPI.Logger.warn('No trailers available');
+                alert('No trailers available for this item');
+            }
+        });
+    }
+    
+    function extractYouTubeVideoId(url) {
+        // Handle various YouTube URL formats
+        // https://www.youtube.com/watch?v=VIDEO_ID
+        // https://youtu.be/VIDEO_ID
+        // https://www.youtube.com/embed/VIDEO_ID
+        
+        var patterns = [
+            /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
+            /^([a-zA-Z0-9_-]{11})$/ // Just the video ID
+        ];
+        
+        for (var i = 0; i < patterns.length; i++) {
+            var match = url.match(patterns[i]);
+            if (match && match[1]) {
+                return match[1];
+            }
+        }
+        
+        return null;
+    }
+    
+    function openYouTubeApp(videoId) {
+        JellyfinAPI.Logger.info('Opening YouTube app with video ID:', videoId);
+        
+        try {
+            webOS.service.request('luna://com.webos.applicationManager', {
+                method: 'launch',
+                parameters: {
+                    id: 'youtube.leanback.v4',
+                    params: {
+                        contentTarget: videoId
+                    }
+                },
+                onSuccess: function(response) {
+                    JellyfinAPI.Logger.success('YouTube app launched successfully');
+                },
+                onFailure: function(error) {
+                    JellyfinAPI.Logger.error('Failed to launch YouTube app:', error);
+                    alert('Failed to open YouTube app. Error: ' + (error.errorText || 'Unknown error'));
+                }
+            });
+        } catch (e) {
+            JellyfinAPI.Logger.error('Exception launching YouTube:', e);
+            alert('Failed to open YouTube app: ' + e.message);
+        }
     }
 
     function handleFavorite() {
@@ -486,7 +777,11 @@ var DetailsController = (function() {
         JellyfinAPI.setFavorite(auth.serverAddress, auth.userId, auth.accessToken, itemData.Id, newState, function(err) {
             if (!err) {
                 itemData.UserData.IsFavorite = newState;
-                elements.favoriteIcon.textContent = newState ? '♥' : '♡';
+                if (newState) {
+                    elements.favoriteIcon.classList.add('favorited');
+                } else {
+                    elements.favoriteIcon.classList.remove('favorited');
+                }
                 JellyfinAPI.Logger.success('Favorite toggled:', newState);
             }
         });
@@ -503,6 +798,78 @@ var DetailsController = (function() {
                 JellyfinAPI.Logger.success('Played status toggled:', newState);
             }
         });
+    }
+
+    function handleShuffle() {
+        JellyfinAPI.Logger.info('Shuffle clicked for item:', itemData.Id);
+        alert('Shuffle playback not yet implemented');
+    }
+
+    function handleAudio() {
+        JellyfinAPI.Logger.info('Audio track selector clicked');
+        
+        if (!itemData.MediaSources || itemData.MediaSources.length === 0) {
+            alert('No media sources available');
+            return;
+        }
+        
+        var mediaSource = itemData.MediaSources[0];
+        if (!mediaSource.MediaStreams) {
+            alert('No media streams available');
+            return;
+        }
+        
+        var audioStreams = mediaSource.MediaStreams.filter(function(s) { return s.Type === 'Audio'; });
+        if (audioStreams.length === 0) {
+            alert('No audio tracks available');
+            return;
+        }
+        
+        var message = 'Audio Tracks:\n\n';
+        audioStreams.forEach(function(stream, index) {
+            var lang = stream.Language || 'Unknown';
+            var codec = stream.Codec ? stream.Codec.toUpperCase() : '';
+            var channels = stream.Channels ? stream.Channels + 'ch' : '';
+            message += (index + 1) + '. ' + lang + ' (' + codec + ' ' + channels + ')\n';
+        });
+        
+        alert(message + '\nAudio track selection not yet implemented');
+    }
+
+    function handleSubtitles() {
+        JellyfinAPI.Logger.info('Subtitle track selector clicked');
+        
+        if (!itemData.MediaSources || itemData.MediaSources.length === 0) {
+            alert('No media sources available');
+            return;
+        }
+        
+        var mediaSource = itemData.MediaSources[0];
+        if (!mediaSource.MediaStreams) {
+            alert('No media streams available');
+            return;
+        }
+        
+        var subtitleStreams = mediaSource.MediaStreams.filter(function(s) { return s.Type === 'Subtitle'; });
+        if (subtitleStreams.length === 0) {
+            alert('No subtitle tracks available');
+            return;
+        }
+        
+        var message = 'Subtitle Tracks:\n\n';
+        subtitleStreams.forEach(function(stream, index) {
+            var lang = stream.Language || 'Unknown';
+            var codec = stream.Codec ? stream.Codec.toUpperCase() : '';
+            var forced = stream.IsForced ? ' [Forced]' : '';
+            message += (index + 1) + '. ' + lang + ' (' + codec + ')' + forced + '\n';
+        });
+        
+        alert(message + '\nSubtitle track selection not yet implemented');
+    }
+
+    function handleMore() {
+        JellyfinAPI.Logger.info('More options clicked');
+        alert('More options menu not yet implemented');
     }
 
     function goBack() {
