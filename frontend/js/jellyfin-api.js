@@ -6,18 +6,38 @@
 var JellyfinAPI = (function() {
     'use strict';
 
+    var LOG_LEVELS = {
+        ERROR: 0,
+        WARN: 1,
+        SUCCESS: 2,
+        INFO: 3
+    };
+    
+    var currentLogLevel = LOG_LEVELS.ERROR; // Production: only errors
+
     var Logger = {
+        setLevel: function(level) {
+            currentLogLevel = level;
+        },
         info: function(message, data) {
-            console.log('[Jellyfin INFO]', message, data || '');
+            if (currentLogLevel >= LOG_LEVELS.INFO) {
+                console.log('[Jellyfin INFO]', message, data || '');
+            }
         },
         success: function(message, data) {
-            console.log('[Jellyfin SUCCESS]', message, data || '');
+            if (currentLogLevel >= LOG_LEVELS.SUCCESS) {
+                console.log('[Jellyfin SUCCESS]', message, data || '');
+            }
         },
         error: function(message, data) {
-            console.error('[Jellyfin ERROR]', message, data || '');
+            if (currentLogLevel >= LOG_LEVELS.ERROR) {
+                console.error('[Jellyfin ERROR]', message, data || '');
+            }
         },
         warn: function(message, data) {
-            console.warn('[Jellyfin WARN]', message, data || '');
+            if (currentLogLevel >= LOG_LEVELS.WARN) {
+                console.warn('[Jellyfin WARN]', message, data || '');
+            }
         }
     };
 
@@ -150,9 +170,18 @@ var JellyfinAPI = (function() {
     }
     
     function normalizeServerAddress(address) {
-        if (!address) return null;
+        if (!address || typeof address !== 'string') {
+            Logger.error('Invalid address provided to normalizeServerAddress:', address);
+            return null;
+        }
         
         address = address.trim();
+        
+        if (address === '') {
+            Logger.error('Empty address after trim');
+            return null;
+        }
+        
         address = address.replace(/\/+$/, '');
         
         if (!/^https?:\/\//i.test(address)) {
@@ -209,6 +238,27 @@ var JellyfinAPI = (function() {
     }
 
     function authenticateByName(serverAddress, username, password, callback) {
+        // Input validation
+        if (!serverAddress || typeof serverAddress !== 'string' || serverAddress.trim() === '') {
+            Logger.error('Invalid server address provided to authenticateByName');
+            if (callback) callback({ error: 'Invalid server address' }, null);
+            return;
+        }
+        
+        if (!username || typeof username !== 'string' || username.trim() === '') {
+            Logger.error('Invalid username provided to authenticateByName');
+            if (callback) callback({ error: 'Username is required' }, null);
+            return;
+        }
+        
+        // Password can be empty string (Jellyfin allows passwordless users)
+        // But must be defined (not null or undefined)
+        if (password === null || password === undefined) {
+            Logger.error('Password is null or undefined');
+            if (callback) callback({ error: 'Password must be provided (can be empty string)' }, null);
+            return;
+        }
+        
         Logger.info('Attempting authentication for user:', username);
         
         var authUrl = serverAddress + '/Users/AuthenticateByName';
@@ -404,12 +454,119 @@ var JellyfinAPI = (function() {
         });
     }
 
+    function getPublicUsers(serverAddress, callback) {
+        var endpoint = serverAddress + '/Users/Public';
+        
+        ajax.request(endpoint, {
+            method: 'GET',
+            headers: {
+                'X-Emby-Authorization': getAuthHeader()
+            },
+            success: function(response) {
+                Logger.info('Retrieved public users:', response.length);
+                if (callback) callback(null, response);
+            },
+            error: function(err) {
+                Logger.error('Failed to get public users:', err);
+                if (callback) callback(err, null);
+            }
+        });
+    }
+
+    function getUserImageUrl(serverAddress, userId, imageTag) {
+        if (!imageTag) return null;
+        return serverAddress + '/Users/' + userId + '/Images/Primary?tag=' + imageTag + '&quality=90&maxWidth=400';
+    }
+
+    // Quick Connect functions
+    function initiateQuickConnect(serverAddress, callback) {
+        var endpoint = serverAddress + '/QuickConnect/Initiate';
+        
+        ajax.request(endpoint, {
+            method: 'POST',
+            headers: {
+                'X-Emby-Authorization': getAuthHeader(),
+                'Content-Type': 'application/json'
+            },
+            success: function(response) {
+                Logger.info('Quick Connect initiated:', response.Code);
+                if (callback) callback(null, response);
+            },
+            error: function(err) {
+                Logger.error('Failed to initiate Quick Connect:', err);
+                if (callback) callback(err, null);
+            }
+        });
+    }
+
+    function checkQuickConnectStatus(serverAddress, secret, callback) {
+        var endpoint = serverAddress + '/QuickConnect/Connect?secret=' + encodeURIComponent(secret);
+        
+        ajax.request(endpoint, {
+            method: 'GET',
+            headers: {
+                'X-Emby-Authorization': getAuthHeader()
+            },
+            success: function(response) {
+                if (callback) callback(null, response);
+            },
+            error: function(err) {
+                Logger.error('Failed to check Quick Connect status:', err);
+                if (callback) callback(err, null);
+            }
+        });
+    }
+
+    function authenticateQuickConnect(serverAddress, secret, callback) {
+        var endpoint = serverAddress + '/Users/AuthenticateWithQuickConnect';
+        
+        ajax.request(endpoint, {
+            method: 'POST',
+            headers: {
+                'X-Emby-Authorization': getAuthHeader(),
+                'Content-Type': 'application/json'
+            },
+            data: {
+                Secret: secret
+            },
+            success: function(response) {
+                Logger.success('Quick Connect authentication successful!', {
+                    user: response.User.Name,
+                    userId: response.User.Id
+                });
+                
+                // Store credentials
+                var authData = {
+                    serverAddress: serverAddress,
+                    accessToken: response.AccessToken,
+                    userId: response.User.Id,
+                    username: response.User.Name,
+                    serverId: response.ServerId,
+                    serverName: response.ServerName || 'Jellyfin Server'
+                };
+                
+                storage.set('jellyfin_auth', authData);
+                
+                if (callback) callback(null, response);
+            },
+            error: function(err) {
+                Logger.error('Quick Connect authentication failed:', err);
+                if (callback) callback(err, null);
+            }
+        });
+    }
+
     return {
         init: initDeviceId,
         discoverServers: discoverServers,
         testServer: testServer,
         normalizeServerAddress: normalizeServerAddress,
         authenticateByName: authenticateByName,
+        getPublicUsers: getPublicUsers,
+        getUserImageUrl: getUserImageUrl,
+        initiateQuickConnect: initiateQuickConnect,
+        checkQuickConnectStatus: checkQuickConnectStatus,
+        authenticateQuickConnect: authenticateQuickConnect,
         getUserInfo: getUserInfo,
         getUserViews: getUserViews,
         getItems: getItems,
@@ -418,6 +575,7 @@ var JellyfinAPI = (function() {
         logout: logout,
         getStoredAuth: getStoredAuth,
         getAuthHeader: getAuthHeader,
-        Logger: Logger
+        Logger: Logger,
+        LOG_LEVELS: LOG_LEVELS
     };
 })();

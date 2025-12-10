@@ -11,7 +11,7 @@ var SettingsController = (function() {
     var focusManager = {
         inSidebar: true,
         inNavBar: false,
-        navBarIndex: 4, 
+        navBarIndex: 0, 
         sidebarIndex: 0,
         contentIndex: 0,
         currentCategory: 'general'
@@ -33,7 +33,7 @@ var SettingsController = (function() {
     };
 
     function init() {
-        auth = JellyfinAPI.getAuth();
+        auth = JellyfinAPI.getStoredAuth();
         if (!auth) {
             window.location.href = 'login.html';
             return;
@@ -82,18 +82,18 @@ var SettingsController = (function() {
     }
 
     function loadSettings() {
-        var stored = Storage.get('jellyfin_settings');
+        var stored = storage.get('jellyfin_settings');
         if (stored) {
             try {
                 settings = JSON.parse(stored);
             } catch (e) {
-                console.error('Failed to parse settings:', e);
+                JellyfinAPI.Logger.error('Failed to parse settings:', e);
             }
         }
     }
 
     function saveSettings() {
-        Storage.set('jellyfin_settings', JSON.stringify(settings));
+        storage.set('jellyfin_settings', JSON.stringify(settings));
     }
 
     function updateSettingValues() {
@@ -197,7 +197,7 @@ var SettingsController = (function() {
     }
 
     function handleNavBarNavigation(evt) {
-        var navButtons = Array.from(document.querySelectorAll('.nav-center .nav-btn, .nav-right .nav-btn'));
+        var navButtons = Array.from(document.querySelectorAll('.nav-left .nav-btn, .nav-center .nav-btn'));
         
         navButtons.forEach(function(btn) {
             btn.classList.remove('focused');
@@ -210,6 +210,7 @@ var SettingsController = (function() {
                     focusManager.navBarIndex--;
                 }
                 navButtons[focusManager.navBarIndex].classList.add('focused');
+                navButtons[focusManager.navBarIndex].focus();
                 break;
                 
             case KeyCodes.RIGHT: // Right
@@ -218,6 +219,7 @@ var SettingsController = (function() {
                     focusManager.navBarIndex++;
                 }
                 navButtons[focusManager.navBarIndex].classList.add('focused');
+                navButtons[focusManager.navBarIndex].focus();
                 break;
                 
             case KeyCodes.DOWN: // Down
@@ -227,7 +229,10 @@ var SettingsController = (function() {
                 
             case KeyCodes.ENTER: // Enter
                 evt.preventDefault();
-                navButtons[focusManager.navBarIndex].click();
+                var currentBtn = navButtons[focusManager.navBarIndex];
+                if (currentBtn) {
+                    currentBtn.click();
+                }
                 break;
         }
     }
@@ -307,13 +312,19 @@ var SettingsController = (function() {
         focusManager.inNavBar = true;
         focusManager.inSidebar = false;
         
-        var navButtons = Array.from(document.querySelectorAll('.nav-center .nav-btn, .nav-right .nav-btn'));
+        var navButtons = Array.from(document.querySelectorAll('.nav-left .nav-btn, .nav-center .nav-btn'));
         navButtons.forEach(function(btn) {
             btn.classList.remove('focused');
         });
         
+        // Start at home button (index 1), not user avatar (index 0)
+        if (focusManager.navBarIndex === 0 || focusManager.navBarIndex >= navButtons.length) {
+            focusManager.navBarIndex = navButtons.length > 1 ? 1 : 0;
+        }
+        
         if (navButtons[focusManager.navBarIndex]) {
             navButtons[focusManager.navBarIndex].classList.add('focused');
+            navButtons[focusManager.navBarIndex].focus();
         }
         
         var categories = document.querySelectorAll('.settings-category');
@@ -365,6 +376,7 @@ var SettingsController = (function() {
         categories.forEach(function(cat, index) {
             if (index === focusManager.sidebarIndex) {
                 cat.classList.add('focused');
+                cat.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             } else {
                 cat.classList.remove('focused');
             }
@@ -418,7 +430,6 @@ var SettingsController = (function() {
                 var message = settings.autoLogin ? 
                     'Auto-login enabled. You will be automatically logged in on app start.' : 
                     'Auto-login disabled. You will need to login manually.';
-                console.log(message);
                 break;
                 
             case 'skipIntro':
@@ -448,7 +459,7 @@ var SettingsController = (function() {
                 break;
                 
             default:
-                console.log('Setting not implemented:', settingName);
+                JellyfinAPI.Logger.warn('Setting not implemented:', settingName);
         }
     }
 

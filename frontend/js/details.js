@@ -6,7 +6,8 @@ var DetailsController = (function() {
     var itemData = null;
     var focusManager = {
         currentSection: 'buttons',
-        currentIndex: 0
+        currentIndex: 0,
+        sections: ['buttons', 'nextup', 'seasons', 'episodes', 'cast', 'similar']
     };
 
     var elements = {};
@@ -42,13 +43,26 @@ var DetailsController = (function() {
     function cacheElements() {
         elements = {
             backdropImage: document.getElementById('backdropImage'),
+            logoImage: document.getElementById('logoImage'),
             posterImage: document.getElementById('posterImage'),
+            personContent: document.getElementById('personContent'),
+            personPhoto: document.getElementById('personPhoto'),
+            personOverview: document.getElementById('personOverview'),
             itemTitle: document.getElementById('itemTitle'),
             itemYear: document.getElementById('itemYear'),
             officialRating: document.getElementById('officialRating'),
             itemRuntime: document.getElementById('itemRuntime'),
             runtimeValue: document.getElementById('runtimeValue'),
             itemGenres: document.getElementById('itemGenres'),
+            itemTagline: document.getElementById('itemTagline'),
+            taglineRow: document.getElementById('taglineRow'),
+            itemDirector: document.getElementById('itemDirector'),
+            directorCell: document.getElementById('directorCell'),
+            itemWriters: document.getElementById('itemWriters'),
+            writersCell: document.getElementById('writersCell'),
+            itemStudios: document.getElementById('itemStudios'),
+            studiosCell: document.getElementById('studiosCell'),
+            genresCell: document.getElementById('genresCell'),
             itemResolution: document.getElementById('itemResolution'),
             videoCodec: document.getElementById('videoCodec'),
             audioCodec: document.getElementById('audioCodec'),
@@ -144,34 +158,112 @@ var DetailsController = (function() {
             return;
         }
 
-        var buttons = Array.from(document.querySelectorAll('.action-buttons .btn-action')).filter(function(btn) {
-            var wrapper = btn.closest('.btn-wrapper');
-            return !wrapper || wrapper.style.display !== 'none';
-        });
+        var currentItems = getCurrentSectionItems();
+        if (!currentItems || currentItems.length === 0) return;
 
         switch (evt.keyCode) {
             case KeyCodes.LEFT:
                 evt.preventDefault();
                 if (focusManager.currentIndex > 0) {
                     focusManager.currentIndex--;
-                    buttons[focusManager.currentIndex].focus();
+                    currentItems[focusManager.currentIndex].focus();
                 }
                 break;
                 
             case KeyCodes.RIGHT:
                 evt.preventDefault();
-                if (focusManager.currentIndex < buttons.length - 1) {
+                if (focusManager.currentIndex < currentItems.length - 1) {
                     focusManager.currentIndex++;
-                    buttons[focusManager.currentIndex].focus();
+                    currentItems[focusManager.currentIndex].focus();
                 }
+                break;
+                
+            case KeyCodes.UP:
+                evt.preventDefault();
+                moveToPreviousSection();
+                break;
+                
+            case KeyCodes.DOWN:
+                evt.preventDefault();
+                moveToNextSection();
                 break;
                 
             case KeyCodes.ENTER:
                 evt.preventDefault();
-                if (buttons[focusManager.currentIndex]) {
-                    buttons[focusManager.currentIndex].click();
+                if (currentItems[focusManager.currentIndex]) {
+                    currentItems[focusManager.currentIndex].click();
                 }
                 break;
+        }
+    }
+
+    function getCurrentSectionItems() {
+        switch (focusManager.currentSection) {
+            case 'buttons':
+                return Array.from(document.querySelectorAll('.action-buttons .btn-action')).filter(function(btn) {
+                    var wrapper = btn.closest('.btn-wrapper');
+                    return !wrapper || wrapper.style.display !== 'none';
+                });
+            case 'nextup':
+                if (elements.nextUpSection.style.display === 'block') {
+                    return Array.from(elements.nextUpList.querySelectorAll('.nextup-card'));
+                }
+                return [];
+            case 'seasons':
+                if (elements.seasonsSection.style.display === 'block') {
+                    return Array.from(elements.seasonsList.querySelectorAll('.season-card'));
+                }
+                return [];
+            case 'episodes':
+                if (elements.episodesSection.style.display === 'block') {
+                    return Array.from(elements.episodesList.querySelectorAll('.episode-card'));
+                }
+                return [];
+            case 'cast':
+                if (elements.castSection.style.display === 'block') {
+                    return Array.from(elements.castList.querySelectorAll('.cast-card'));
+                }
+                return [];
+            case 'collection':
+                if (elements.collectionSection.style.display === 'block') {
+                    return Array.from(elements.collectionList.querySelectorAll('.collection-card'));
+                }
+                return [];
+            case 'similar':
+                if (elements.similarSection.style.display === 'block') {
+                    return Array.from(elements.similarList.querySelectorAll('.similar-card'));
+                }
+                return [];
+            default:
+                return [];
+        }
+    }
+
+    function moveToNextSection() {
+        var currentSectionIndex = focusManager.sections.indexOf(focusManager.currentSection);
+        
+        for (var i = currentSectionIndex + 1; i < focusManager.sections.length; i++) {
+            focusManager.currentSection = focusManager.sections[i];
+            var items = getCurrentSectionItems();
+            if (items && items.length > 0) {
+                focusManager.currentIndex = 0;
+                items[0].focus();
+                return;
+            }
+        }
+    }
+
+    function moveToPreviousSection() {
+        var currentSectionIndex = focusManager.sections.indexOf(focusManager.currentSection);
+        
+        for (var i = currentSectionIndex - 1; i >= 0; i--) {
+            focusManager.currentSection = focusManager.sections[i];
+            var items = getCurrentSectionItems();
+            if (items && items.length > 0) {
+                focusManager.currentIndex = 0;
+                items[0].focus();
+                return;
+            }
         }
     }
 
@@ -188,26 +280,56 @@ var DetailsController = (function() {
         JellyfinAPI.getItems(auth.serverAddress, auth.accessToken, endpoint, params, function(err, data) {
             hideLoading();
             
-            if (err || !data) {
-                showError('Failed to load item details');
+            if (err) {
+                JellyfinAPI.Logger.error('Error loading item details:', err);
+                showError('Failed to load item details: ' + (err.error || 'Unknown error'));
+                return;
+            }
+            
+            if (!data) {
+                JellyfinAPI.Logger.error('No data returned for item:', itemId);
+                showError('Failed to load item details: No data returned');
                 return;
             }
             
             itemData = data;
             JellyfinAPI.Logger.success('Item details loaded:', itemData.Name);
-            displayItemDetails();
-            loadAdditionalContent();
+            
+            try {
+                displayItemDetails();
+                loadAdditionalContent();
+            } catch (displayError) {
+                JellyfinAPI.Logger.error('Error displaying item details:', displayError.message, displayError.stack);
+                showError('Failed to display item details: ' + displayError.message);
+            }
         });
     }
 
     function displayItemDetails() {
+        // Check if this is a Person type (actor, director, etc.)
+        if (itemData.Type === 'Person') {
+            displayPersonDetails();
+            return;
+        }
+        
+        // Ensure critical elements exist
+        if (!elements.itemTitle || !elements.itemOverview) {
+            JellyfinAPI.Logger.error('Critical elements not found, recaching...');
+            cacheElements();
+            // If still null after recaching, abort
+            if (!elements.itemTitle) {
+                JellyfinAPI.Logger.error('Failed to find itemTitle element');
+                return;
+            }
+        }
+        
         elements.itemTitle.textContent = itemData.Name;
-        if (itemData.CommunityRating) {
+        if (itemData.CommunityRating && elements.communityRating && elements.ratingValue) {
             elements.communityRating.style.display = 'inline-flex';
             elements.ratingValue.textContent = itemData.CommunityRating.toFixed(1);
         }
         
-        if (itemData.CriticRating) {
+        if (itemData.CriticRating && elements.criticRating && elements.criticIcon && elements.criticValue) {
             elements.criticRating.style.display = 'inline-flex';
             var rating = itemData.CriticRating;
             if (rating >= 60) {
@@ -218,17 +340,17 @@ var DetailsController = (function() {
             elements.criticValue.textContent = rating + '%';
         }
         
-        if (itemData.ProductionYear) {
+        if (itemData.ProductionYear && elements.itemYear) {
             elements.itemYear.textContent = itemData.ProductionYear;
             elements.itemYear.style.display = 'inline-flex';
         }
         
-        if (itemData.OfficialRating) {
+        if (itemData.OfficialRating && elements.officialRating) {
             elements.officialRating.textContent = itemData.OfficialRating;
             elements.officialRating.style.display = 'inline-flex';
         }
         
-        if (itemData.RunTimeTicks) {
+        if (itemData.RunTimeTicks && elements.itemRuntime && elements.runtimeValue) {
             var minutes = Math.round(itemData.RunTimeTicks / 600000000);
             var hours = Math.floor(minutes / 60);
             var mins = minutes % 60;
@@ -242,13 +364,13 @@ var DetailsController = (function() {
             
             if (mediaSource.MediaStreams) {
                 var videoStream = mediaSource.MediaStreams.find(function(s) { return s.Type === 'Video'; });
-                if (videoStream && videoStream.Width && videoStream.Height) {
+                if (videoStream && videoStream.Width && videoStream.Height && elements.itemResolution) {
                     var resolution = getResolutionName(videoStream.Width, videoStream.Height);
                     elements.itemResolution.textContent = resolution;
                     elements.itemResolution.style.display = 'inline-flex';
                 }
                 
-                if (videoStream && videoStream.Codec) {
+                if (videoStream && videoStream.Codec && elements.videoCodec) {
                     var codec = videoStream.Codec.toUpperCase();
                     if (videoStream.VideoRangeType && videoStream.VideoRangeType !== 'SDR') {
                         codec = videoStream.VideoRangeType.toUpperCase();
@@ -258,7 +380,7 @@ var DetailsController = (function() {
                 }
                 
                 var audioStream = mediaSource.MediaStreams.find(function(s) { return s.Type === 'Audio'; });
-                if (audioStream && audioStream.Codec) {
+                if (audioStream && audioStream.Codec && elements.audioCodec) {
                     var audioCodec = audioStream.Codec.toUpperCase();
                     if (audioStream.Profile && audioStream.Profile.indexOf('Atmos') > -1) {
                         audioCodec = 'ATMOS';
@@ -267,41 +389,83 @@ var DetailsController = (function() {
                     elements.audioCodec.style.display = 'inline-flex';
                 }
                 
-                var hasSubtitles = mediaSource.MediaStreams.some(function(s) { return s.Type === 'Subtitle'; });
-                if (hasSubtitles) {
-                    elements.subtitles.style.display = 'inline-flex';
+                if (elements.subtitles) {
+                    var hasSubtitles = mediaSource.MediaStreams.some(function(s) { return s.Type === 'Subtitle'; });
+                    if (hasSubtitles) {
+                        elements.subtitles.style.display = 'inline-flex';
+                    }
                 }
             }
         }
         
-        if (itemData.Genres && itemData.Genres.length > 0) {
+        if (itemData.Genres && itemData.Genres.length > 0 && elements.itemGenres && elements.genresCell) {
             elements.itemGenres.textContent = itemData.Genres.slice(0, 3).join(', ');
+            elements.genresCell.style.display = 'flex';
         }
         
-        if (itemData.Overview) {
+        // Tagline
+        if (itemData.Taglines && itemData.Taglines.length > 0 && elements.itemTagline && elements.taglineRow) {
+            elements.itemTagline.textContent = itemData.Taglines[0];
+            elements.taglineRow.style.display = 'block';
+        }
+        
+        // Director
+        if (itemData.People && itemData.People.length > 0) {
+            var directors = itemData.People.filter(function(p) { return p.Type === 'Director'; });
+            if (directors.length > 0 && elements.itemDirector && elements.directorCell) {
+                elements.itemDirector.textContent = directors.map(function(d) { return d.Name; }).join(', ');
+                elements.directorCell.style.display = 'flex';
+            }
+            
+            // Writers
+            var writers = itemData.People.filter(function(p) { return p.Type === 'Writer'; });
+            if (writers.length > 0 && elements.itemWriters && elements.writersCell) {
+                elements.itemWriters.textContent = writers.map(function(w) { return w.Name; }).join(', ');
+                elements.writersCell.style.display = 'flex';
+            }
+        }
+        
+        // Studios
+        if (itemData.Studios && itemData.Studios.length > 0 && elements.itemStudios && elements.studiosCell) {
+            elements.itemStudios.textContent = itemData.Studios.map(function(s) { return s.Name; }).join(', ');
+            elements.studiosCell.style.display = 'flex';
+        }
+        
+        if (itemData.Overview && elements.itemOverview) {
             elements.itemOverview.textContent = itemData.Overview;
         }
         
-        if (itemData.BackdropImageTags && itemData.BackdropImageTags.length > 0) {
-            elements.backdropImage.src = auth.serverAddress + '/Items/' + itemData.Id + '/Images/Backdrop/0?quality=90&maxWidth=1920';
-        } else if (itemData.ParentBackdropImageTags && itemData.ParentBackdropImageTags.length > 0) {
-            elements.backdropImage.src = auth.serverAddress + '/Items/' + itemData.ParentBackdropItemId + '/Images/Backdrop/0?quality=90&maxWidth=1920';
+        // Logo image - show on right side, keep title on left
+        if (elements.logoImage) {
+            if (itemData.ImageTags && itemData.ImageTags.Logo) {
+                elements.logoImage.src = auth.serverAddress + '/Items/' + itemData.Id + '/Images/Logo?quality=90&maxWidth=600';
+                elements.logoImage.style.display = 'block';
+            } else if (itemData.ParentLogoImageTag && itemData.ParentLogoItemId) {
+                elements.logoImage.src = auth.serverAddress + '/Items/' + itemData.ParentLogoItemId + '/Images/Logo?quality=90&maxWidth=600&tag=' + itemData.ParentLogoImageTag;
+                elements.logoImage.style.display = 'block';
+            } else {
+                elements.logoImage.style.display = 'none';
+            }
         }
         
-        if (itemData.ImageTags && itemData.ImageTags.Primary) {
-            elements.posterImage.src = auth.serverAddress + '/Items/' + itemData.Id + '/Images/Primary?quality=90&maxHeight=600';
-        } else if (itemData.SeriesId && itemData.SeriesPrimaryImageTag) {
-            elements.posterImage.src = auth.serverAddress + '/Items/' + itemData.SeriesId + '/Images/Primary?quality=90&maxHeight=600&tag=' + itemData.SeriesPrimaryImageTag;
+        if (elements.backdropImage) {
+            if (itemData.BackdropImageTags && itemData.BackdropImageTags.length > 0) {
+                elements.backdropImage.src = auth.serverAddress + '/Items/' + itemData.Id + '/Images/Backdrop/0?quality=90&maxWidth=1920';
+            } else if (itemData.ParentBackdropImageTags && itemData.ParentBackdropImageTags.length > 0) {
+                elements.backdropImage.src = auth.serverAddress + '/Items/' + itemData.ParentBackdropItemId + '/Images/Backdrop/0?quality=90&maxWidth=1920';
+            }
         }
         
         if (itemData.UserData) {
-            if (itemData.UserData.IsFavorite) {
-                elements.favoriteIcon.classList.add('favorited');
-            } else {
-                elements.favoriteIcon.classList.remove('favorited');
+            if (elements.favoriteIcon) {
+                if (itemData.UserData.IsFavorite) {
+                    elements.favoriteIcon.classList.add('favorited');
+                } else {
+                    elements.favoriteIcon.classList.remove('favorited');
+                }
             }
             
-            if (itemData.UserData.Played) {
+            if (elements.playedText && itemData.UserData.Played) {
                 elements.playedText.textContent = 'Mark Unplayed';
             }
             
@@ -388,31 +552,222 @@ var DetailsController = (function() {
         }, 100);
     }
     
+    function displayPersonDetails() {
+        if (elements.itemTitle) {
+            elements.itemTitle.textContent = itemData.Name;
+        }
+        
+        // Hide all metadata that's not relevant for persons
+        if (elements.itemYear) elements.itemYear.style.display = 'none';
+        if (elements.officialRating) elements.officialRating.style.display = 'none';
+        if (elements.itemRuntime) elements.itemRuntime.style.display = 'none';
+        if (elements.itemResolution) elements.itemResolution.style.display = 'none';
+        if (elements.videoCodec) elements.videoCodec.style.display = 'none';
+        if (elements.audioCodec) elements.audioCodec.style.display = 'none';
+        if (elements.subtitles) elements.subtitles.style.display = 'none';
+        if (elements.communityRating) elements.communityRating.style.display = 'none';
+        if (elements.criticRating) elements.criticRating.style.display = 'none';
+        
+        // Show person content (photo and description side by side)
+        if (elements.personContent) {
+            if (itemData.ImageTags && itemData.ImageTags.Primary && elements.personPhoto) {
+                elements.personPhoto.src = auth.serverAddress + '/Items/' + itemData.Id + '/Images/Primary?quality=90&maxHeight=450';
+            }
+            if (itemData.Overview && elements.personOverview) {
+                elements.personOverview.textContent = itemData.Overview;
+            }
+            elements.personContent.style.display = 'flex';
+        }
+        
+        // Hide all buttons except favorite
+        if (elements.playBtnWrapper) elements.playBtnWrapper.style.display = 'none';
+        if (elements.resumeBtnWrapper) elements.resumeBtnWrapper.style.display = 'none';
+        if (elements.shuffleBtnWrapper) elements.shuffleBtnWrapper.style.display = 'none';
+        if (elements.trailerBtnWrapper) elements.trailerBtnWrapper.style.display = 'none';
+        if (elements.markPlayedBtn && elements.markPlayedBtn.closest('.btn-wrapper')) {
+            elements.markPlayedBtn.closest('.btn-wrapper').style.display = 'none';
+        }
+        if (elements.audioBtnWrapper) elements.audioBtnWrapper.style.display = 'none';
+        if (elements.subtitleBtnWrapper) elements.subtitleBtnWrapper.style.display = 'none';
+        if (elements.moreBtnWrapper) elements.moreBtnWrapper.style.display = 'none';
+        
+        // Show favorite button
+        if (itemData.UserData && elements.favoriteIcon) {
+            if (itemData.UserData.IsFavorite) {
+                elements.favoriteIcon.classList.add('favorited');
+            } else {
+                elements.favoriteIcon.classList.remove('favorited');
+            }
+        }
+        
+        setTimeout(function() {
+            if (elements.favoriteBtn) {
+                elements.favoriteBtn.focus();
+            }
+        }, 100);
+        
+        // Load their filmography
+        loadPersonFilmography();
+    }
+    
     function getResolutionName(width, height) {
-        if (height >= 2160) return '4K';
-        if (height >= 1440) return '1440P';
-        if (height >= 1080) return '1080P';
-        if (height >= 720) return '720P';
-        if (height >= 576) return '576P';
-        if (height >= 480) return '480P';
+        if (width >= 3800 && height >= 2100) return '4K';
+        if (width >= 2500 && height >= 1400) return '1440P';
+        if (width >= 1900 && height >= 1000) return '1080P';
+        if (width >= 1260 && height >= 700) return '720P';
+        if (width >= 1000 && height >= 560) return '576P';
+        if (width >= 850 && height >= 460) return '480P';
         return height + 'P';
     }
 
     function loadAdditionalContent() {
+        // Don't load normal content for Person pages
+        if (itemData.Type === 'Person') {
+            return;
+        }
+        
+        // For BoxSet/Collection, show collection movies instead of "More Like This"
+        if (itemData.Type === 'BoxSet' || itemData.Type === 'Collection') {
+            loadCollectionMovies();
+            displayTechnicalDetails();
+            return;
+        }
+        
         if (itemData.Type === 'Series') {
             loadNextUp();
+            loadSeasons();
+        }
+        
+        if (itemData.Type === 'Season') {
+            loadEpisodes();
         }
         
         if (itemData.People && itemData.People.length > 0) {
             displayCast(itemData.People);
         }
         
-        if (itemData.Type === 'Series') {
-            loadSeasons();
-        }
-        
         loadSimilarItems();
         displayTechnicalDetails();
+    }
+
+    function loadCollectionMovies() {
+        var params = {
+            parentId: itemData.Id,
+            sortBy: 'ProductionYear,SortName',
+            sortOrder: 'Ascending',
+            fields: 'PrimaryImageAspectRatio,ProductionYear'
+        };
+        
+        var endpoint = '/Users/' + auth.userId + '/Items';
+        
+        JellyfinAPI.getItems(auth.serverAddress, auth.accessToken, endpoint, params, function(err, data) {
+            if (!err && data && data.Items && data.Items.length > 0) {
+                displayCollectionMovies(data.Items);
+            }
+        });
+    }
+
+    function displayCollectionMovies(items) {
+        // Reuse the similar section for displaying collection movies
+        elements.similarSection.style.display = 'block';
+        var titleElement = elements.similarSection.querySelector('.section-title');
+        titleElement.textContent = 'Movies in Collection';
+        elements.similarList.innerHTML = '';
+        
+        items.forEach(function(item) {
+            var card = document.createElement('div');
+            card.className = 'similar-card';
+            card.setAttribute('tabindex', '0');
+            
+            var img = document.createElement('img');
+            img.className = 'similar-image';
+            if (item.ImageTags && item.ImageTags.Primary) {
+                img.src = auth.serverAddress + '/Items/' + item.Id + '/Images/Primary?quality=90&maxHeight=400';
+            }
+            
+            var title = document.createElement('div');
+            title.className = 'similar-title';
+            title.textContent = item.Name;
+            if (item.ProductionYear) {
+                title.textContent += ' (' + item.ProductionYear + ')';
+            }
+            
+            card.appendChild(img);
+            card.appendChild(title);
+            
+            card.addEventListener('click', function() {
+                window.location.href = 'details.html?id=' + item.Id;
+            });
+            
+            elements.similarList.appendChild(card);
+        });
+    }
+
+    function loadPersonFilmography() {
+        var params = {
+            userId: auth.userId,
+            personIds: itemData.Id,
+            recursive: true,
+            includeItemTypes: 'Movie,Series',
+            fields: 'PrimaryImageAspectRatio,ProductionYear',
+            sortBy: 'ProductionYear,SortName',
+            sortOrder: 'Descending',
+            limit: 100
+        };
+        
+        var endpoint = '/Users/' + auth.userId + '/Items';
+        
+        JellyfinAPI.getItems(auth.serverAddress, auth.accessToken, endpoint, params, function(err, data) {
+            if (!err && data && data.Items && data.Items.length > 0) {
+                displayFilmography(data.Items);
+            }
+        });
+    }
+
+    function displayFilmography(items) {
+        // Reuse the similar section for filmography display
+        elements.similarSection.style.display = 'block';
+        var titleElement = elements.similarSection.querySelector('.section-title');
+        if (titleElement) {
+            titleElement.textContent = 'Filmography';
+        }
+        
+        elements.similarList.innerHTML = '';
+        
+        items.forEach(function(item) {
+            var card = document.createElement('div');
+            card.className = 'similar-card';
+            card.setAttribute('tabindex', '0');
+            
+            var img = document.createElement('img');
+            img.className = 'similar-image';
+            if (item.ImageTags && item.ImageTags.Primary) {
+                img.src = auth.serverAddress + '/Items/' + item.Id + '/Images/Primary?quality=90&maxHeight=400';
+            }
+            
+            var title = document.createElement('div');
+            title.className = 'similar-title';
+            title.textContent = item.Name;
+            if (item.ProductionYear) {
+                title.textContent += ' (' + item.ProductionYear + ')';
+            }
+            
+            card.appendChild(img);
+            card.appendChild(title);
+            
+            card.addEventListener('click', function() {
+                window.location.href = 'details.html?id=' + item.Id;
+            });
+            
+            card.addEventListener('keydown', function(evt) {
+                if (evt.keyCode === KeyCodes.ENTER) {
+                    evt.preventDefault();
+                    window.location.href = 'details.html?id=' + item.Id;
+                }
+            });
+            
+            elements.similarList.appendChild(card);
+        });
     }
 
     function displayCast(people) {
@@ -446,6 +801,13 @@ var DetailsController = (function() {
             
             castCard.addEventListener('click', function() {
                 window.location.href = 'details.html?id=' + person.Id;
+            });
+            
+            castCard.addEventListener('keydown', function(evt) {
+                if (evt.keyCode === KeyCodes.ENTER) {
+                    evt.preventDefault();
+                    window.location.href = 'details.html?id=' + person.Id;
+                }
             });
             
             elements.castList.appendChild(castCard);
@@ -609,6 +971,91 @@ var DetailsController = (function() {
             });
             
             elements.seasonsList.appendChild(seasonCard);
+        });
+    }
+
+    function loadEpisodes() {
+        var params = {
+            userId: auth.userId,
+            seasonId: itemData.Id,
+            fields: 'Overview,PrimaryImageAspectRatio,MediaStreams',
+            enableImages: true,
+            enableUserData: true
+        };
+        
+        var endpoint = '/Shows/' + itemData.Id + '/Episodes';
+        
+        JellyfinAPI.getItems(auth.serverAddress, auth.accessToken, endpoint, params, function(err, data) {
+            if (!err && data && data.Items && data.Items.length > 0) {
+                displayEpisodes(data.Items);
+            }
+        });
+    }
+
+    function displayEpisodes(episodes) {
+        elements.episodesSection.style.display = 'block';
+        elements.episodesList.innerHTML = '';
+        
+        episodes.forEach(function(episode) {
+            var card = document.createElement('div');
+            card.className = 'episode-card';
+            card.setAttribute('tabindex', '0');
+            
+            var img = document.createElement('img');
+            img.className = 'episode-image';
+            if (episode.ImageTags && episode.ImageTags.Primary) {
+                img.src = auth.serverAddress + '/Items/' + episode.Id + '/Images/Primary?quality=90&maxWidth=420';
+            } else if (episode.SeriesPrimaryImageTag && episode.SeriesId) {
+                img.src = auth.serverAddress + '/Items/' + episode.SeriesId + '/Images/Primary?quality=90&maxWidth=420';
+            }
+            
+            var title = document.createElement('div');
+            title.className = 'episode-title';
+            title.textContent = episode.Name;
+            
+            var info = document.createElement('div');
+            info.className = 'episode-info';
+            var episodeNum = 'Episode ' + (episode.IndexNumber || 0);
+            if (episode.RunTimeTicks) {
+                var minutes = Math.round(episode.RunTimeTicks / 600000000);
+                episodeNum += ' • ' + minutes + ' min';
+            }
+            info.textContent = episodeNum;
+            
+            var overview = document.createElement('div');
+            overview.className = 'episode-overview';
+            overview.textContent = episode.Overview || '';
+            
+            card.appendChild(img);
+            card.appendChild(title);
+            card.appendChild(info);
+            card.appendChild(overview);
+            
+            if (episode.UserData && episode.UserData.PlaybackPositionTicks > 0 && episode.RunTimeTicks) {
+                var progressContainer = document.createElement('div');
+                progressContainer.className = 'episode-progress';
+                
+                var progressBar = document.createElement('div');
+                progressBar.className = 'episode-progress-bar';
+                var percentage = (episode.UserData.PlaybackPositionTicks / episode.RunTimeTicks) * 100;
+                progressBar.style.width = percentage + '%';
+                
+                progressContainer.appendChild(progressBar);
+                card.appendChild(progressContainer);
+            }
+            
+            card.addEventListener('click', function() {
+                window.location.href = 'details.html?id=' + episode.Id;
+            });
+            
+            card.addEventListener('keydown', function(evt) {
+                if (evt.keyCode === KeyCodes.ENTER) {
+                    evt.preventDefault();
+                    window.location.href = 'details.html?id=' + episode.Id;
+                }
+            });
+            
+            elements.episodesList.appendChild(card);
         });
     }
 

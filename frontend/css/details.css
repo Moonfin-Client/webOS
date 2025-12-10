@@ -51,33 +51,45 @@ body {
     z-index: 1;
     height: 100vh;
     overflow-y: auto;
-    overflow-x: hidden;
-    padding: 60px;
+    overflow-x: visible;
+    padding: 80px 60px 60px 60px;
 }
 
 .details-header {
     display: flex;
     gap: 50px;
     margin-bottom: 60px;
+    margin-top: 0;
+    width: 100%;
+    min-width: 100%;
 }
 
-.poster-section {
-    flex: 0 0 auto;
-}
-
-.poster-image {
-    width: 400px;
-    height: 600px;
-    object-fit: cover;
-    border-radius: 12px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
-}
-
+/* Left column - Info section */
 .info-section {
-    flex: 1;
+    flex: 1 1 70%;
     display: flex;
     flex-direction: column;
+    justify-content: flex-start;
+    min-width: 0;
+}
+
+/* Right column - Logo/Poster section */
+.logo-section {
+    flex: 0 1 30%;
+    min-width: 300px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
     justify-content: center;
+}
+
+.logo-image {
+    max-width: 600px;
+    max-height: 300px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    flex-shrink: 0;
 }
 
 .item-title {
@@ -87,19 +99,46 @@ body {
     line-height: 1.2;
 }
 
+.person-content {
+    display: flex;
+    gap: 30px;
+    margin-bottom: 30px;
+    align-items: flex-start;
+}
+
+.person-photo {
+    max-width: 300px;
+    max-height: 450px;
+    min-width: 300px;
+    width: 300px;
+    height: auto;
+    border-radius: 8px;
+    object-fit: cover;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    flex-shrink: 0;
+}
+
+.person-overview {
+    flex: 1;
+    font-size: 24px;
+    line-height: 1.6;
+    color: rgba(255, 255, 255, 0.9);
+    margin: 0;
+}
+
 .info-row {
     display: flex;
-    gap: 8px;
+    gap: 12px;
     flex-wrap: wrap;
     align-items: center;
-    margin-bottom: 16px;
+    margin-bottom: 20px;
 }
 
 .info-badge {
     display: inline-flex;
     align-items: center;
-    gap: 3px;
-    font-size: 16px;
+    gap: 5px;
+    font-size: 18px;
     font-weight: 500;
     color: rgba(255, 255, 255, 0.9);
     padding: 0;
@@ -107,41 +146,89 @@ body {
 
 .info-badge-pill {
     background: rgba(255, 255, 255, 0.15);
-    border-radius: 3px;
-    padding: 2px 6px;
-    font-size: 12px;
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 14px;
     font-weight: 600;
     text-align: center;
 }
 
-.info-badge .icon-star,
-.info-badge .icon-time {
+.info-badge .icon-star {
     font-size: 18px;
     color: #EECE55;
 }
 
-.genres-row {
-    margin-bottom: 16px;
+/* Tagline */
+.tagline-row {
+    margin-bottom: 20px;
 }
 
-.genres-text {
-    font-size: 14px;
-    color: rgba(255, 255, 255, 0.7);
+.tagline-text {
+    font-size: 20px;
+    font-style: italic;
+    color: rgba(255, 255, 255, 0.75);
     font-weight: 400;
+    line-height: 1.4;
 }
 
+/* Overview/Description */
 .item-overview {
-    font-size: 26px;
+    font-size: 22px;
     line-height: 1.6;
-    color: #e0e0e0;
-    margin: 0 0 40px 0;
-    max-width: 900px;
+    color: rgba(255, 255, 255, 0.85);
+    margin: 0 0 30px 0;
+    max-width: 65vw;
+}
+
+/* Grouped Metadata Cells (Android TV Style) */
+.metadata-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin-bottom: 30px;
+    background: transparent;
+    border-radius: 6px;
+    overflow: hidden;
+    width: 100%;
+    max-width: 800px;
+}
+
+.metadata-cell {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 18px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.metadata-cell:last-child {
+    border-bottom: none;
+}
+
+.metadata-label {
+    font-size: 16px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.7);
+    flex: 0 0 100px;
+}
+
+.metadata-value {
+    font-size: 16px;
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.9);
+    text-align: right;
+    flex: 1;
 }
 
 .action-buttons {
     display: flex;
-    gap: 24px;
+    gap: 40px;
     flex-wrap: wrap;
+    justify-content: center;
+    width: 100vw;
+    margin: 0 calc(-60px - ((100vw - 100%) / 2));
+    position: relative;
+    left: 0;
 }
 
 .btn-wrapper {
@@ -155,20 +242,20 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 80px;
-    height: 52px;
+    width: 120px;
+    height: 75px;
     padding: 0;
     background: transparent;
     border: none;
-    border-radius: 4px;
+    border-radius: 8px;
     cursor: pointer;
     transition: all 0.2s ease;
     outline: none;
 }
 
 .btn-action img {
-    width: 32px;
-    height: 32px;
+    width: 48px;
+    height: 48px;
     object-fit: contain;
     filter: brightness(0) invert(1);
     transition: filter 0.2s ease;
@@ -177,11 +264,11 @@ body {
 .btn-label {
     display: block;
     text-align: center;
-    font-size: 13px;
+    font-size: 16px;
     font-weight: 500;
     line-height: 1.2;
     color: rgba(255, 255, 255, 0.8);
-    max-width: 80px;
+    max-width: 120px;
     transition: color 0.2s ease;
 }
 
@@ -243,7 +330,7 @@ body {
 
 .nextup-scroller {
     overflow-x: auto;
-    overflow-y: hidden;
+    overflow-y: visible;
     scrollbar-width: none;
     -ms-overflow-style: none;
 }
@@ -255,7 +342,7 @@ body {
 .nextup-list {
     display: flex;
     gap: 20px;
-    padding-bottom: 10px;
+    padding: 20px 0 30px 0;
 }
 
 .nextup-card {
@@ -310,7 +397,7 @@ body {
 
 .cast-scroller {
     overflow-x: auto;
-    overflow-y: hidden;
+    overflow-y: visible;
     scrollbar-width: none;
     -ms-overflow-style: none;
 }
@@ -322,7 +409,7 @@ body {
 .cast-list {
     display: flex;
     gap: 20px;
-    padding-bottom: 10px;
+    padding: 20px 0 30px 0;
 }
 
 .cast-card {
@@ -369,7 +456,7 @@ body {
 
 .seasons-scroller {
     overflow-x: auto;
-    overflow-y: hidden;
+    overflow-y: visible;
     scrollbar-width: none;
     -ms-overflow-style: none;
 }
@@ -381,7 +468,7 @@ body {
 .seasons-list {
     display: flex;
     gap: 20px;
-    padding-bottom: 10px;
+    padding: 20px 0 30px 0;
 }
 
 .season-card {
@@ -420,9 +507,91 @@ body {
     color: #888;
 }
 
+.episodes-scroller {
+    overflow-x: auto;
+    overflow-y: visible;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.episodes-scroller::-webkit-scrollbar {
+    display: none;
+}
+
+.episodes-list {
+    display: flex;
+    gap: 20px;
+    padding: 20px 0 30px 0;
+}
+
+.episode-card {
+    flex: 0 0 auto;
+    width: 420px;
+    cursor: pointer;
+    transition: transform 0.2s;
+    outline: none;
+}
+
+.episode-card:focus {
+    outline: 3px solid #ffffff;
+    outline-offset: 4px;
+    transform: scale(1.05);
+}
+
+.episode-image {
+    width: 420px;
+    height: 236px;
+    object-fit: cover;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    background: #222;
+}
+
+.episode-title {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.episode-info {
+    font-size: 18px;
+    color: #888;
+    margin-bottom: 8px;
+}
+
+.episode-overview {
+    font-size: 16px;
+    color: #aaa;
+    line-height: 1.4;
+    max-height: 3.6em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.episode-progress {
+    margin-top: 8px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.episode-progress-bar {
+    height: 100%;
+    background: #00a4dc;
+    transition: width 0.3s;
+}
+
+/* Similar Section */
 .similar-scroller {
     overflow-x: auto;
-    overflow-y: hidden;
+    overflow-y: visible;
     scrollbar-width: none;
     -ms-overflow-style: none;
 }
@@ -434,7 +603,7 @@ body {
 .similar-list {
     display: flex;
     gap: 20px;
-    padding-bottom: 10px;
+    padding: 20px 0 30px 0;
 }
 
 .similar-card {

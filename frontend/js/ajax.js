@@ -69,7 +69,9 @@ AJAX.prototype.request = function(url, settings) {
 					try {
                     	settings.success(JSON.parse(xhr.responseText));
 					} catch (error) {
-						console.error(error);
+						if (typeof JellyfinAPI !== 'undefined') {
+							JellyfinAPI.Logger.error(error);
+						}
 						if (error instanceof SyntaxError) {
 							if (settings.error) {
 								settings.error({error: "The server did not return valid JSON data."});

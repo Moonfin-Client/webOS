@@ -14,7 +14,8 @@ var BrowseController = (function() {
         inNavBar: false,
         navBarIndex: 0,
         rowPositions: {},
-        featuredButtonIndex: 0
+        featuredButtonIndex: 0,
+        previousRow: 0
     };
     
     var featuredCarousel = {
@@ -46,6 +47,11 @@ var BrowseController = (function() {
                 displayUserInfo();
                 setupNavigation();
                 loadHomeContent();
+                
+                // Restore focus position after content loads (delayed)
+                setTimeout(function() {
+                    restoreFocusPosition();
+                }, 800);
             }
         }, 50);
     }
@@ -74,6 +80,10 @@ var BrowseController = (function() {
             carouselPrev: document.getElementById('carouselPrev'),
             carouselNext: document.getElementById('carouselNext'),
             featuredIndicators: document.getElementById('featuredIndicators'),
+            detailSection: document.getElementById('detailSection'),
+            detailTitle: document.getElementById('detailTitle'),
+            detailInfoRow: document.getElementById('detailInfoRow'),
+            detailSummary: document.getElementById('detailSummary'),
             contentRows: document.getElementById('contentRows'),
             loadingIndicator: document.getElementById('loadingIndicator'),
             errorDisplay: document.getElementById('errorDisplay'),
@@ -94,27 +104,8 @@ var BrowseController = (function() {
                 userLibraries = response.Items;
                 JellyfinAPI.Logger.info('Loaded libraries:', userLibraries.length);
                 
-                var navPill = document.querySelector('.nav-pill');
-                if (navPill) {
-                    userLibraries.forEach(function(library) {
-                        var btn = document.createElement('button');
-                        btn.className = 'nav-btn';
-                        btn.dataset.libraryId = library.Id;
-                        btn.dataset.libraryName = library.Name;
-                        btn.dataset.collectionType = library.CollectionType || 'mixed';
-                        
-                        var label = document.createElement('span');
-                        label.className = 'nav-label';
-                        label.textContent = library.Name;
-                        btn.appendChild(label);
-                        
-                        btn.addEventListener('click', function() {
-                            switchView('library', library.Id, library.Name, library.CollectionType);
-                        });
-                        
-                        navPill.appendChild(btn);
-                    });
-                }
+                // Libraries are now loaded by navbar.js, so we don't need to add them here
+                // Just store them for internal use
             }
         });
     }
@@ -134,9 +125,6 @@ var BrowseController = (function() {
             elements.showsBtn.addEventListener('click', function() {
                 switchView('shows');
             });
-        }
-        if (elements.settingsBtn) {
-            elements.settingsBtn.addEventListener('click', handleLogout);
         }
         if (elements.retryBtn) {
             elements.retryBtn.addEventListener('click', function() {
@@ -231,14 +219,30 @@ var BrowseController = (function() {
                 evt.preventDefault();
                 if (focusManager.currentRow > 0) {
                     focusManager.rowPositions[focusManager.currentRow] = focusManager.currentItem;
+                    focusManager.previousRow = focusManager.currentRow;
                     focusManager.currentRow--;
                     focusManager.currentItem = focusManager.rowPositions[focusManager.currentRow] || 0;
                     var prevRowItems = allRows[focusManager.currentRow].querySelectorAll('.item-card');
                     if (focusManager.currentItem >= prevRowItems.length) {
                         focusManager.currentItem = prevRowItems.length - 1;
                     }
+                    updateRowVisibility();
                     updateFocus();
                 } else if (focusManager.currentRow === 0) {
+                    // Slide banner back down
+                    if (elements.featuredBanner) {
+                        elements.featuredBanner.classList.remove('slide-up');
+                    }
+                    if (elements.contentRows) {
+                        elements.contentRows.classList.remove('move-up');
+                    }
+                    
+                    // Show all rows when going back to featured banner
+                    var allRowElements = document.querySelectorAll('.content-row');
+                    allRowElements.forEach(function(row) {
+                        row.classList.remove('row-hidden');
+                    });
+                    
                     focusManager.inFeaturedBanner = true;
                     focusManager.inNavBar = false;
                     if (elements.featuredBanner) {
@@ -253,12 +257,14 @@ var BrowseController = (function() {
                 evt.preventDefault();
                 if (focusManager.currentRow < allRows.length - 1) {
                     focusManager.rowPositions[focusManager.currentRow] = focusManager.currentItem;
+                    focusManager.previousRow = focusManager.currentRow;
                     focusManager.currentRow++;
                     focusManager.currentItem = focusManager.rowPositions[focusManager.currentRow] || 0;
                     var nextRowItems = allRows[focusManager.currentRow].querySelectorAll('.item-card');
                     if (focusManager.currentItem >= nextRowItems.length) {
                         focusManager.currentItem = nextRowItems.length - 1;
                     }
+                    updateRowVisibility();
                     updateFocus();
                 }
                 break;
@@ -295,9 +301,19 @@ var BrowseController = (function() {
                 focusManager.inFeaturedBanner = false;
                 if (elements.featuredBanner) {
                     elements.featuredBanner.classList.remove('focused');
+                    elements.featuredBanner.classList.add('slide-up');
                 }
+                if (elements.contentRows) {
+                    elements.contentRows.classList.add('move-up');
+                }
+                focusManager.previousRow = -1;
                 focusManager.currentRow = 0;
                 focusManager.currentItem = focusManager.rowPositions[0] || 0;
+                // Ensure all rows are visible when entering first row from banner
+                var allRowElements = document.querySelectorAll('.content-row');
+                allRowElements.forEach(function(row) {
+                    row.classList.remove('row-hidden');
+                });
                 updateFocus();
                 break;
                 
@@ -307,6 +323,10 @@ var BrowseController = (function() {
                     var currentItem = featuredCarousel.items[featuredCarousel.currentIndex];
                     if (currentItem) {
                         stopCarouselAutoPlay();
+                        
+                        // Save focus position before navigating
+                        saveFocusPosition();
+                        
                         window.location.href = 'details.html?id=' + currentItem.Id;
                     }
                 }
@@ -315,7 +335,7 @@ var BrowseController = (function() {
     }
     
     function handleNavBarNavigation(evt) {
-        var navButtons = Array.from(document.querySelectorAll('.nav-center .nav-btn, .nav-right .nav-btn'));
+        var navButtons = Array.from(document.querySelectorAll('.nav-left .nav-btn, .nav-center .nav-btn'));
         
         navButtons.forEach(function(btn) {
             btn.classList.remove('focused');
@@ -358,14 +378,17 @@ var BrowseController = (function() {
     function focusToNavBar() {
         focusManager.inNavBar = true;
         focusManager.inFeaturedBanner = false;
-        focusManager.navBarIndex = 0;
-        var navButtons = Array.from(document.querySelectorAll('.nav-center .nav-btn, .nav-right .nav-btn'));
+        var navButtons = Array.from(document.querySelectorAll('.nav-left .nav-btn, .nav-center .nav-btn'));
+        
+        // Start at home button (index 1), not user avatar (index 0)
+        focusManager.navBarIndex = navButtons.length > 1 ? 1 : 0;
+        
         if (navButtons.length > 0) {
             navButtons.forEach(function(btn) {
                 btn.classList.remove('focused');
             });
-            navButtons[0].classList.add('focused');
-            navButtons[0].focus();
+            navButtons[focusManager.navBarIndex].classList.add('focused');
+            navButtons[focusManager.navBarIndex].focus();
         }
         
         if (elements.featuredBanner) {
@@ -381,6 +404,14 @@ var BrowseController = (function() {
     function focusToFeaturedBanner() {
         focusManager.inFeaturedBanner = true;
         focusManager.inNavBar = false;
+        
+        // Slide banner back down if it was up
+        if (elements.featuredBanner) {
+            elements.featuredBanner.classList.remove('slide-up');
+        }
+        if (elements.contentRows) {
+            elements.contentRows.classList.remove('move-up');
+        }
         
         updateFeaturedFocus();
         
@@ -403,6 +434,172 @@ var BrowseController = (function() {
         if (elements.featuredBanner) {
             elements.featuredBanner.classList.add('focused');
         }
+        // Hide detail section when in featured banner
+        if (elements.detailSection) {
+            elements.detailSection.style.display = 'none';
+        }
+        // Remove padding from content rows
+        if (elements.contentRows) {
+            elements.contentRows.classList.remove('with-detail');
+        }
+    }
+    
+    function updateRowVisibility() {
+        var allRows = document.querySelectorAll('.content-row');
+        if (allRows.length === 0) return;
+        
+        // Keep featured banner hidden when scrolling rows
+        if (focusManager.currentRow >= 0 && !focusManager.inFeaturedBanner) {
+            if (elements.featuredBanner && !elements.featuredBanner.classList.contains('slide-up')) {
+                elements.featuredBanner.classList.add('slide-up');
+            }
+            if (elements.contentRows && !elements.contentRows.classList.contains('move-up')) {
+                elements.contentRows.classList.add('move-up');
+            }
+        }
+        
+        allRows.forEach(function(row, index) {
+            // Hide rows above current row (keep current and below visible)
+            if (index < focusManager.currentRow) {
+                row.classList.add('row-hidden');
+            } else {
+                row.classList.remove('row-hidden');
+            }
+        });
+    }
+    
+    function updateDetailSection(itemCard) {
+        if (!elements.detailSection || !elements.detailTitle || !elements.detailInfoRow || !elements.detailSummary) {
+            return;
+        }
+        
+        var itemData = itemCard.dataset;
+        
+        // Show detail section and add padding to content rows
+        elements.detailSection.style.display = 'block';
+        if (elements.contentRows) {
+            elements.contentRows.classList.add('with-detail');
+        }
+        
+        // Update title
+        elements.detailTitle.textContent = itemData.name || 'Unknown Title';
+        
+        // Clear and populate info row with badges
+        elements.detailInfoRow.innerHTML = '';
+        
+        if (itemData.year) {
+            var yearBadge = document.createElement('span');
+            yearBadge.className = 'info-badge';
+            yearBadge.textContent = itemData.year;
+            elements.detailInfoRow.appendChild(yearBadge);
+        }
+        
+        if (itemData.rating) {
+            var ratingBadge = document.createElement('span');
+            ratingBadge.className = 'info-badge';
+            ratingBadge.textContent = itemData.rating;
+            elements.detailInfoRow.appendChild(ratingBadge);
+        }
+        
+        if (itemData.runtime) {
+            var runtimeBadge = document.createElement('span');
+            runtimeBadge.className = 'info-badge';
+            runtimeBadge.textContent = formatRuntime(parseInt(itemData.runtime));
+            elements.detailInfoRow.appendChild(runtimeBadge);
+        }
+        
+        if (itemData.genres) {
+            var genresBadge = document.createElement('span');
+            genresBadge.className = 'info-badge';
+            genresBadge.textContent = itemData.genres;
+            elements.detailInfoRow.appendChild(genresBadge);
+        }
+        
+        // Update summary
+        elements.detailSummary.textContent = itemData.overview || 'No description available.';
+    }
+    
+    function formatRuntime(ticks) {
+        var minutes = Math.round(ticks / 600000000);
+        var hours = Math.floor(minutes / 60);
+        var mins = minutes % 60;
+        
+        if (hours > 0) {
+            return hours + 'h ' + mins + 'm';
+        }
+        return mins + 'm';
+    }
+    
+    /**
+     * Scrolls item horizontally into view within its row scroller
+     * @param {HTMLElement} currentItem - The focused item card
+     * @param {HTMLElement} rowScroller - The row's scroll container
+     */
+    function scrollItemHorizontally(currentItem, rowScroller) {
+        if (!currentItem || !rowScroller) return;
+        
+        var itemRect = currentItem.getBoundingClientRect();
+        var scrollerRect = rowScroller.getBoundingClientRect();
+        
+        var HORIZONTAL_SCROLL_PADDING = 60;
+        
+        if (itemRect.left < scrollerRect.left) {
+            rowScroller.scrollLeft -= (scrollerRect.left - itemRect.left) + HORIZONTAL_SCROLL_PADDING;
+        } else if (itemRect.right > scrollerRect.right) {
+            rowScroller.scrollLeft += (itemRect.right - scrollerRect.right) + HORIZONTAL_SCROLL_PADDING;
+        }
+    }
+    
+    /**
+     * Calculates vertical scroll adjustment to position row on screen
+     * @param {HTMLElement} currentRowElement - The current focused row
+     * @returns {number} Scroll adjustment in pixels (0 if no adjustment needed)
+     */
+    function calculateVerticalScrollAdjustment(currentRowElement) {
+        if (!currentRowElement) return 0;
+        
+        var mainContent = document.querySelector('.main-content');
+        if (!mainContent) return 0;
+        
+        var rowRect = currentRowElement.getBoundingClientRect();
+        var mainRect = mainContent.getBoundingClientRect();
+        
+        var detailSection = elements.detailSection;
+        var detailBottom = 0;
+        
+        if (detailSection && detailSection.style.display !== 'none') {
+            var detailRect = detailSection.getBoundingClientRect();
+            detailBottom = detailRect.bottom;
+        }
+        
+        var ROW_VERTICAL_POSITION = 0.25; // Position row at 25% of viewport height
+        var targetPosition = mainRect.top + (mainRect.height * ROW_VERTICAL_POSITION);
+        var scrollAdjustment = rowRect.top - targetPosition;
+        
+        // Prevent first row from scrolling behind detail section
+        var DETAIL_SECTION_BOTTOM_SPACING = 20;
+        if (focusManager.currentRow === 0 && detailBottom > 0) {
+            var minRowTop = detailBottom + DETAIL_SECTION_BOTTOM_SPACING;
+            if (rowRect.top - scrollAdjustment < minRowTop) {
+                scrollAdjustment = rowRect.top - minRowTop;
+            }
+        }
+        
+        var SCROLL_THRESHOLD = 10;
+        return Math.abs(scrollAdjustment) > SCROLL_THRESHOLD ? scrollAdjustment : 0;
+    }
+    
+    /**
+     * Applies vertical scroll adjustment to main content
+     * @param {number} scrollAdjustment - Amount to scroll in pixels
+     */
+    function applyVerticalScroll(scrollAdjustment) {
+        if (scrollAdjustment === 0) return;
+        
+        var mainContent = document.querySelector('.main-content');
+        if (mainContent) {
+            mainContent.scrollTop += scrollAdjustment;
+        }
     }
     
     function updateFocus() {
@@ -424,19 +621,13 @@ var BrowseController = (function() {
             currentItem.classList.add('focused');
             currentItem.focus();
             
-            var rowScroller = currentRowElement.querySelector('.row-scroller');
-            if (rowScroller) {
-                var itemRect = currentItem.getBoundingClientRect();
-                var scrollerRect = rowScroller.getBoundingClientRect();
-                
-                if (itemRect.left < scrollerRect.left) {
-                    rowScroller.scrollLeft -= (scrollerRect.left - itemRect.left) + 60;
-                } else if (itemRect.right > scrollerRect.right) {
-                    rowScroller.scrollLeft += (itemRect.right - scrollerRect.right) + 60;
-                }
-            }
+            updateDetailSection(currentItem);
             
-            currentRowElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            var rowScroller = currentRowElement.querySelector('.row-scroller');
+            scrollItemHorizontally(currentItem, rowScroller);
+            
+            var scrollAdjustment = calculateVerticalScrollAdjustment(currentRowElement);
+            applyVerticalScroll(scrollAdjustment);
         }
     }
     
@@ -735,9 +926,8 @@ var BrowseController = (function() {
                     hideLoading();
                     if (!hasContent) {
                         showError('No content available in your library');
-                    } else {
-                        initializeFocus();
                     }
+                    // Focus initialization handled by restoreFocusPosition in init()
                 }
             });
         });
@@ -1026,6 +1216,19 @@ var BrowseController = (function() {
         card.className = 'item-card';
         card.setAttribute('data-item-id', item.Id);
         
+        // Add data attributes for detail section
+        card.dataset.name = item.Name || '';
+        card.dataset.year = item.ProductionYear || '';
+        card.dataset.rating = item.OfficialRating || '';
+        card.dataset.runtime = item.RunTimeTicks || '';
+        card.dataset.overview = item.Overview || '';
+        
+        if (item.Genres && item.Genres.length > 0) {
+            card.dataset.genres = item.Genres.slice(0, 3).join(', ');
+        } else {
+            card.dataset.genres = '';
+        }
+        
         var img = document.createElement('img');
         img.className = 'item-image';
         
@@ -1062,7 +1265,147 @@ var BrowseController = (function() {
 
     function handleItemClick(item) {
         JellyfinAPI.Logger.info('Item clicked:', item.Name, item.Id);
+        
+        // Save current focus position before navigating away
+        saveFocusPosition();
+        
         window.location.href = 'details.html?id=' + item.Id;
+    }
+
+    function saveFocusPosition() {
+        var position = {
+            inFeaturedBanner: focusManager.inFeaturedBanner,
+            inNavBar: focusManager.inNavBar,
+            currentRow: focusManager.currentRow,
+            currentItem: focusManager.currentItem,
+            featuredButtonIndex: focusManager.featuredButtonIndex,
+            timestamp: Date.now()
+        };
+        
+        try {
+            localStorage.setItem('browsePosition', JSON.stringify(position));
+            JellyfinAPI.Logger.info('Saved browse position:', position);
+        } catch (e) {
+            JellyfinAPI.Logger.error('Failed to save browse position:', e);
+        }
+    }
+
+    function restoreFocusPosition() {
+        try {
+            var savedPosition = localStorage.getItem('browsePosition');
+            if (!savedPosition) {
+                // No saved position, default to featured banner if enabled
+                defaultFocus();
+                return;
+            }
+            
+            var position = JSON.parse(savedPosition);
+            
+            // Check if position is recent (within 5 minutes)
+            var age = Date.now() - position.timestamp;
+            if (age > 5 * 60 * 1000) {
+                JellyfinAPI.Logger.info('Saved position too old, using default');
+                localStorage.removeItem('browsePosition');
+                defaultFocus();
+                return;
+            }
+            
+            // If was in navbar, don't restore - use default focus
+            if (position.inNavBar) {
+                JellyfinAPI.Logger.info('Was in navbar, using default focus');
+                localStorage.removeItem('browsePosition');
+                defaultFocus();
+                return;
+            }
+            
+            // If was in featured banner, restore featured banner focus
+            if (position.inFeaturedBanner && elements.featuredBanner && elements.featuredBanner.style.display !== 'none') {
+                JellyfinAPI.Logger.info('Restoring featured banner focus');
+                focusManager.inFeaturedBanner = true;
+                focusManager.inNavBar = false;
+                focusManager.featuredButtonIndex = position.featuredButtonIndex || 0;
+                var featuredButtons = [elements.carouselPrev, elements.carouselNext];
+                if (featuredButtons[focusManager.featuredButtonIndex]) {
+                    featuredButtons[focusManager.featuredButtonIndex].focus();
+                }
+                localStorage.removeItem('browsePosition');
+                return;
+            }
+            
+            // Restore row and item position
+            if (typeof position.currentRow === 'number' && typeof position.currentItem === 'number') {
+                var rowElements = elements.contentRows.querySelectorAll('.content-row');
+                if (position.currentRow < rowElements.length) {
+                    JellyfinAPI.Logger.info('Restoring row focus:', position.currentRow, position.currentItem);
+                    focusManager.currentRow = position.currentRow;
+                    focusManager.currentItem = position.currentItem;
+                    focusManager.inFeaturedBanner = false;
+                    focusManager.inNavBar = false;
+                    
+                    // Update focus without animation
+                    updateFocusNoAnimation();
+                    localStorage.removeItem('browsePosition');
+                    return;
+                }
+            }
+            
+            // Fallback to default
+            defaultFocus();
+            
+        } catch (e) {
+            JellyfinAPI.Logger.error('Failed to restore browse position:', e);
+            defaultFocus();
+        }
+    }
+
+    function updateFocusNoAnimation() {
+        document.querySelectorAll('.item-card').forEach(function(card) {
+            card.classList.remove('focused');
+        });
+        
+        var allRows = document.querySelectorAll('.content-row');
+        if (allRows.length === 0) return;
+        
+        var currentRowElement = allRows[focusManager.currentRow];
+        if (!currentRowElement) return;
+        
+        var items = currentRowElement.querySelectorAll('.item-card');
+        if (items.length === 0) return;
+        
+        var currentItem = items[focusManager.currentItem];
+        if (currentItem) {
+            currentItem.classList.add('focused');
+            currentItem.focus();
+            
+            var rowScroller = currentRowElement.querySelector('.row-scroller');
+            scrollItemHorizontally(currentItem, rowScroller);
+            
+            updateDetailSection(currentItem);
+            
+            var scrollAdjustment = calculateVerticalScrollAdjustment(currentRowElement);
+            applyVerticalScroll(scrollAdjustment);
+        }
+    }
+
+    function defaultFocus() {
+        // Check if featured banner is enabled and visible
+        if (elements.featuredBanner && elements.featuredBanner.style.display !== 'none' && featuredCarousel.items && featuredCarousel.items.length > 0) {
+            JellyfinAPI.Logger.info('Default focus: featured banner');
+            focusManager.inFeaturedBanner = true;
+            focusManager.inNavBar = false;
+            focusManager.featuredButtonIndex = 0;
+            if (elements.carouselPrev) {
+                elements.carouselPrev.focus();
+            }
+        } else {
+            // Default to first item in first row
+            JellyfinAPI.Logger.info('Default focus: first row');
+            focusManager.currentRow = 0;
+            focusManager.currentItem = 0;
+            focusManager.inFeaturedBanner = false;
+            focusManager.inNavBar = false;
+            updateFocusNoAnimation();
+        }
     }
 
     function clearRows() {

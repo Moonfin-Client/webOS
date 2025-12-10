@@ -23,29 +23,20 @@
     <!-- Main Content -->
     <div class="details-container">
         
-        <!-- Header with Poster and Main Info -->
+        <!-- Header with Two-Column Layout (Android TV Style) -->
         <div class="details-header">
-            <div class="poster-section">
-                <img id="posterImage" class="poster-image" src="" alt="">
-            </div>
-            
+            <!-- Left Column: Info Section -->
             <div class="info-section">
                 <h1 id="itemTitle" class="item-title"></h1>
                 
-                <!-- Android TV-style Metadata Info Row -->
+                <!-- Person Content: Photo and Description side by side -->
+                <div id="personContent" class="person-content" style="display: none;">
+                    <img id="personPhoto" class="person-photo" src="" alt="">
+                    <p id="personOverview" class="person-overview"></p>
+                </div>
+                
+                <!-- Metadata Info Row -->
                 <div class="info-row">
-                    <!-- Community Rating -->
-                    <div id="communityRating" class="info-badge" style="display: none;">
-                        <span class="icon-star">⭐</span>
-                        <span id="ratingValue"></span>
-                    </div>
-                    
-                    <!-- Critic Rating -->
-                    <div id="criticRating" class="info-badge" style="display: none;">
-                        <span id="criticIcon"></span>
-                        <span id="criticValue"></span>
-                    </div>
-                    
                     <!-- Year -->
                     <div id="itemYear" class="info-badge" style="display: none;"></div>
                     
@@ -54,7 +45,6 @@
                     
                     <!-- Runtime -->
                     <div id="itemRuntime" class="info-badge" style="display: none;">
-                        <span class="icon-time">⏱</span>
                         <span id="runtimeValue"></span>
                     </div>
                     
@@ -67,16 +57,50 @@
                     <!-- Audio Codec -->
                     <div id="audioCodec" class="info-badge info-badge-pill" style="display: none;"></div>
                     
-                    <!-- Subtitles -->
-                    <div id="subtitles" class="info-badge info-badge-pill" style="display: none;">CC</div>
+                    <!-- Community Rating -->
+                    <div id="communityRating" class="info-badge" style="display: none;">
+                        <span class="icon-star">⭐</span>
+                        <span id="ratingValue"></span>
+                    </div>
+                    
+                    <!-- Critic Rating -->
+                    <div id="criticRating" class="info-badge" style="display: none;">
+                        <span id="criticIcon"></span>
+                        <span id="criticValue"></span>
+                    </div>
                 </div>
                 
-                <!-- Genres Row -->
-                <div class="genres-row">
-                    <span id="itemGenres" class="genres-text"></span>
+                <!-- Tagline -->
+                <div id="taglineRow" class="tagline-row" style="display: none;">
+                    <span id="itemTagline" class="tagline-text"></span>
                 </div>
                 
+                <!-- Description/Overview -->
                 <p id="itemOverview" class="item-overview"></p>
+                
+                <!-- Grouped Metadata Cells (Android TV Style) -->
+                <div id="metadataGroup" class="metadata-group">
+                    <!-- Genres -->
+                    <div id="genresCell" class="metadata-cell" style="display: none;">
+                        <span class="metadata-label">Genres</span>
+                        <span id="itemGenres" class="metadata-value"></span>
+                    </div>
+                    <!-- Director -->
+                    <div id="directorCell" class="metadata-cell" style="display: none;">
+                        <span class="metadata-label">Director</span>
+                        <span id="itemDirector" class="metadata-value"></span>
+                    </div>
+                    <!-- Writers -->
+                    <div id="writersCell" class="metadata-cell" style="display: none;">
+                        <span class="metadata-label">Writers</span>
+                        <span id="itemWriters" class="metadata-value"></span>
+                    </div>
+                    <!-- Studios -->
+                    <div id="studiosCell" class="metadata-cell" style="display: none;">
+                        <span class="metadata-label">Studio</span>
+                        <span id="itemStudios" class="metadata-value"></span>
+                    </div>
+                </div>
                 
                 <!-- Action Buttons -->
                 <div class="action-buttons">
@@ -136,6 +160,11 @@
                     </div>
                 </div>
             </div>
+            
+            <!-- Right Column: Logo Only -->
+            <div class="logo-section">
+                <img id="logoImage" class="logo-image" src="" alt="" style="display: none;">
+            </div>
         </div>
 
         <!-- Additional Information -->
@@ -147,16 +176,6 @@
                 <div class="nextup-scroller">
                     <div id="nextUpList" class="nextup-list">
                         <!-- Next up episodes will be added here -->
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Cast & Crew -->
-            <div id="castSection" class="section" style="display: none;">
-                <h2 class="section-title">Cast & Crew</h2>
-                <div class="cast-scroller">
-                    <div id="castList" class="cast-list">
-                        <!-- Cast items will be added here -->
                     </div>
                 </div>
             </div>
@@ -174,8 +193,20 @@
             <!-- Episodes (for Seasons) -->
             <div id="episodesSection" class="section" style="display: none;">
                 <h2 class="section-title">Episodes</h2>
-                <div id="episodesList" class="episodes-list">
-                    <!-- Episode items will be added here -->
+                <div class="episodes-scroller">
+                    <div id="episodesList" class="episodes-list">
+                        <!-- Episode items will be added here -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Cast & Crew -->
+            <div id="castSection" class="section" style="display: none;">
+                <h2 class="section-title">Cast & Crew</h2>
+                <div class="cast-scroller">
+                    <div id="castList" class="cast-list">
+                        <!-- Cast items will be added here -->
+                    </div>
                 </div>
             </div>
             

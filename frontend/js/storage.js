@@ -22,103 +22,303 @@
  * 
 */
 
-var storage = new STORAGE();
-
+/**
+ * STORAGE - Persistent storage for webOS with fallback to localStorage
+ * Uses webOS db8 database service for true persistence across app restarts
+ */
 function STORAGE() {
-	// Initialize webOS systeminfo storage if available
-	this.useWebOSStorage = typeof webOS !== 'undefined' && webOS.service;
+	this.useWebOSStorage = false;
+	this.dbKind = 'org.jellyfin.webos:1';
+	this.cache = {}; // In-memory cache for webOS data
 	
-	if (this.useWebOSStorage) {
-		console.log('[STORAGE] Using webOS persistent storage API');
+	// Check for webOS service availability
+	if (typeof webOS !== 'undefined' && webOS.service && webOS.service.request) {
+		this.useWebOSStorage = true;
+		if (typeof JellyfinAPI !== 'undefined') {
+			JellyfinAPI.Logger.info('[STORAGE] webOS db8 service available - using persistent storage');
+		}
+		this._initWebOSStorage();
 	} else {
-		console.log('[STORAGE] Using localStorage (may not persist on webOS)');
+		if (typeof JellyfinAPI !== 'undefined') {
+			JellyfinAPI.Logger.warn('[STORAGE] webOS service unavailable - using localStorage only');
+		}
+	}
+}
+
+/**
+ * Initialize webOS storage by loading existing data from db8
+ * @private
+ */
+STORAGE.prototype._initWebOSStorage = function() {
+	if (!this.useWebOSStorage) return;
+	
+	var self = this;
+	
+	// Load from localStorage immediately as backup
+	if (localStorage) {
+		try {
+			for (var i = 0; i < localStorage.length; i++) {
+				var key = localStorage.key(i);
+				if (key) {
+					self.cache[key] = localStorage.getItem(key);
+				}
+			}
+			if (Object.keys(self.cache).length > 0 && typeof JellyfinAPI !== 'undefined') {
+				JellyfinAPI.Logger.info('[STORAGE] Preloaded ' + Object.keys(self.cache).length + ' keys from localStorage');
+			}
+		} catch (e) {
+			if (typeof JellyfinAPI !== 'undefined') {
+				JellyfinAPI.Logger.warn('[STORAGE] Could not preload from localStorage:', e);
+			}
+		}
+	}
+	
+	// Try to load from db8 (will override localStorage cache if available)
+	try {
+		webOS.service.request('luna://com.webos.service.db/', {
+			method: 'find',
+			parameters: {
+				query: {
+					from: this.dbKind
+				}
+			},
+			onSuccess: function(response) {
+				if (response && response.results && response.results.length > 0) {
+					// Load all key-value pairs from db8
+					response.results.forEach(function(item) {
+						if (item.key && item.value !== undefined) {
+							self.cache[item.key] = item.value;
+						}
+					});
+					if (typeof JellyfinAPI !== 'undefined') {
+						JellyfinAPI.Logger.success('[STORAGE] Loaded ' + Object.keys(self.cache).length + ' keys from webOS db8');
+					}
+				} else {
+					if (typeof JellyfinAPI !== 'undefined') {
+						JellyfinAPI.Logger.info('[STORAGE] No existing data in webOS db8, using localStorage cache');
+					}
+				}
+			},
+			onFailure: function(error) {
+				// db8 kind might not exist yet, that's okay - we have localStorage cache
+				if (typeof JellyfinAPI !== 'undefined') {
+					JellyfinAPI.Logger.info('[STORAGE] webOS db8 not available, using localStorage (data: ' + Object.keys(self.cache).length + ' keys)');
+				}
+			}
+		});
+	} catch (e) {
+		if (typeof JellyfinAPI !== 'undefined') {
+			JellyfinAPI.Logger.warn('[STORAGE] Error initializing webOS db8, using localStorage:', e);
+		}
 	}
 };
 
+/**
+ * Get value from storage
+ * @param {string} name - Key name
+ * @param {boolean} isJSON - Whether to parse as JSON (default: true)
+ * @returns {*} Stored value or undefined
+ */
 STORAGE.prototype.get = function(name, isJSON) {	
 	if (isJSON === undefined) {
 		isJSON = true;	
 	}
 	
-	// Try webOS storage first (persistent across app launches)
+	// Use webOS persistent storage
 	if (this.useWebOSStorage) {
 		try {
-			// Use localStorage as cache, but it's the primary for webOS too
-			// webOS should persist localStorage automatically
-			if (localStorage && localStorage.getItem(name)) {
-				if (isJSON) {
-					return JSON.parse(localStorage.getItem(name));
-				} else {
-					return localStorage.getItem(name);
+			// Check cache first (loaded from db8 on init)
+			if (this.cache.hasOwnProperty(name)) {
+				var value = this.cache[name];
+				if (isJSON && typeof value === 'string') {
+					return JSON.parse(value);
 				}
+				return value;
+			}
+			
+			// Fallback to localStorage if not in cache (db8 might not be ready yet)
+			if (localStorage && localStorage.getItem(name)) {
+				var localValue = localStorage.getItem(name);
+				if (isJSON) {
+					return JSON.parse(localValue);
+				}
+				return localValue;
 			}
 		} catch (e) {
-			console.error('[STORAGE] Error reading from storage:', e);
+			if (typeof JellyfinAPI !== 'undefined') {
+				JellyfinAPI.Logger.error('[STORAGE] Error reading from webOS storage:', e);
+			}
 		}
+		return undefined;
 	}
 	
-	// Fallback to standard localStorage
-	if (localStorage) {
-		if (localStorage.getItem(name)) {
+	// Fallback to localStorage only
+	try {
+		if (localStorage && localStorage.getItem(name)) {
 			if (isJSON) {
 				return JSON.parse(localStorage.getItem(name));
 			} else {
 				return localStorage.getItem(name);
 			}
 		}
+	} catch (e) {
+		if (typeof JellyfinAPI !== 'undefined') {
+			JellyfinAPI.Logger.error('[STORAGE] Error reading from localStorage:', e);
+		}
 	}
+	return undefined;
 };
 
+/**
+ * Set value in storage
+ * @param {string} name - Key name
+ * @param {*} data - Data to store
+ * @param {boolean} isJSON - Whether to stringify as JSON (default: true)
+ * @returns {*} The stored data
+ */
 STORAGE.prototype.set = function(name, data, isJSON) {
 	if (isJSON === undefined) {
 		isJSON = true;	
 	}
 	
-	try {
-		if (localStorage) {
-			if (isJSON) {
-				var stringified = JSON.stringify(data);
-				localStorage.setItem(name, stringified);
-				console.log('[STORAGE] Saved ' + name + ' (' + stringified.length + ' bytes)');
-			} else {
-				localStorage.setItem(name, data);
-				console.log('[STORAGE] Saved ' + name);
+	var valueToStore = isJSON ? JSON.stringify(data) : data;
+	
+	// Use webOS persistent storage via db8
+	if (this.useWebOSStorage) {
+		try {
+			this.cache[name] = valueToStore;
+			
+			// Also write to localStorage as backup
+			if (localStorage) {
+				localStorage.setItem(name, valueToStore);
+			}
+			
+			var dbObject = {
+				_kind: this.dbKind,
+				key: name,
+				value: valueToStore
+			};
+			
+			webOS.service.request('luna://com.webos.service.db/', {
+				method: 'merge',
+				parameters: {
+					objects: [dbObject],
+					query: {
+						from: this.dbKind,
+						where: [{ prop: 'key', op: '=', val: name }]
+					}
+				},
+				onSuccess: function(response) {
+					if (typeof JellyfinAPI !== 'undefined') {
+						JellyfinAPI.Logger.info('[STORAGE] Persisted to webOS db8: ' + name);
+					}
+				},
+				onFailure: function(error) {
+					if (typeof JellyfinAPI !== 'undefined') {
+						JellyfinAPI.Logger.warn('[STORAGE] db8 merge failed, data saved to localStorage:', error);
+					}
+				}
+			});
+		} catch (e) {
+			if (typeof JellyfinAPI !== 'undefined') {
+				JellyfinAPI.Logger.error('[STORAGE] Error writing to webOS storage:', e);
 			}
 		}
-		
-		// For webOS, explicitly flush to ensure persistence
-		if (this.useWebOSStorage && typeof localStorage !== 'undefined') {
-			// WebOS should handle this automatically, but we log it
-			console.log('[STORAGE] Data should persist on webOS');
+		return data;
+	}
+	
+	// Fallback to localStorage
+	try {
+		if (localStorage) {
+			localStorage.setItem(name, valueToStore);
 		}
 	} catch (e) {
-		console.error('[STORAGE] Error writing to storage:', e);
-		console.error('[STORAGE] This might be a quota issue or webOS restriction');
+		if (typeof JellyfinAPI !== 'undefined') {
+			JellyfinAPI.Logger.error('[STORAGE] Error writing to localStorage:', e);
+			JellyfinAPI.Logger.error('[STORAGE] This might be a quota issue');
+		}
 	}
 	
 	return data;
 };
 
+/**
+ * Remove value from storage
+ * @param {string} name - Key name to remove
+ */
 STORAGE.prototype.remove = function(name) {
+	// Use webOS persistent storage via db8
+	if (this.useWebOSStorage) {
+		try {
+			delete this.cache[name];
+			
+			// Also remove from localStorage
+			if (localStorage) {
+				localStorage.removeItem(name);
+			}
+			
+			webOS.service.request('luna://com.webos.service.db/', {
+				method: 'del',
+				parameters: {
+					query: {
+						from: this.dbKind,
+						where: [{ prop: 'key', op: '=', val: name }]
+					}
+				},
+				onSuccess: function(response) {
+					if (typeof JellyfinAPI !== 'undefined') {
+						JellyfinAPI.Logger.info('[STORAGE] Removed from webOS db8: ' + name);
+					}
+				},
+				onFailure: function(error) {
+					if (typeof JellyfinAPI !== 'undefined') {
+						JellyfinAPI.Logger.warn('[STORAGE] db8 del failed:', error);
+					}
+				}
+			});
+		} catch (e) {
+			if (typeof JellyfinAPI !== 'undefined') {
+				JellyfinAPI.Logger.error('[STORAGE] Error removing from webOS storage:', e);
+			}
+		}
+		return;
+	}
+	
+	// Fallback to localStorage
 	try {
 		if (localStorage) {
 			localStorage.removeItem(name);
-			console.log('[STORAGE] Removed ' + name);
 		}
 	} catch (e) {
-		console.error('[STORAGE] Error removing from storage:', e);
+		if (typeof JellyfinAPI !== 'undefined') {
+			JellyfinAPI.Logger.error('[STORAGE] Error removing from localStorage:', e);
+		}
 	}
 };
 
+/**
+ * Check if key exists in storage
+ * @param {string} name - Key name to check
+ * @returns {boolean} True if key exists
+ */
 STORAGE.prototype.exists = function(name) {
+	// Use webOS persistent storage
+	if (this.useWebOSStorage) {
+		return this.cache.hasOwnProperty(name);
+	}
+	
+	// Fallback to localStorage
 	try {
 		if (localStorage) {
-			if (localStorage.getItem(name)) {
-				return true;
-			} 
+			return localStorage.getItem(name) !== null;
 		}	
 	} catch (e) {
-		console.error('[STORAGE] Error checking storage:', e);
+		if (typeof JellyfinAPI !== 'undefined') {
+			JellyfinAPI.Logger.error('[STORAGE] Error checking localStorage:', e);
+		}
 	}
 	return false;
 };
+
+// Initialize global storage instance after all prototypes are defined
+var storage = new STORAGE();
