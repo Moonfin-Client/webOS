@@ -1,17 +1,26 @@
 var DetailsController = (function() {
     'use strict';
 
-    var auth = null;
-    var itemId = null;
-    var itemData = null;
-    var focusManager = {
+    let auth = null;
+    let itemId = null;
+    let itemData = null;
+    const focusManager = {
         currentSection: 'buttons',
         currentIndex: 0,
         sections: ['buttons', 'nextup', 'seasons', 'episodes', 'cast', 'similar']
     };
+    let modalFocusableItems = [];
+    let currentModalFocusIndex = 0;
+    let activeModal = null;
 
-    var elements = {};
+    let elements = {};
 
+    const FOCUS_DELAY_MS = 100;
+
+    /**
+     * Initialize the details controller
+     * Authenticates, loads item details, and sets up navigation
+     */
     function init() {
         JellyfinAPI.Logger.info('Initializing details controller...');
         
@@ -35,11 +44,20 @@ var DetailsController = (function() {
         loadItemDetails();
     }
 
+    /**
+     * Extract item ID from URL query parameter
+     * @returns {string|null} Item ID or null if not found
+     * @private
+     */
     function getItemIdFromUrl() {
         var params = new URLSearchParams(window.location.search);
         return params.get('id');
     }
 
+    /**
+     * Cache frequently accessed DOM elements for better performance
+     * @private
+     */
     function cacheElements() {
         elements = {
             backdropImage: document.getElementById('backdropImage'),
@@ -111,10 +129,19 @@ var DetailsController = (function() {
             loadingIndicator: document.getElementById('loadingIndicator'),
             errorDisplay: document.getElementById('errorDisplay'),
             errorText: document.getElementById('errorText'),
-            backBtn: document.getElementById('backBtn')
+            backBtn: document.getElementById('backBtn'),
+            audioModal: document.getElementById('audioModal'),
+            audioTrackList: document.getElementById('audioTrackList'),
+            subtitleModal: document.getElementById('subtitleModal'),
+            subtitleTrackList: document.getElementById('subtitleTrackList'),
+            detailsContainer: document.querySelector('.details-container')
         };
     }
 
+    /**
+     * Set up keyboard and click event listeners for navigation
+     * @private
+     */
     function setupNavigation() {
         if (elements.playBtn) {
             elements.playBtn.addEventListener('click', handlePlay);
@@ -150,8 +177,19 @@ var DetailsController = (function() {
         document.addEventListener('keydown', handleKeyDown);
     }
 
+    /**
+     * Handle keyboard navigation in details view
+     * @param {KeyboardEvent} evt - Keyboard event
+     * @private
+     */
     function handleKeyDown(evt) {
         evt = evt || window.event;
+        
+        // Handle modal navigation separately
+        if (activeModal) {
+            handleModalKeyDown(evt);
+            return;
+        }
         
         if (evt.keyCode === KeyCodes.BACK || evt.keyCode === KeyCodes.ESCAPE) {
             goBack();
@@ -195,6 +233,15 @@ var DetailsController = (function() {
                 }
                 break;
         }
+    }
+
+    function handleModalKeyDown(evt) {
+        currentModalFocusIndex = TrackSelector.handleModalKeyDown(
+            evt,
+            modalFocusableItems,
+            currentModalFocusIndex,
+            closeModal
+        );
     }
 
     function getCurrentSectionItems() {
@@ -267,6 +314,11 @@ var DetailsController = (function() {
         }
     }
 
+    /**
+     * Load item details from Jellyfin server
+     * Fetches complete item metadata and displays it
+     * @private
+     */
     function loadItemDetails() {
         showLoading();
         
@@ -281,14 +333,14 @@ var DetailsController = (function() {
             hideLoading();
             
             if (err) {
-                JellyfinAPI.Logger.error('Error loading item details:', err);
-                showError('Failed to load item details: ' + (err.error || 'Unknown error'));
+                JellyfinAPI.Logger.error('Failed to load item details:', err);
+                showError('Failed to load item details');
                 return;
             }
             
             if (!data) {
-                JellyfinAPI.Logger.error('No data returned for item:', itemId);
-                showError('Failed to load item details: No data returned');
+                JellyfinAPI.Logger.error('No item data returned for:', itemId);
+                showError('Failed to load item details');
                 return;
             }
             
@@ -299,12 +351,17 @@ var DetailsController = (function() {
                 displayItemDetails();
                 loadAdditionalContent();
             } catch (displayError) {
-                JellyfinAPI.Logger.error('Error displaying item details:', displayError.message, displayError.stack);
-                showError('Failed to display item details: ' + displayError.message);
+                JellyfinAPI.Logger.error('Error displaying item details:', displayError);
+                showError('Failed to display item details');
             }
         });
     }
 
+    /**
+     * Display item details in the UI
+     * Populates all metadata fields and action buttons
+     * @private
+     */
     function displayItemDetails() {
         // Check if this is a Person type (actor, director, etc.)
         if (itemData.Type === 'Person') {
@@ -403,13 +460,11 @@ var DetailsController = (function() {
             elements.genresCell.style.display = 'flex';
         }
         
-        // Tagline
         if (itemData.Taglines && itemData.Taglines.length > 0 && elements.itemTagline && elements.taglineRow) {
             elements.itemTagline.textContent = itemData.Taglines[0];
             elements.taglineRow.style.display = 'block';
         }
         
-        // Director
         if (itemData.People && itemData.People.length > 0) {
             var directors = itemData.People.filter(function(p) { return p.Type === 'Director'; });
             if (directors.length > 0 && elements.itemDirector && elements.directorCell) {
@@ -417,7 +472,6 @@ var DetailsController = (function() {
                 elements.directorCell.style.display = 'flex';
             }
             
-            // Writers
             var writers = itemData.People.filter(function(p) { return p.Type === 'Writer'; });
             if (writers.length > 0 && elements.itemWriters && elements.writersCell) {
                 elements.itemWriters.textContent = writers.map(function(w) { return w.Name; }).join(', ');
@@ -425,7 +479,6 @@ var DetailsController = (function() {
             }
         }
         
-        // Studios
         if (itemData.Studios && itemData.Studios.length > 0 && elements.itemStudios && elements.studiosCell) {
             elements.itemStudios.textContent = itemData.Studios.map(function(s) { return s.Name; }).join(', ');
             elements.studiosCell.style.display = 'flex';
@@ -435,7 +488,6 @@ var DetailsController = (function() {
             elements.itemOverview.textContent = itemData.Overview;
         }
         
-        // Logo image - show on right side, keep title on left
         if (elements.logoImage) {
             if (itemData.ImageTags && itemData.ImageTags.Logo) {
                 elements.logoImage.src = auth.serverAddress + '/Items/' + itemData.Id + '/Images/Logo?quality=90&maxWidth=600';
@@ -469,38 +521,31 @@ var DetailsController = (function() {
                 elements.playedText.textContent = 'Mark Unplayed';
             }
             
-            // Handle play/resume button display
             if (itemData.UserData.PlaybackPositionTicks > 0) {
-                // Media has been started - show resume button with time and play from beginning
                 var minutes = Math.round(itemData.UserData.PlaybackPositionTicks / 600000000);
                 var hours = Math.floor(minutes / 60);
                 var mins = minutes % 60;
                 var timeText = hours > 0 ? hours + 'h ' + mins + 'm' : mins + 'm';
                 
-                // Change play button to "Play from beginning"
                 if (elements.playBtnImage && elements.playBtnLabel) {
                     elements.playBtnImage.src = 'assets/restart.png';
                     elements.playBtnLabel.textContent = 'Play from beginning';
                 }
                 
-                // Show resume button with time
                 if (elements.resumeBtnWrapper && elements.resumeBtnLabel) {
                     elements.resumeBtnWrapper.style.display = 'flex';
                     elements.resumeBtnLabel.textContent = 'Resume from ' + timeText;
                     
-                    // Move resume button to first position
                     var actionButtons = elements.resumeBtnWrapper.parentElement;
                     if (actionButtons && elements.playBtnWrapper) {
                         actionButtons.insertBefore(elements.resumeBtnWrapper, elements.playBtnWrapper);
                     }
                 }
             } else {
-                // Media not started - show regular play button
                 if (elements.playBtnImage && elements.playBtnLabel) {
                     elements.playBtnImage.src = 'assets/play.png';
                     elements.playBtnLabel.textContent = 'Play';
                 }
-                // Hide resume button
                 if (elements.resumeBtnWrapper) {
                     elements.resumeBtnWrapper.style.display = 'none';
                 }
@@ -513,7 +558,6 @@ var DetailsController = (function() {
             }
         }
         
-        // Show shuffle button for collections, series, playlists, and folders
         if (itemData.Type === 'Series' || itemData.Type === 'Season' || 
             itemData.Type === 'BoxSet' || itemData.Type === 'Playlist' || 
             itemData.Type === 'Folder' || itemData.Type === 'CollectionFolder') {
@@ -522,7 +566,6 @@ var DetailsController = (function() {
             }
         }
         
-        // Show audio button if multiple audio tracks are available
         if (itemData.MediaSources && itemData.MediaSources.length > 0) {
             var mediaSource = itemData.MediaSources[0];
             if (mediaSource.MediaStreams) {
@@ -531,7 +574,6 @@ var DetailsController = (function() {
                     elements.audioBtnWrapper.style.display = 'flex';
                 }
                 
-                // Show subtitle button if subtitles are available
                 var subtitleStreams = mediaSource.MediaStreams.filter(function(s) { return s.Type === 'Subtitle'; });
                 if (subtitleStreams.length > 0 && elements.subtitleBtnWrapper) {
                     elements.subtitleBtnWrapper.style.display = 'flex';
@@ -539,7 +581,6 @@ var DetailsController = (function() {
             }
         }
         
-        // Always show more button for additional options
         if (elements.moreBtnWrapper) {
             elements.moreBtnWrapper.style.display = 'flex';
         }
@@ -549,7 +590,7 @@ var DetailsController = (function() {
             if (firstBtn) {
                 firstBtn.focus();
             }
-        }, 100);
+        }, FOCUS_DELAY_MS);
     }
     
     function displayPersonDetails() {
@@ -557,7 +598,6 @@ var DetailsController = (function() {
             elements.itemTitle.textContent = itemData.Name;
         }
         
-        // Hide all metadata that's not relevant for persons
         if (elements.itemYear) elements.itemYear.style.display = 'none';
         if (elements.officialRating) elements.officialRating.style.display = 'none';
         if (elements.itemRuntime) elements.itemRuntime.style.display = 'none';
@@ -568,7 +608,6 @@ var DetailsController = (function() {
         if (elements.communityRating) elements.communityRating.style.display = 'none';
         if (elements.criticRating) elements.criticRating.style.display = 'none';
         
-        // Show person content (photo and description side by side)
         if (elements.personContent) {
             if (itemData.ImageTags && itemData.ImageTags.Primary && elements.personPhoto) {
                 elements.personPhoto.src = auth.serverAddress + '/Items/' + itemData.Id + '/Images/Primary?quality=90&maxHeight=450';
@@ -579,7 +618,6 @@ var DetailsController = (function() {
             elements.personContent.style.display = 'flex';
         }
         
-        // Hide all buttons except favorite
         if (elements.playBtnWrapper) elements.playBtnWrapper.style.display = 'none';
         if (elements.resumeBtnWrapper) elements.resumeBtnWrapper.style.display = 'none';
         if (elements.shuffleBtnWrapper) elements.shuffleBtnWrapper.style.display = 'none';
@@ -591,7 +629,6 @@ var DetailsController = (function() {
         if (elements.subtitleBtnWrapper) elements.subtitleBtnWrapper.style.display = 'none';
         if (elements.moreBtnWrapper) elements.moreBtnWrapper.style.display = 'none';
         
-        // Show favorite button
         if (itemData.UserData && elements.favoriteIcon) {
             if (itemData.UserData.IsFavorite) {
                 elements.favoriteIcon.classList.add('favorited');
@@ -604,9 +641,8 @@ var DetailsController = (function() {
             if (elements.favoriteBtn) {
                 elements.favoriteBtn.focus();
             }
-        }, 100);
+        }, FOCUS_DELAY_MS);
         
-        // Load their filmography
         loadPersonFilmography();
     }
     
@@ -621,12 +657,10 @@ var DetailsController = (function() {
     }
 
     function loadAdditionalContent() {
-        // Don't load normal content for Person pages
         if (itemData.Type === 'Person') {
             return;
         }
         
-        // For BoxSet/Collection, show collection movies instead of "More Like This"
         if (itemData.Type === 'BoxSet' || itemData.Type === 'Collection') {
             loadCollectionMovies();
             displayTechnicalDetails();
@@ -1127,14 +1161,19 @@ var DetailsController = (function() {
         elements.technicalDetails.innerHTML = html;
     }
 
+    /**
+     * Handle play button activation
+     * Navigates to player page to start playback
+     * @private
+     */
     function handlePlay() {
         JellyfinAPI.Logger.info('Play clicked for item:', itemData.Id);
-        alert('Playback not yet implemented');
+        window.location.href = 'player.html?id=' + itemData.Id;
     }
 
     function handleResume() {
         JellyfinAPI.Logger.info('Resume clicked for item:', itemData.Id);
-        alert('Resume playback not yet implemented');
+        window.location.href = 'player.html?id=' + itemData.Id;
     }
 
     function handleTrailer() {
@@ -1217,6 +1256,11 @@ var DetailsController = (function() {
         }
     }
 
+    /**
+     * Toggle favorite status of current item
+     * Updates server and refreshes UI
+     * @private
+     */
     function handleFavorite() {
         var isFavorite = itemData.UserData && itemData.UserData.IsFavorite;
         var newState = !isFavorite;
@@ -1272,15 +1316,7 @@ var DetailsController = (function() {
             return;
         }
         
-        var message = 'Audio Tracks:\n\n';
-        audioStreams.forEach(function(stream, index) {
-            var lang = stream.Language || 'Unknown';
-            var codec = stream.Codec ? stream.Codec.toUpperCase() : '';
-            var channels = stream.Channels ? stream.Channels + 'ch' : '';
-            message += (index + 1) + '. ' + lang + ' (' + codec + ' ' + channels + ')\n';
-        });
-        
-        alert(message + '\nAudio track selection not yet implemented');
+        showAudioTrackSelector(audioStreams);
     }
 
     function handleSubtitles() {
@@ -1298,20 +1334,8 @@ var DetailsController = (function() {
         }
         
         var subtitleStreams = mediaSource.MediaStreams.filter(function(s) { return s.Type === 'Subtitle'; });
-        if (subtitleStreams.length === 0) {
-            alert('No subtitle tracks available');
-            return;
-        }
         
-        var message = 'Subtitle Tracks:\n\n';
-        subtitleStreams.forEach(function(stream, index) {
-            var lang = stream.Language || 'Unknown';
-            var codec = stream.Codec ? stream.Codec.toUpperCase() : '';
-            var forced = stream.IsForced ? ' [Forced]' : '';
-            message += (index + 1) + '. ' + lang + ' (' + codec + ')' + forced + '\n';
-        });
-        
-        alert(message + '\nSubtitle track selection not yet implemented');
+        showSubtitleTrackSelector(subtitleStreams);
     }
 
     function handleMore() {
@@ -1323,21 +1347,83 @@ var DetailsController = (function() {
         window.history.back();
     }
 
+    /**
+     * Show loading indicator, hide details content
+     * @private
+     */
     function showLoading() {
         elements.loadingIndicator.style.display = 'flex';
-        document.querySelector('.details-container').style.display = 'none';
+        if (elements.detailsContainer) {
+            elements.detailsContainer.style.display = 'none';
+        }
     }
 
+    /**
+     * Hide loading indicator, show details content
+     * @private
+     */
     function hideLoading() {
         elements.loadingIndicator.style.display = 'none';
-        document.querySelector('.details-container').style.display = 'block';
+        if (elements.detailsContainer) {
+            elements.detailsContainer.style.display = 'block';
+        }
     }
 
+    /**
+     * Show error message, hide loading and details
+     * @param {string} message - Error message to display
+     * @private
+     */
     function showError(message) {
         hideLoading();
         elements.errorText.textContent = message;
         elements.errorDisplay.style.display = 'flex';
-        document.querySelector('.details-container').style.display = 'none';
+        if (elements.detailsContainer) {
+            elements.detailsContainer.style.display = 'none';
+        }
+    }
+
+    function showAudioTrackSelector(audioStreams) {
+        modalFocusableItems = TrackSelector.buildAudioTrackList(
+            audioStreams,
+            -1, // No current selection in details view
+            elements.audioTrackList,
+            closeModal
+        );
+
+        activeModal = 'audio';
+        elements.audioModal.style.display = 'flex';
+        currentModalFocusIndex = 0;
+        if (modalFocusableItems[currentModalFocusIndex]) {
+            modalFocusableItems[currentModalFocusIndex].focus();
+        }
+    }
+
+    function showSubtitleTrackSelector(subtitleStreams) {
+        modalFocusableItems = TrackSelector.buildSubtitleTrackList(
+            subtitleStreams,
+            -1, // No current selection in details view
+            elements.subtitleTrackList,
+            closeModal
+        );
+
+        activeModal = 'subtitle';
+        elements.subtitleModal.style.display = 'flex';
+        currentModalFocusIndex = 0;
+        if (modalFocusableItems[currentModalFocusIndex]) {
+            modalFocusableItems[currentModalFocusIndex].focus();
+        }
+    }
+
+    function closeModal() {
+        if (elements.audioModal) {
+            elements.audioModal.style.display = 'none';
+        }
+        if (elements.subtitleModal) {
+            elements.subtitleModal.style.display = 'none';
+        }
+        activeModal = null;
+        modalFocusableItems = [];
     }
 
     return {

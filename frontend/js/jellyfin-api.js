@@ -6,16 +6,16 @@
 var JellyfinAPI = (function() {
     'use strict';
 
-    var LOG_LEVELS = {
+    const LOG_LEVELS = {
         ERROR: 0,
         WARN: 1,
         SUCCESS: 2,
         INFO: 3
     };
     
-    var currentLogLevel = LOG_LEVELS.ERROR; // Production: only errors
+    let currentLogLevel = LOG_LEVELS.ERROR;
 
-    var Logger = {
+    const Logger = {
         setLevel: function(level) {
             currentLogLevel = level;
         },
@@ -41,10 +41,13 @@ var JellyfinAPI = (function() {
         }
     };
 
-    var deviceId = null;
-    var deviceName = 'LG Smart TV';
-    var appName = 'Jellyfin for webOS';
-    var appVersion = '1.2.2';
+    let deviceId = null;
+    const deviceName = 'LG Smart TV';
+    const appName = 'Jellyfin for webOS';
+    const appVersion = '1.2.2';
+
+    const SERVER_DISCOVERY_TIMEOUT_MS = 5000;
+    const LAN_SCAN_TIMEOUT_MS = 2000;
 
     function initDeviceId() {
         deviceId = storage.get('_deviceId2', false);
@@ -71,7 +74,7 @@ var JellyfinAPI = (function() {
         
         ajax.request(discoveryUrl, {
             method: 'GET',
-            timeout: 5000,
+            timeout: SERVER_DISCOVERY_TIMEOUT_MS,
             success: function(response) {
                 Logger.success('Server discovery completed', response);
                 if (callback) callback(null, response);
@@ -218,7 +221,7 @@ var JellyfinAPI = (function() {
         
         ajax.request(address + '/System/Info/Public', {
             method: 'GET',
-            timeout: 2000, // Shorter timeout for LAN scanning
+            timeout: LAN_SCAN_TIMEOUT_MS,
             headers: {
                 'X-Emby-Authorization': getAuthHeader()
             },
@@ -238,7 +241,6 @@ var JellyfinAPI = (function() {
     }
 
     function authenticateByName(serverAddress, username, password, callback) {
-        // Input validation
         if (!serverAddress || typeof serverAddress !== 'string' || serverAddress.trim() === '') {
             Logger.error('Invalid server address provided to authenticateByName');
             if (callback) callback({ error: 'Invalid server address' }, null);
@@ -251,8 +253,6 @@ var JellyfinAPI = (function() {
             return;
         }
         
-        // Password can be empty string (Jellyfin allows passwordless users)
-        // But must be defined (not null or undefined)
         if (password === null || password === undefined) {
             Logger.error('Password is null or undefined');
             if (callback) callback({ error: 'Password must be provided (can be empty string)' }, null);
@@ -281,7 +281,6 @@ var JellyfinAPI = (function() {
                     hasAccessToken: !!response.AccessToken
                 });
                 
-                // Store credentials
                 var authData = {
                     serverAddress: serverAddress,
                     accessToken: response.AccessToken,
@@ -295,7 +294,6 @@ var JellyfinAPI = (function() {
                 Logger.info('Auth data to store:', authData);
                 storage.set('jellyfin_auth', authData);
                 
-                // Verify it was stored
                 var verification = storage.get('jellyfin_auth');
                 if (verification && verification.accessToken === authData.accessToken) {
                     Logger.success('Authentication data successfully stored and verified!');
@@ -478,7 +476,6 @@ var JellyfinAPI = (function() {
         return serverAddress + '/Users/' + userId + '/Images/Primary?tag=' + imageTag + '&quality=90&maxWidth=400';
     }
 
-    // Quick Connect functions
     function initiateQuickConnect(serverAddress, callback) {
         var endpoint = serverAddress + '/QuickConnect/Initiate';
         

@@ -1,14 +1,14 @@
 {
-  "name": "org.jellyfin.webos",
-  "version": "1.2.2",
-  "description": "Jellyfin WebOS client",
+  "name": "org.moonfin.webos",
+  "version": "1.0.0",
+  "description": "Moonfin WebOS client",
   "scripts": {
     "check": "ares-package --check",
     "package": "ares-package --no-minify --outdir build/ services frontend",
     "clean": "rm -rf build/",
-    "deploy": "ares-install build/org.jellyfin.webos_${npm_package_version}_all.ipk",
-    "launch": "ares-launch org.jellyfin.webos",
-    "manifest": "node tools/gen-manifest.js build/org.jellyfin.webos.manifest.json",
+    "deploy": "ares-install build/org.moonfin.webos_${npm_package_version}_all.ipk",
+    "launch": "ares-launch org.moonfin.webos",
+    "manifest": "node tools/gen-manifest.js build/org.moonfin.webos.manifest.json",
     "version": "node tools/sync-version.js && git add frontend/appinfo.json",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

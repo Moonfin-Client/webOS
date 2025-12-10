@@ -1,4 +1,3 @@
-// Library Grid Controller
 const LibraryController = {
     libraryId: null,
     libraryName: null,
@@ -11,9 +10,20 @@ const LibraryController = {
         isPlayed: null,
         isFavorite: null
     },
+    inNavBar: false,
+    navBarIndex: 0,
+    elements: {
+        loading: null,
+        itemGrid: null,
+        errorDisplay: null,
+        libraryTitle: null
+    },
 
+    /**
+     * Initialize the library controller
+     * Gets library ID from URL, caches elements, and loads library items
+     */
     init() {
-        // Get library ID from URL parameter
         const urlParams = new URLSearchParams(window.location.search);
         this.libraryId = urlParams.get('id');
         
@@ -22,25 +32,18 @@ const LibraryController = {
             return;
         }
 
-        // Load navbar
         const self = this;
         const initLibrary = function() {
-            // Set up event listeners
+            self.cacheElements();
             self.setupEventListeners();
-
-            // Calculate columns based on viewport
             self.updateColumns();
             window.addEventListener('resize', () => self.updateColumns());
-
-            // Load library items
             self.loadLibrary();
         };
 
-        // Check if navbar is already loaded
         if (document.getElementById('homeBtn')) {
             initLibrary();
         } else {
-            // Wait for navbar to load
             const checkNavbar = setInterval(function() {
                 if (document.getElementById('homeBtn')) {
                     clearInterval(checkNavbar);
@@ -50,6 +53,19 @@ const LibraryController = {
         }
     },
 
+    /**
+     * Cache frequently accessed DOM elements for better performance
+     */
+    cacheElements() {
+        this.elements.loading = document.getElementById('loading');
+        this.elements.itemGrid = document.getElementById('item-grid');
+        this.elements.errorDisplay = document.getElementById('error-display');
+        this.elements.libraryTitle = document.getElementById('library-title');
+    },
+
+    /**
+     * Set up keyboard and click event listeners
+     */
     setupEventListeners() {
         document.addEventListener('keydown', (e) => this.handleKeyDown(e));
 
@@ -66,6 +82,10 @@ const LibraryController = {
         }
     },
 
+    /**
+     * Update grid column count based on viewport width
+     * @private
+     */
     updateColumns() {
         const width = window.innerWidth;
         if (width >= 1920) {
@@ -77,6 +97,10 @@ const LibraryController = {
         }
     },
 
+    /**
+     * Load library items from Jellyfin server
+     * Fetches library details and items, then displays them in grid
+     */
     loadLibrary() {
         const self = this;
         self.showLoading();
@@ -87,21 +111,27 @@ const LibraryController = {
             return;
         }
 
-        // Get library details first
         JellyfinAPI.getUserViews(auth.serverAddress, auth.userId, auth.accessToken, function(err, response) {
-            if (err || !response || !response.Items) {
+            if (err) {
+                JellyfinAPI.Logger.error('Failed to load library details:', err);
+                self.showError('Failed to load library details');
+                return;
+            }
+            
+            if (!response || !response.Items) {
+                JellyfinAPI.Logger.error('No library data returned');
                 self.showError('Failed to load library details');
                 return;
             }
 
-            // Find the library in the views
             const library = response.Items.find(item => item.Id === self.libraryId);
             if (library && library.Name) {
                 self.libraryName = library.Name;
-                document.getElementById('library-title').textContent = library.Name;
+                if (self.elements.libraryTitle) {
+                    self.elements.libraryTitle.textContent = library.Name;
+                }
             }
 
-            // Build query parameters
             const params = {
                 SortBy: self.sortBy,
                 SortOrder: self.sortOrder,
@@ -111,18 +141,21 @@ const LibraryController = {
                 Limit: 300
             };
 
-            // Check if this is a boxsets/collections view
             if (library && library.CollectionType === 'boxsets') {
-                // For collections, query BoxSets type
                 params.IncludeItemTypes = 'BoxSet';
                 params.Recursive = true;
+            } else if (library && library.CollectionType === 'tvshows') {
+                params.IncludeItemTypes = 'Series';
+                params.ParentId = self.libraryId;
+                params.Recursive = true;
+            } else if (library && library.CollectionType === 'movies') {
+                params.IncludeItemTypes = 'Movie';
+                params.ParentId = self.libraryId;
+                params.Recursive = true;
             } else {
-                // For regular libraries, use ParentId
                 params.ParentId = self.libraryId;
                 params.Recursive = true;
             }
-
-            // Apply filters
             if (self.filters.isPlayed !== null) {
                 params.IsPlayed = self.filters.isPlayed;
             }
@@ -130,45 +163,59 @@ const LibraryController = {
                 params.IsFavorite = self.filters.isFavorite;
             }
 
-            // Load items
             const endpoint = '/Users/' + auth.userId + '/Items';
             JellyfinAPI.getItems(auth.serverAddress, auth.accessToken, endpoint, params, function(err, data) {
                 if (err) {
+                    JellyfinAPI.Logger.error('Failed to load library items:', err);
                     self.showError('Failed to load library');
                     return;
                 }
 
-                if (data && data.Items) {
-                    self.items = data.Items;
-                    if (self.items.length === 0) {
-                        self.showEmptyLibrary();
-                    } else {
-                        self.displayItems();
-                    }
-                } else {
+                if (!data || !data.Items) {
+                    JellyfinAPI.Logger.error('No library items returned');
                     self.showError('Failed to load library items');
+                    return;
+                }
+                
+                self.items = data.Items;
+                if (self.items.length === 0) {
+                    self.showEmptyLibrary();
+                } else {
+                    self.displayItems();
                 }
             });
         });
     },
 
+    /**
+     * Display library items in the grid
+     * Clears existing items and renders current item list
+     * @private
+     */
     displayItems() {
-        const grid = document.getElementById('item-grid');
-        grid.innerHTML = '';
+        if (!this.elements.itemGrid) return;
+        
+        this.elements.itemGrid.innerHTML = '';
 
         this.items.forEach((item, index) => {
             const gridItem = this.createGridItem(item, index);
-            grid.appendChild(gridItem);
+            this.elements.itemGrid.appendChild(gridItem);
         });
 
         this.hideLoading();
 
-        // Focus first item
         if (this.items.length > 0) {
             this.updateFocus();
         }
     },
 
+    /**
+     * Create a grid item element for a library item
+     * @param {Object} item - Jellyfin item object
+     * @param {number} index - Item index in the grid
+     * @returns {HTMLElement} Grid item element
+     * @private
+     */
     createGridItem(item, index) {
         const auth = JellyfinAPI.getStoredAuth();
         const div = document.createElement('div');
@@ -176,13 +223,11 @@ const LibraryController = {
         div.setAttribute('data-index', index);
         div.setAttribute('tabindex', '0');
 
-        // Create image element
         const img = document.createElement('img');
         img.className = 'item-image';
         img.alt = item.Name;
         img.loading = 'lazy';
 
-        // Always use Primary image for vertical posters
         if (item.ImageTags && item.ImageTags.Primary) {
             img.src = auth.serverAddress + '/Items/' + item.Id + '/Images/Primary?quality=90&maxHeight=400&tag=' + item.ImageTags.Primary;
         } else if (item.Type === 'Episode' && item.SeriesId && item.SeriesPrimaryImageTag) {
@@ -193,7 +238,6 @@ const LibraryController = {
 
         div.appendChild(img);
 
-        // Add progress bar if partially watched
         if (item.UserData && item.UserData.PlayedPercentage && item.UserData.PlayedPercentage > 0 && item.UserData.PlayedPercentage < 100) {
             const progressBar = document.createElement('div');
             progressBar.className = 'item-progress';
@@ -234,8 +278,19 @@ const LibraryController = {
         return div;
     },
 
+    /**
+     * Handle keyboard navigation in library grid
+     * @param {KeyboardEvent} e - Keyboard event
+     * @private
+     */
     handleKeyDown(e) {
         const keyCode = e.keyCode;
+
+        // Handle navbar navigation separately
+        if (this.inNavBar) {
+            this.handleNavBarNavigation(e);
+            return;
+        }
 
         if (this.items.length === 0) return;
 
@@ -265,6 +320,9 @@ const LibraryController = {
                 if (newIndexUp >= 0) {
                     this.currentIndex = newIndexUp;
                     this.updateFocus();
+                } else if (row === 0) {
+                    // At the first row, pressing UP focuses the navbar
+                    this.focusToNavBar();
                 }
                 break;
 
@@ -289,6 +347,11 @@ const LibraryController = {
         }
     },
 
+    /**
+     * Update focus to the current grid item
+     * Scrolls item into view smoothly
+     * @private
+     */
     updateFocus() {
         const items = document.querySelectorAll('.grid-item');
         items.forEach((item, index) => {
@@ -299,6 +362,11 @@ const LibraryController = {
         });
     },
 
+    /**
+     * Navigate to details page for selected item
+     * @param {number} index - Index of item to select
+     * @private
+     */
     selectItem(index) {
         const item = this.items[index];
         if (!item) return;
@@ -307,38 +375,42 @@ const LibraryController = {
         window.location.href = `details.html?id=${item.Id}`;
     },
 
-    showSortMenu() {
-        // TODO: Implement sort menu
-    },
-
-    showFilterMenu() {
-        // TODO: Implement filter menu
-    },
-
+    /**
+     * Show loading indicator, hide grid and errors
+     * @private
+     */
     showLoading() {
-        document.getElementById('loading').style.display = 'flex';
-        document.getElementById('error-display').style.display = 'none';
-        document.getElementById('item-grid').style.display = 'none';
+        if (this.elements.loading) this.elements.loading.style.display = 'flex';
+        if (this.elements.errorDisplay) this.elements.errorDisplay.style.display = 'none';
+        if (this.elements.itemGrid) this.elements.itemGrid.style.display = 'none';
     },
 
     hideLoading() {
-        document.getElementById('loading').style.display = 'none';
-        document.getElementById('item-grid').style.display = 'grid';
+        if (this.elements.loading) this.elements.loading.style.display = 'none';
+        if (this.elements.itemGrid) this.elements.itemGrid.style.display = 'grid';
     },
 
+    /**
+     * Show error message, hide loading and grid
+     * @param {string} message - Error message to display
+     * @private
+     */
     showError(message) {
-        document.getElementById('loading').style.display = 'none';
-        document.getElementById('item-grid').style.display = 'none';
-        const errorDisplay = document.getElementById('error-display');
-        errorDisplay.style.display = 'flex';
-        errorDisplay.querySelector('p').textContent = message;
+        JellyfinAPI.Logger.error(message);
+        if (this.elements.loading) this.elements.loading.style.display = 'none';
+        if (this.elements.itemGrid) this.elements.itemGrid.style.display = 'none';
+        if (this.elements.errorDisplay) {
+            this.elements.errorDisplay.style.display = 'flex';
+            const errorMessage = this.elements.errorDisplay.querySelector('p');
+            if (errorMessage) errorMessage.textContent = message;
+        }
     },
 
     showEmptyLibrary() {
         // Hide loading and grid
-        document.getElementById('loading').style.display = 'none';
-        document.getElementById('item-grid').style.display = 'none';
-        document.getElementById('error-display').style.display = 'none';
+        if (this.elements.loading) this.elements.loading.style.display = 'none';
+        if (this.elements.itemGrid) this.elements.itemGrid.style.display = 'none';
+        if (this.elements.errorDisplay) this.elements.errorDisplay.style.display = 'none';
         
         // Create popup overlay
         const overlay = document.createElement('div');
@@ -385,6 +457,88 @@ const LibraryController = {
         popup.appendChild(button);
         overlay.appendChild(popup);
         document.body.appendChild(overlay);
+    },
+
+    /**
+     * Get all navbar button elements
+     * @returns {HTMLElement[]} Array of navbar button elements
+     * @private
+     */
+    getNavButtons() {
+        return Array.from(document.querySelectorAll('.nav-left .nav-btn, .nav-center .nav-btn'));
+    },
+
+    /**
+     * Move focus from grid to navbar
+     * @private
+     */
+    focusToNavBar() {
+        this.inNavBar = true;
+        const navButtons = this.getNavButtons();
+        
+        // Start at home button (index 1), not user avatar (index 0)
+        this.navBarIndex = navButtons.length > 1 ? 1 : 0;
+        
+        if (navButtons.length > 0) {
+            navButtons.forEach(btn => btn.classList.remove('focused'));
+            navButtons[this.navBarIndex].classList.add('focused');
+            navButtons[this.navBarIndex].focus();
+        }
+    },
+
+    /**
+     * Move focus from navbar back to grid
+     * @private
+     */
+    focusToGrid() {
+        this.inNavBar = false;
+        const navButtons = this.getNavButtons();
+        navButtons.forEach(btn => btn.classList.remove('focused'));
+        this.updateFocus();
+    },
+
+    /**
+     * Handle keyboard navigation within navbar
+     * @param {KeyboardEvent} e - Keyboard event
+     * @private
+     */
+    handleNavBarNavigation(e) {
+        const navButtons = this.getNavButtons();
+        
+        navButtons.forEach(btn => btn.classList.remove('focused'));
+        
+        switch (e.keyCode) {
+            case KeyCodes.LEFT:
+                e.preventDefault();
+                if (this.navBarIndex > 0) {
+                    this.navBarIndex--;
+                }
+                navButtons[this.navBarIndex].classList.add('focused');
+                navButtons[this.navBarIndex].focus();
+                break;
+                
+            case KeyCodes.RIGHT:
+                e.preventDefault();
+                if (this.navBarIndex < navButtons.length - 1) {
+                    this.navBarIndex++;
+                }
+                navButtons[this.navBarIndex].classList.add('focused');
+                navButtons[this.navBarIndex].focus();
+                break;
+                
+            case KeyCodes.DOWN:
+                e.preventDefault();
+                this.focusToGrid();
+                break;
+                
+            case KeyCodes.ENTER:
+                e.preventDefault();
+                const currentBtn = navButtons[this.navBarIndex];
+                if (currentBtn) {
+                    currentBtn.click();
+                }
+                break;
+        }
     }
 };
 

@@ -42,7 +42,11 @@ body {
 }
 
 .featured-banner.slide-up {
-    transform: translateY(-100vh);
+    opacity: 0;
+    pointer-events: none;
+    height: 0;
+    overflow: hidden;
+    transform: translateY(-50px);
 }
 
 .featured-banner.focused {
@@ -308,20 +312,24 @@ body {
 .content-rows {
     padding: 0 60px 60px 60px;
     transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: transform;
+    transform: translateZ(0); /* Hardware acceleration */
+    backface-visibility: hidden;
 }
 
 .content-rows.with-detail {
     padding-top: 240px;
 }
 
-.content-rows.move-up {
-    transform: translateY(-100vh);
-}
+/* Removed .content-rows.move-up - no longer needed */
 
 .content-row {
-    margin-bottom: 30px;
+    margin-bottom: 50px;
     overflow: visible;
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+    will-change: transform;
+    transform: translateZ(0);
+    backface-visibility: hidden;
 }
 
 .content-row.row-hidden {
@@ -331,18 +339,19 @@ body {
 .row-title {
     font-size: 28px;
     font-weight: 600;
-    margin: 0 0 16px 0;
+    margin: 0 0 20px 0;
+    padding-left: 60px;
     color: #ffffff;
 }
 
 .row-scroller {
-    overflow-x: auto;
+    overflow: hidden;
     overflow-y: visible;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     -ms-overflow-style: none;
-    scroll-behavior: smooth;
-    padding: 20px 0;
+    position: relative;
+    transform: translateZ(0);
 }
 
 .row-scroller::-webkit-scrollbar {
@@ -353,6 +362,10 @@ body {
     display: flex;
     gap: 16px;
     padding: 0 60px;
+    transform: translateX(0) translateZ(0);
+    transition: transform 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
+    will-change: transform;
+    backface-visibility: hidden;
 }
 
 /* Item Cards */
@@ -360,27 +373,32 @@ body {
     flex: 0 0 auto;
     width: 240px;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: transform 0.25s cubic-bezier(0.25, 0.1, 0.25, 1), 
+                box-shadow 0.25s ease, 
+                border-color 0.25s ease,
+                background 0.25s ease;
     outline: none;
     border-radius: 8px;
     overflow: hidden;
     background: rgba(255, 255, 255, 0.05);
     border: 3px solid transparent;
+    transform: translateZ(0);
+    backface-visibility: hidden;
 }
 
 .item-card.focused {
-    transform: scale(1.15);
+    transform: scale(1.03) translateZ(0);
     z-index: 10;
-    box-shadow: 0 8px 30px rgba(0, 164, 220, 0.6);
-    background: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 12px 40px rgba(0, 164, 220, 0.7);
+    background: rgba(255, 255, 255, 0.12);
     border-color: #00a4dc;
 }
 
 .item-card:hover {
-    transform: scale(1.1);
-    z-index: 10;
+    transform: scale(1.05) translateZ(0);
+    z-index: 9;
     box-shadow: 0 8px 30px rgba(0, 164, 220, 0.4);
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.08);
 }
 
 .item-image {
@@ -389,6 +407,8 @@ body {
     object-fit: cover;
     display: block;
     border-radius: 8px 8px 0 0;
+    transform: translateZ(0);
+    backface-visibility: hidden;
 }
 
 .item-title {

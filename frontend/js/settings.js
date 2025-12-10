@@ -28,10 +28,13 @@ var SettingsController = (function() {
         audioLanguage: 'en',
         subtitleLanguage: 'none',
         theme: 'dark',
-        backdrop: true,
         carouselSpeed: 8000
     };
 
+    /**
+     * Initialize the settings controller
+     * Loads settings, displays user info, and sets up navigation
+     */
     function init() {
         auth = JellyfinAPI.getStoredAuth();
         if (!auth) {
@@ -48,6 +51,10 @@ var SettingsController = (function() {
         focusToSidebar();
     }
 
+    /**
+     * Cache frequently accessed DOM elements for better performance
+     * @private
+     */
     function cacheElements() {
         elements = {
             username: document.getElementById('username'),
@@ -62,6 +69,10 @@ var SettingsController = (function() {
         };
     }
 
+    /**
+     * Display current user information in the UI
+     * @private
+     */
     function displayUserInfo() {
         if (elements.username) {
             elements.username.textContent = auth.username;
@@ -81,6 +92,10 @@ var SettingsController = (function() {
         }
     }
 
+    /**
+     * Load settings from persistent storage
+     * @private
+     */
     function loadSettings() {
         var stored = storage.get('jellyfin_settings');
         if (stored) {
@@ -92,10 +107,18 @@ var SettingsController = (function() {
         }
     }
 
+    /**
+     * Save current settings to persistent storage
+     * @private
+     */
     function saveSettings() {
         storage.set('jellyfin_settings', JSON.stringify(settings));
     }
 
+    /**
+     * Update all setting value displays in the UI
+     * @private
+     */
     function updateSettingValues() {
         var autoLoginValue = document.getElementById('autoLoginValue');
         if (autoLoginValue) {
@@ -135,11 +158,6 @@ var SettingsController = (function() {
         var themeValue = document.getElementById('themeValue');
         if (themeValue) {
             themeValue.textContent = settings.theme === 'dark' ? 'Dark' : 'Light';
-        }
-        
-        var backdropValue = document.getElementById('backdropValue');
-        if (backdropValue) {
-            backdropValue.textContent = settings.backdrop ? 'On' : 'Off';
         }
         
         var carouselSpeedValue = document.getElementById('carouselSpeedValue');
@@ -196,8 +214,40 @@ var SettingsController = (function() {
         }
     }
 
+    /**
+     * Get all navbar button elements
+     * @returns {HTMLElement[]} Array of navbar button elements
+     * @private
+     */
+    function getNavButtons() {
+        return Array.from(document.querySelectorAll('.nav-left .nav-btn, .nav-center .nav-btn'));
+    }
+
+    /**
+     * Get all settings category elements
+     * @returns {NodeList} NodeList of category elements
+     * @private
+     */
+    function getCategories() {
+        return document.querySelectorAll('.settings-category');
+    }
+
+    /**
+     * Get all settings category elements as array
+     * @returns {HTMLElement[]} Array of category elements
+     * @private
+     */
+    function getCategoriesArray() {
+        return Array.from(getCategories());
+    }
+
+    /**
+     * Handle keyboard navigation within navbar
+     * @param {KeyboardEvent} evt - Keyboard event
+     * @private
+     */
     function handleNavBarNavigation(evt) {
-        var navButtons = Array.from(document.querySelectorAll('.nav-left .nav-btn, .nav-center .nav-btn'));
+        var navButtons = getNavButtons();
         
         navButtons.forEach(function(btn) {
             btn.classList.remove('focused');
@@ -237,8 +287,13 @@ var SettingsController = (function() {
         }
     }
 
+    /**
+     * Handle keyboard navigation within settings sidebar
+     * @param {KeyboardEvent} evt - Keyboard event
+     * @private
+     */
     function handleSidebarNavigation(evt) {
-        var categories = Array.from(document.querySelectorAll('.settings-category'));
+        var categories = getCategoriesArray();
         
         switch (evt.keyCode) {
             case KeyCodes.UP: // Up
@@ -272,6 +327,11 @@ var SettingsController = (function() {
         }
     }
 
+    /**
+     * Handle keyboard navigation within settings content area
+     * @param {KeyboardEvent} evt - Keyboard event
+     * @private
+     */
     function handleContentNavigation(evt) {
         var panel = document.querySelector('.settings-panel.active');
         if (!panel) return;
@@ -312,7 +372,7 @@ var SettingsController = (function() {
         focusManager.inNavBar = true;
         focusManager.inSidebar = false;
         
-        var navButtons = Array.from(document.querySelectorAll('.nav-left .nav-btn, .nav-center .nav-btn'));
+        var navButtons = getNavButtons();
         navButtons.forEach(function(btn) {
             btn.classList.remove('focused');
         });
@@ -327,7 +387,7 @@ var SettingsController = (function() {
             navButtons[focusManager.navBarIndex].focus();
         }
         
-        var categories = document.querySelectorAll('.settings-category');
+        var categories = getCategories();
         categories.forEach(function(cat) {
             cat.classList.remove('focused');
         });
@@ -365,14 +425,14 @@ var SettingsController = (function() {
         var items = Array.from(panel.querySelectorAll('.setting-item:not(.non-interactive)'));
         updateContentFocus(items);
         
-        var categories = document.querySelectorAll('.settings-category');
+        var categories = getCategories();
         categories.forEach(function(cat) {
             cat.classList.remove('focused');
         });
     }
 
     function updateSidebarFocus() {
-        var categories = document.querySelectorAll('.settings-category');
+        var categories = getCategories();
         categories.forEach(function(cat, index) {
             if (index === focusManager.sidebarIndex) {
                 cat.classList.add('focused');
@@ -394,11 +454,16 @@ var SettingsController = (function() {
         });
     }
 
+    /**
+     * Select and display a settings category
+     * @param {number} index - Index of category to select
+     * @private
+     */
     function selectCategory(index) {
         focusManager.sidebarIndex = index;
         focusManager.contentIndex = 0;
         
-        var categories = Array.from(document.querySelectorAll('.settings-category'));
+        var categories = getCategoriesArray();
         var category = categories[index];
         if (!category) return;
         
@@ -418,6 +483,11 @@ var SettingsController = (function() {
         updateSidebarFocus();
     }
 
+    /**
+     * Handle activation of a setting item
+     * @param {HTMLElement} item - Setting item element
+     * @private
+     */
     function handleSettingActivation(item) {
         var settingName = item.dataset.setting;
         
@@ -440,12 +510,6 @@ var SettingsController = (function() {
                 
             case 'autoPlay':
                 settings.autoPlay = !settings.autoPlay;
-                saveSettings();
-                updateSettingValues();
-                break;
-                
-            case 'backdrop':
-                settings.backdrop = !settings.backdrop;
                 saveSettings();
                 updateSettingValues();
                 break;

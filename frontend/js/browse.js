@@ -1,12 +1,12 @@
 var BrowseController = (function() {
     'use strict';
 
-    var auth = null;
-    var currentView = 'home';
-    var rows = [];
-    var userLibraries = [];
+    let auth = null;
+    let currentView = 'home';
+    let rows = [];
+    let userLibraries = [];
     
-    var focusManager = {
+    const focusManager = {
         currentRow: 0,
         currentItem: 0,
         totalRows: 0,
@@ -18,15 +18,29 @@ var BrowseController = (function() {
         previousRow: 0
     };
     
-    var featuredCarousel = {
+    const featuredCarousel = {
         items: [],
         currentIndex: 0,
         intervalId: null,
         transitioning: false
     };
 
-    var elements = {};
+    let elements = {};
 
+    const NAVBAR_CHECK_INTERVAL_MS = 50;
+    const FOCUS_INIT_DELAY_MS = 100;
+    const CONTENT_LOAD_DELAY_MS = 800;
+    const CAROUSEL_AUTO_PLAY_INTERVAL_MS = 8000;
+    
+    // Animation Constants
+    const SCROLL_ANIMATION_DURATION_MS = 250;
+    const SCROLL_THRESHOLD_PX = 2;
+    const ROW_VERTICAL_POSITION = 0.45; // 45% of viewport height
+
+    /**
+     * Initialize the browse controller
+     * Authenticates, caches elements, loads libraries, and sets up navigation
+     */
     function init() {
         JellyfinAPI.Logger.info('Initializing browse controller...');
         
@@ -48,14 +62,17 @@ var BrowseController = (function() {
                 setupNavigation();
                 loadHomeContent();
                 
-                // Restore focus position after content loads (delayed)
                 setTimeout(function() {
                     restoreFocusPosition();
-                }, 800);
+                }, CONTENT_LOAD_DELAY_MS);
             }
-        }, 50);
+        }, NAVBAR_CHECK_INTERVAL_MS);
     }
 
+    /**
+     * Cache frequently accessed DOM elements for better performance
+     * @private
+     */
     function cacheElements() {
         elements = {
             username: document.getElementById('username'),
@@ -93,6 +110,10 @@ var BrowseController = (function() {
         };
     }
 
+    /**
+     * Load user's media libraries from Jellyfin server
+     * @private
+     */
     function loadUserLibraries() {
         JellyfinAPI.getUserViews(auth.serverAddress, auth.userId, auth.accessToken, function(err, response) {
             if (err) {
@@ -100,16 +121,20 @@ var BrowseController = (function() {
                 return;
             }
             
-            if (response && response.Items) {
-                userLibraries = response.Items;
-                JellyfinAPI.Logger.info('Loaded libraries:', userLibraries.length);
-                
-                // Libraries are now loaded by navbar.js, so we don't need to add them here
-                // Just store them for internal use
+            if (!response || !response.Items) {
+                JellyfinAPI.Logger.error('No library data returned');
+                return;
             }
+            
+            userLibraries = response.Items;
+            JellyfinAPI.Logger.info('Loaded libraries:', userLibraries.length);
         });
     }
 
+    /**
+     * Set up click and keyboard event listeners for navigation
+     * @private
+     */
     function setupNavigation() {
         if (elements.homeBtn) {
             elements.homeBtn.addEventListener('click', function() {
@@ -156,6 +181,12 @@ var BrowseController = (function() {
         document.addEventListener('keydown', handleKeyDown);
     }
     
+    /**
+     * Main keyboard event handler for browse view
+     * Routes events to appropriate navigation handlers
+     * @param {KeyboardEvent} evt - Keyboard event
+     * @private
+     */
     function handleKeyDown(evt) {
         evt = evt || window.event;
         
@@ -189,7 +220,7 @@ var BrowseController = (function() {
             return;
         }
         
-        var allRows = document.querySelectorAll('.content-row');
+        var allRows = getAllRows();
         if (allRows.length === 0) return;
         
         var currentRowElement = allRows[focusManager.currentRow];
@@ -233,13 +264,10 @@ var BrowseController = (function() {
                     if (elements.featuredBanner) {
                         elements.featuredBanner.classList.remove('slide-up');
                     }
-                    if (elements.contentRows) {
-                        elements.contentRows.classList.remove('move-up');
-                    }
+                    // Don't remove move-up class - it's no longer used
                     
                     // Show all rows when going back to featured banner
-                    var allRowElements = document.querySelectorAll('.content-row');
-                    allRowElements.forEach(function(row) {
+                    getAllRows().forEach(function(row) {
                         row.classList.remove('row-hidden');
                     });
                     
@@ -279,6 +307,11 @@ var BrowseController = (function() {
         }
     }
     
+    /**
+     * Handle keyboard navigation within featured banner carousel
+     * @param {KeyboardEvent} evt - Keyboard event
+     * @private
+     */
     function handleFeaturedBannerNavigation(evt) {
         switch (evt.keyCode) {
             case KeyCodes.LEFT:
@@ -303,15 +336,12 @@ var BrowseController = (function() {
                     elements.featuredBanner.classList.remove('focused');
                     elements.featuredBanner.classList.add('slide-up');
                 }
-                if (elements.contentRows) {
-                    elements.contentRows.classList.add('move-up');
-                }
+                // Don't add move-up class - let rows stay in their natural position
                 focusManager.previousRow = -1;
                 focusManager.currentRow = 0;
                 focusManager.currentItem = focusManager.rowPositions[0] || 0;
                 // Ensure all rows are visible when entering first row from banner
-                var allRowElements = document.querySelectorAll('.content-row');
-                allRowElements.forEach(function(row) {
+                getAllRows().forEach(function(row) {
                     row.classList.remove('row-hidden');
                 });
                 updateFocus();
@@ -334,8 +364,13 @@ var BrowseController = (function() {
         }
     }
     
+    /**
+     * Handle keyboard navigation within navbar
+     * @param {KeyboardEvent} evt - Keyboard event
+     * @private
+     */
     function handleNavBarNavigation(evt) {
-        var navButtons = Array.from(document.querySelectorAll('.nav-left .nav-btn, .nav-center .nav-btn'));
+        const navButtons = Array.from(document.querySelectorAll('.nav-left .nav-btn, .nav-center .nav-btn'));
         
         navButtons.forEach(function(btn) {
             btn.classList.remove('focused');
@@ -367,7 +402,7 @@ var BrowseController = (function() {
                 
             case KeyCodes.ENTER:
                 evt.preventDefault();
-                var currentBtn = navButtons[focusManager.navBarIndex];
+                const currentBtn = navButtons[focusManager.navBarIndex];
                 if (currentBtn) {
                     currentBtn.click();
                 }
@@ -378,7 +413,7 @@ var BrowseController = (function() {
     function focusToNavBar() {
         focusManager.inNavBar = true;
         focusManager.inFeaturedBanner = false;
-        var navButtons = Array.from(document.querySelectorAll('.nav-left .nav-btn, .nav-center .nav-btn'));
+        const navButtons = Array.from(document.querySelectorAll('.nav-left .nav-btn, .nav-center .nav-btn'));
         
         // Start at home button (index 1), not user avatar (index 0)
         focusManager.navBarIndex = navButtons.length > 1 ? 1 : 0;
@@ -395,10 +430,7 @@ var BrowseController = (function() {
             elements.featuredBanner.classList.remove('focused');
         }
         
-        var items = document.querySelectorAll('.item-card');
-        items.forEach(function(item) {
-            item.classList.remove('focused');
-        });
+        clearAllItemFocus();
     }
     
     function focusToFeaturedBanner() {
@@ -424,10 +456,7 @@ var BrowseController = (function() {
             btn.classList.remove('focused');
         });
         
-        var items = document.querySelectorAll('.item-card');
-        items.forEach(function(item) {
-            item.classList.remove('focused');
-        });
+        clearAllItemFocus();
     }
     
     function updateFeaturedFocus() {
@@ -444,8 +473,13 @@ var BrowseController = (function() {
         }
     }
     
+    /**
+     * Update visibility of rows based on current focus position
+     * Hides rows above current row to improve visual focus
+     * @private
+     */
     function updateRowVisibility() {
-        var allRows = document.querySelectorAll('.content-row');
+        var allRows = getAllRows();
         if (allRows.length === 0) return;
         
         // Keep featured banner hidden when scrolling rows
@@ -531,22 +565,54 @@ var BrowseController = (function() {
     }
     
     /**
-     * Scrolls item horizontally into view within its row scroller
+     * Scrolls item horizontally into view within its row using transform
      * @param {HTMLElement} currentItem - The focused item card
      * @param {HTMLElement} rowScroller - The row's scroll container
      */
     function scrollItemHorizontally(currentItem, rowScroller) {
         if (!currentItem || !rowScroller) return;
         
+        var rowItems = rowScroller.querySelector('.row-items');
+        if (!rowItems) return;
+        
         var itemRect = currentItem.getBoundingClientRect();
         var scrollerRect = rowScroller.getBoundingClientRect();
         
-        var HORIZONTAL_SCROLL_PADDING = 60;
+        var HORIZONTAL_SCROLL_PADDING = 120; // Increased padding for better positioning
+        var EDGE_THRESHOLD = 100; // Distance from edge to trigger scroll
         
-        if (itemRect.left < scrollerRect.left) {
-            rowScroller.scrollLeft -= (scrollerRect.left - itemRect.left) + HORIZONTAL_SCROLL_PADDING;
-        } else if (itemRect.right > scrollerRect.right) {
-            rowScroller.scrollLeft += (itemRect.right - scrollerRect.right) + HORIZONTAL_SCROLL_PADDING;
+        // Calculate item position relative to viewport
+        var itemCenter = itemRect.left + (itemRect.width / 2);
+        var scrollerCenter = scrollerRect.left + (scrollerRect.width / 2);
+        
+        // Get current transform
+        var currentTransform = getComputedStyle(rowItems).transform;
+        var currentX = 0;
+        if (currentTransform !== 'none') {
+            var matrix = new DOMMatrix(currentTransform);
+            currentX = matrix.m41;
+        }
+        
+        // Calculate desired scroll
+        var desiredScroll = 0;
+        
+        if (itemRect.left < scrollerRect.left + EDGE_THRESHOLD) {
+            // Item is too far left
+            desiredScroll = (scrollerRect.left + HORIZONTAL_SCROLL_PADDING) - itemRect.left;
+        } else if (itemRect.right > scrollerRect.right - EDGE_THRESHOLD) {
+            // Item is too far right
+            desiredScroll = (scrollerRect.right - HORIZONTAL_SCROLL_PADDING) - itemRect.right;
+        }
+        
+        if (Math.abs(desiredScroll) > 5) {
+            var newX = currentX + desiredScroll;
+            
+            // Clamp to prevent scrolling beyond bounds
+            var maxScroll = 0;
+            var minScroll = -(rowItems.scrollWidth - rowScroller.clientWidth);
+            newX = Math.max(minScroll, Math.min(maxScroll, newX));
+            
+            rowItems.style.transform = 'translateX(' + newX + 'px)';
         }
     }
     
@@ -558,75 +624,105 @@ var BrowseController = (function() {
     function calculateVerticalScrollAdjustment(currentRowElement) {
         if (!currentRowElement) return 0;
         
-        var mainContent = document.querySelector('.main-content');
+        const mainContent = document.querySelector('.main-content');
         if (!mainContent) return 0;
         
-        var rowRect = currentRowElement.getBoundingClientRect();
-        var mainRect = mainContent.getBoundingClientRect();
+        // Use row title as the reference point for consistent positioning
+        const rowTitle = currentRowElement.querySelector('.row-title');
+        const referenceElement = rowTitle || currentRowElement;
+        const rowRect = referenceElement.getBoundingClientRect();
+        const mainRect = mainContent.getBoundingClientRect();
         
-        var detailSection = elements.detailSection;
-        var detailBottom = 0;
+        // Position row title at configured viewport height
+        const targetPosition = mainRect.top + (mainRect.height * ROW_VERTICAL_POSITION);
+        const scrollAdjustment = rowRect.top - targetPosition;
         
-        if (detailSection && detailSection.style.display !== 'none') {
-            var detailRect = detailSection.getBoundingClientRect();
-            detailBottom = detailRect.bottom;
-        }
+        // No special constraints - all rows positioned consistently
         
-        var ROW_VERTICAL_POSITION = 0.25; // Position row at 25% of viewport height
-        var targetPosition = mainRect.top + (mainRect.height * ROW_VERTICAL_POSITION);
-        var scrollAdjustment = rowRect.top - targetPosition;
-        
-        // Prevent first row from scrolling behind detail section
-        var DETAIL_SECTION_BOTTOM_SPACING = 20;
-        if (focusManager.currentRow === 0 && detailBottom > 0) {
-            var minRowTop = detailBottom + DETAIL_SECTION_BOTTOM_SPACING;
-            if (rowRect.top - scrollAdjustment < minRowTop) {
-                scrollAdjustment = rowRect.top - minRowTop;
-            }
-        }
-        
-        var SCROLL_THRESHOLD = 10;
-        return Math.abs(scrollAdjustment) > SCROLL_THRESHOLD ? scrollAdjustment : 0;
+        return Math.abs(scrollAdjustment) > SCROLL_THRESHOLD_PX ? scrollAdjustment : 0;
     }
     
     /**
-     * Applies vertical scroll adjustment to main content
+     * Applies vertical scroll adjustment to main content with smooth animation
      * @param {number} scrollAdjustment - Amount to scroll in pixels
      */
     function applyVerticalScroll(scrollAdjustment) {
         if (scrollAdjustment === 0) return;
         
-        var mainContent = document.querySelector('.main-content');
+        const mainContent = document.querySelector('.main-content');
         if (mainContent) {
-            mainContent.scrollTop += scrollAdjustment;
+            const startScroll = mainContent.scrollTop;
+            const targetScroll = startScroll + scrollAdjustment;
+            let startTime = null;
+            
+            function animateScroll(currentTime) {
+                if (!startTime) startTime = currentTime;
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / SCROLL_ANIMATION_DURATION_MS, 1);
+                
+                // Spring-like easing for more natural feel
+                const easeProgress = progress < 0.5
+                    ? 4 * progress * progress * progress
+                    : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+                
+                mainContent.scrollTop = startScroll + (scrollAdjustment * easeProgress);
+                
+                if (progress < 1) {
+                    requestAnimationFrame(animateScroll);
+                }
+            }
+            
+            requestAnimationFrame(animateScroll);
         }
     }
     
-    function updateFocus() {
+    /**
+     * Helper to get all content rows (cached per call)
+     * @returns {NodeList} All content row elements
+     * @private
+     */
+    function getAllRows() {
+        return document.querySelectorAll('.content-row');
+    }
+    
+    /**
+     * Helper to clear focus from all item cards
+     * @private
+     */
+    function clearAllItemFocus() {
         document.querySelectorAll('.item-card').forEach(function(card) {
             card.classList.remove('focused');
         });
+    }
+    
+    /**
+     * Update focus to current item and handle scrolling
+     * Applies smooth scrolling animation to keep focused item visible
+     * @private
+     */
+    function updateFocus() {
+        clearAllItemFocus();
         
-        var allRows = document.querySelectorAll('.content-row');
+        const allRows = getAllRows();
         if (allRows.length === 0) return;
         
-        var currentRowElement = allRows[focusManager.currentRow];
+        const currentRowElement = allRows[focusManager.currentRow];
         if (!currentRowElement) return;
         
-        var items = currentRowElement.querySelectorAll('.item-card');
+        const items = currentRowElement.querySelectorAll('.item-card');
         if (items.length === 0) return;
         
-        var currentItem = items[focusManager.currentItem];
+        const currentItem = items[focusManager.currentItem];
         if (currentItem) {
             currentItem.classList.add('focused');
             currentItem.focus();
             
-            updateDetailSection(currentItem);
-            
-            var rowScroller = currentRowElement.querySelector('.row-scroller');
+            const rowScroller = currentRowElement.querySelector('.row-scroller');
             scrollItemHorizontally(currentItem, rowScroller);
             
-            var scrollAdjustment = calculateVerticalScrollAdjustment(currentRowElement);
+            updateDetailSection(currentItem);
+            
+            const scrollAdjustment = calculateVerticalScrollAdjustment(currentRowElement);
             applyVerticalScroll(scrollAdjustment);
         }
     }
@@ -639,7 +735,7 @@ var BrowseController = (function() {
         
         setTimeout(function() {
             focusToNavBar();
-        }, 100);
+        }, FOCUS_INIT_DELAY_MS);
     }
 
     function displayUserInfo() {
@@ -670,6 +766,14 @@ var BrowseController = (function() {
         }
     }
 
+    /**
+     * Switch between different views (home, movies, shows, library)
+     * @param {string} view - View name ('home', 'movies', 'shows', 'library')
+     * @param {string} [libraryId] - Library ID for library view
+     * @param {string} [libraryName] - Library name for library view
+     * @param {string} [collectionType] - Collection type (movies, tvshows, etc.)
+     * @private
+     */
     function switchView(view, libraryId, libraryName, collectionType) {
         currentView = view;
         JellyfinAPI.Logger.info('Switching to view:', view, libraryId || '');
@@ -700,17 +804,29 @@ var BrowseController = (function() {
         }
     }
 
+    /**
+     * Load and display home view content
+     * Loads featured carousel and content rows
+     * @private
+     */
     function loadHomeContent() {
         showLoading();
         JellyfinAPI.Logger.info('Loading home content...');
         
         JellyfinAPI.getUserViews(auth.serverAddress, auth.userId, auth.accessToken, function(err, views) {
             if (err) {
+                JellyfinAPI.Logger.error('Failed to load libraries:', err);
                 showError('Failed to load libraries');
                 return;
             }
             
-            JellyfinAPI.Logger.success('Loaded user views:', views);
+            if (!views || !views.Items) {
+                JellyfinAPI.Logger.error('No views data returned');
+                showError('Failed to load libraries');
+                return;
+            }
+            
+            JellyfinAPI.Logger.success('Loaded user views:', views.Items.length, 'views');
             
             clearRows();
             loadFeaturedItem();
@@ -1161,7 +1277,7 @@ var BrowseController = (function() {
         featuredCarousel.intervalId = setInterval(function() {
             var nextIndex = (featuredCarousel.currentIndex + 1) % featuredCarousel.items.length;
             displayFeaturedItem(nextIndex);
-        }, 8000);
+        }, CAROUSEL_AUTO_PLAY_INTERVAL_MS);
     }
     
     function stopCarouselAutoPlay() {
@@ -1342,8 +1458,8 @@ var BrowseController = (function() {
                     focusManager.inFeaturedBanner = false;
                     focusManager.inNavBar = false;
                     
-                    // Update focus without animation
-                    updateFocusNoAnimation();
+                    // Update focus
+                    updateFocus();
                     localStorage.removeItem('browsePosition');
                     return;
                 }
@@ -1355,35 +1471,6 @@ var BrowseController = (function() {
         } catch (e) {
             JellyfinAPI.Logger.error('Failed to restore browse position:', e);
             defaultFocus();
-        }
-    }
-
-    function updateFocusNoAnimation() {
-        document.querySelectorAll('.item-card').forEach(function(card) {
-            card.classList.remove('focused');
-        });
-        
-        var allRows = document.querySelectorAll('.content-row');
-        if (allRows.length === 0) return;
-        
-        var currentRowElement = allRows[focusManager.currentRow];
-        if (!currentRowElement) return;
-        
-        var items = currentRowElement.querySelectorAll('.item-card');
-        if (items.length === 0) return;
-        
-        var currentItem = items[focusManager.currentItem];
-        if (currentItem) {
-            currentItem.classList.add('focused');
-            currentItem.focus();
-            
-            var rowScroller = currentRowElement.querySelector('.row-scroller');
-            scrollItemHorizontally(currentItem, rowScroller);
-            
-            updateDetailSection(currentItem);
-            
-            var scrollAdjustment = calculateVerticalScrollAdjustment(currentRowElement);
-            applyVerticalScroll(scrollAdjustment);
         }
     }
 
@@ -1404,7 +1491,7 @@ var BrowseController = (function() {
             focusManager.currentItem = 0;
             focusManager.inFeaturedBanner = false;
             focusManager.inNavBar = false;
-            updateFocusNoAnimation();
+            updateFocus();
         }
     }
 

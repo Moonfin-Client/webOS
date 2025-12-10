@@ -289,8 +289,14 @@ var LoginController = (function() {
     function loadPublicUsers(serverAddress) {
         JellyfinAPI.getPublicUsers(serverAddress, function(err, users) {
             if (err) {
+                JellyfinAPI.Logger.error('Failed to load public users:', err);
                 showError('Connected to server but failed to load users');
-                JellyfinAPI.Logger.error('Failed to load public users', err);
+                return;
+            }
+            
+            if (!users || users.length === 0) {
+                JellyfinAPI.Logger.warn('No users found on server');
+                showError('No users found on this server');
                 return;
             }
             
@@ -540,18 +546,25 @@ var LoginController = (function() {
             }
             
             if (err) {
+                JellyfinAPI.Logger.error('Authentication failed:', err);
                 showError('Login failed! Check your password.');
-                JellyfinAPI.Logger.error('Authentication failed', err);
-            } else {
-                showStatus('Login successful! Welcome, ' + authData.username + '!', 'success');
-                JellyfinAPI.Logger.success('Login successful', authData);
-                
-                elements.passwordInput.value = '';
-                
-                setTimeout(function() {
-                    window.location.href = 'browse.html';
-                }, 1000);
+                return;
             }
+            
+            if (!authData || !authData.AccessToken) {
+                JellyfinAPI.Logger.error('No access token received');
+                showError('Login failed! Invalid response from server.');
+                return;
+            }
+            
+            showStatus('Login successful! Welcome, ' + authData.User.Name + '!', 'success');
+            JellyfinAPI.Logger.success('Login successful');
+            
+            elements.passwordInput.value = '';
+            
+            setTimeout(function() {
+                window.location.href = 'browse.html';
+            }, 1000);
         });
     }
 
@@ -571,8 +584,15 @@ var LoginController = (function() {
         
         JellyfinAPI.initiateQuickConnect(connectedServer.address, function(err, response) {
             if (err) {
+                JellyfinAPI.Logger.error('Quick Connect initiation failed:', err);
                 showError('Quick Connect is not enabled on this server');
-                JellyfinAPI.Logger.error('Quick Connect initiation failed', err);
+                backToUserSelection();
+                return;
+            }
+            
+            if (!response || !response.Secret) {
+                JellyfinAPI.Logger.error('Invalid QuickConnect response');
+                showError('Quick Connect is not available');
                 backToUserSelection();
                 return;
             }
@@ -646,17 +666,25 @@ var LoginController = (function() {
             quickConnectSecret = null;
             
             if (err) {
+                JellyfinAPI.Logger.error('Quick Connect authentication failed:', err);
                 showError('Quick Connect authentication failed');
-                JellyfinAPI.Logger.error('Quick Connect auth failed', err);
                 backToUserSelection();
-            } else {
-                showStatus('Login successful! Welcome, ' + authData.User.Name + '!', 'success');
-                JellyfinAPI.Logger.success('Quick Connect login successful', authData);
-                
-                setTimeout(function() {
-                    window.location.href = 'browse.html';
-                }, 1000);
+                return;
             }
+            
+            if (!authData || !authData.AccessToken) {
+                JellyfinAPI.Logger.error('No access token from QuickConnect');
+                showError('Quick Connect authentication failed');
+                backToUserSelection();
+                return;
+            }
+            
+            showStatus('Login successful! Welcome, ' + authData.User.Name + '!', 'success');
+            JellyfinAPI.Logger.success('Quick Connect login successful');
+            
+            setTimeout(function() {
+                window.location.href = 'browse.html';
+            }, 1000);
         });
     }
 

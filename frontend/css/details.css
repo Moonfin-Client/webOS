@@ -767,6 +767,107 @@ body {
     background: rgba(255, 255, 255, 0.3);
 }
 
+/* Track Selection Modals */
+.track-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+}
+
+.modal-content {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    border-radius: 16px;
+    padding: 40px;
+    min-width: 600px;
+    max-width: 800px;
+    max-height: 70vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.modal-title {
+    font-size: 32px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.track-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.track-item {
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 20px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    outline: none;
+}
+
+.track-item:hover,
+.track-item:focus {
+    background: rgba(0, 164, 220, 0.2);
+    border-color: #00a4dc;
+    transform: translateX(8px);
+}
+
+.track-item.selected {
+    background: rgba(0, 164, 220, 0.15);
+    border-color: #00a4dc;
+}
+
+.track-item.selected::after {
+    content: '✓';
+    font-size: 24px;
+    color: #00a4dc;
+    margin-left: 16px;
+}
+
+.track-name {
+    font-size: 22px;
+    font-weight: 600;
+    color: #fff;
+}
+
+.track-info {
+    font-size: 18px;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.modal-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+
+.modal-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+
 *:focus {
     outline: none;
 }

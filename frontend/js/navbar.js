@@ -160,17 +160,12 @@
         
         if (searchBtn) {
             searchBtn.addEventListener('click', function() {
-                // TODO: Implement search
-                if (typeof JellyfinAPI !== 'undefined') {
-                    JellyfinAPI.Logger.info('Search not yet implemented');
-                }
+                window.location.href = 'search.html';
             });
             searchBtn.addEventListener('keydown', function(e) {
                 if (e.keyCode === KeyCodes.ENTER) {
                     e.preventDefault();
-                    if (typeof JellyfinAPI !== 'undefined') {
-                        JellyfinAPI.Logger.info('Search not yet implemented');
-                    }
+                    window.location.href = 'search.html';
                 }
             });
         }

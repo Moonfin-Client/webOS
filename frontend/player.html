@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moonfin - Player</title>
+    <link rel="stylesheet" href="css/player.css">
+    <script src="webOSTVjs-1.2.11/webOSTV.js" charset="utf-8"></script>
+    <script src="webOSTVjs-1.2.11/webOSTV-dev.js" charset="utf-8"></script>
+    <script src="js/storage.js" charset="utf-8"></script>
+    <script src="js/ajax.js" charset="utf-8"></script>
+    <script src="js/keycodes.js" charset="utf-8"></script>
+    <script src="js/jellyfin-api.js" charset="utf-8"></script>
+    <script src="js/track-selector.js" charset="utf-8"></script>
+    <script src="js/player.js" charset="utf-8"></script>
+</head>
+<body>
+    <video id="videoPlayer" class="video-player"></video>
+    
+    <!-- Player Controls Overlay -->
+    <div id="playerControls" class="player-controls">
+        <div class="controls-top">
+            <div class="media-info">
+                <h1 id="mediaTitle" class="media-title"></h1>
+                <p id="mediaSubtitle" class="media-subtitle"></p>
+            </div>
+        </div>
+        
+        <div class="controls-bottom">
+            <div class="progress-container">
+                <div id="progressBar" class="progress-bar">
+                    <div id="progressFill" class="progress-fill"></div>
+                </div>
+                <div class="time-info">
+                    <span id="currentTime" class="time-current">0:00</span>
+                    <span id="totalTime" class="time-total">0:00</span>
+                </div>
+            </div>
+            
+            <div class="control-buttons">
+                <button id="playPauseBtn" class="control-btn" tabindex="0">
+                    <img src="assets/pause.png" alt="Play/Pause" class="btn-icon">
+                </button>
+                <button id="rewindBtn" class="control-btn" tabindex="0">
+                    <img src="assets/rewinds.png" alt="Rewind" class="btn-icon">
+                </button>
+                <button id="forwardBtn" class="control-btn" tabindex="0">
+                    <img src="assets/fast_forward.png" alt="Forward" class="btn-icon">
+                </button>
+                <button id="audioBtn" class="control-btn" tabindex="0">
+                    <img src="assets/select_audio.png" alt="Audio" class="btn-icon">
+                </button>
+                <button id="subtitleBtn" class="control-btn" tabindex="0">
+                    <img src="assets/subtitle.png" alt="Subtitles" class="btn-icon">
+                </button>
+                <button id="backBtn" class="control-btn" tabindex="0">
+                    <img src="assets/chevron-left.svg" alt="Back" class="btn-icon">
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Audio Track Selection Modal -->
+    <div id="audioModal" class="track-modal">
+        <div class="modal-content">
+            <h2 class="modal-title">Select Audio Track</h2>
+            <div id="audioTrackList" class="track-list"></div>
+        </div>
+    </div>
+    
+    <!-- Subtitle Track Selection Modal -->
+    <div id="subtitleModal" class="track-modal">
+        <div class="modal-content">
+            <h2 class="modal-title">Select Subtitle</h2>
+            <div id="subtitleTrackList" class="track-list"></div>
+        </div>
+    </div>
+    
+    <div id="loadingIndicator" class="loading-indicator">
+        <div class="spinner"></div>
+        <p>Loading...</p>
+    </div>
+</body>
+</html>

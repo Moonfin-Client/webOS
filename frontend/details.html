@@ -11,6 +11,7 @@
     <script src="js/ajax.js" charset="utf-8"></script>
     <script src="js/keycodes.js" charset="utf-8"></script>
     <script src="js/jellyfin-api.js" charset="utf-8"></script>
+    <script src="js/track-selector.js" charset="utf-8"></script>
     <script src="js/details.js" charset="utf-8"></script>
 </head>
 <body>
@@ -142,7 +143,7 @@
                     </div>
                     <div class="btn-wrapper" style="display: none;" id="audioBtnWrapper">
                         <button id="audioBtn" class="btn-action btn-secondary" tabindex="0">
-                            <img src="assets/masks.png" alt="Audio">
+                            <img src="assets/select_audio.png" alt="Audio">
                         </button>
                         <span class="btn-label">Audio</span>
                     </div>
@@ -255,6 +256,22 @@
         <h2>Unable to load details</h2>
         <p id="errorText"></p>
         <button id="backBtn" class="btn-primary" tabindex="0">Go Back</button>
+    </div>
+
+    <!-- Audio Track Selection Modal -->
+    <div id="audioModal" class="track-modal">
+        <div class="modal-content">
+            <h2 class="modal-title">Select Audio Track</h2>
+            <div id="audioTrackList" class="track-list"></div>
+        </div>
+    </div>
+    
+    <!-- Subtitle Track Selection Modal -->
+    <div id="subtitleModal" class="track-modal">
+        <div class="modal-content">
+            <h2 class="modal-title">Select Subtitle</h2>
+            <div id="subtitleTrackList" class="track-list"></div>
+        </div>
     </div>
 </body>
 </html>
