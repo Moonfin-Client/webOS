@@ -210,6 +210,25 @@ var JellyfinAPI = (function() {
         return address;
     }
 
+    function getSystemInfo(address, accessToken, callback) {
+        address = normalizeServerAddress(address);
+        
+        ajax.request(address + '/System/Info', {
+            method: 'GET',
+            headers: {
+                'X-Emby-Authorization': getAuthHeader(accessToken),
+                'X-MediaBrowser-Token': accessToken
+            },
+            success: function(response) {
+                if (callback) callback(null, response);
+            },
+            error: function(err) {
+                Logger.error('Failed to get system info:', err);
+                if (callback) callback(err, null);
+            }
+        });
+    }
+
     function testServer(address, callback) {
         address = normalizeServerAddress(address);
         
@@ -367,13 +386,56 @@ var JellyfinAPI = (function() {
         
         var viewsUrl = serverAddress + '/Users/' + userId + '/Views';
         
+        // Unsupported collection types
+        var unsupportedCollectionTypes = ['books', 'folders'];
+        
         ajax.request(viewsUrl, {
             method: 'GET',
             headers: {
                 'X-Emby-Authorization': getAuthHeader(accessToken)
             },
             success: function(response) {
-                Logger.success('User views retrieved:', response.Items.length + ' libraries');
+                if (!response || !response.Items) {
+                    Logger.error('Invalid user views response - missing Items');
+                    if (callback) callback(new Error('Invalid response'), null);
+                    return;
+                }
+                
+                Logger.info('Raw user views retrieved:', response.Items.length, 'libraries');
+                
+                // Filter out unsupported collection types and empty libraries
+                var totalItems = response.Items.length;
+                response.Items = response.Items.filter(function(view) {
+                    var collectionType = view.CollectionType ? view.CollectionType.toLowerCase() : '';
+                    
+                    // Check if collection type is supported
+                    var isSupported = unsupportedCollectionTypes.indexOf(collectionType) === -1;
+                    if (!isSupported) {
+                        Logger.info('Filtering out unsupported library:', view.Name, 
+                            '(Type:', view.CollectionType + ')');
+                        return false;
+                    }
+                    
+                    // Check if library has content (skip empty libraries)
+                    var hasContent = view.ChildCount === undefined || view.ChildCount > 0;
+                    if (!hasContent) {
+                        Logger.info('Filtering out empty library:', view.Name, '(ChildCount: 0)');
+                        return false;
+                    }
+                    
+                    Logger.info('Supporting library:', view.Name,
+                        '(Type:', view.CollectionType || 'unknown',
+                        'Items:', view.ChildCount || 0 + ')');
+                    return true;
+                });
+                
+                var filteredCount = totalItems - response.Items.length;
+                if (filteredCount > 0) {
+                    Logger.info('Filtered out', filteredCount, 'unsupported/empty libraries');
+                }
+                
+                Logger.success('User views ready:', response.Items.length, 'supported libraries');
+                
                 if (callback) callback(null, response);
             },
             error: function(err) {
@@ -553,6 +615,248 @@ var JellyfinAPI = (function() {
         });
     }
 
+    /**
+     * Get resume items (Continue Watching) for the user
+     */
+    function getResumeItems(serverAddress, userId, accessToken, callback) {
+        Logger.info('Fetching resume items for userId:', userId);
+        
+        var params = {
+            Limit: 50, // ITEM_LIMIT_RESUME
+            Recursive: true,
+            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,MediaSourceCount,ProductionYear,ChildCount,RecursiveItemCount',
+            ImageTypeLimit: 1,
+            EnableImageTypes: 'Primary,Backdrop,Thumb',
+            MediaTypes: 'Video'
+        };
+        
+        var endpoint = '/Users/' + userId + '/Items/Resume';
+        
+        getItems(serverAddress, accessToken, endpoint, params, function(err, response) {
+            if (err) {
+                Logger.error('Failed to get resume items:', err);
+                if (callback) callback(err, null);
+                return;
+            }
+            
+            Logger.success('Resume items retrieved:', response.Items ? response.Items.length : 0);
+            if (callback) callback(null, response);
+        });
+    }
+
+    /**
+     * Get next up episodes for TV shows
+     */
+    function getNextUpItems(serverAddress, userId, accessToken, callback) {
+        Logger.info('Fetching next up items for userId:', userId);
+        
+        var params = {
+            Limit: 50, // ITEM_LIMIT_NEXT_UP
+            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,MediaSourceCount,ProductionYear,ChildCount,RecursiveItemCount',
+            UserId: userId,
+            ImageTypeLimit: 1,
+            EnableImageTypes: 'Primary,Backdrop,Thumb'
+        };
+        
+        var endpoint = '/Shows/NextUp';
+        
+        getItems(serverAddress, accessToken, endpoint, params, function(err, response) {
+            if (err) {
+                Logger.error('Failed to get next up items:', err);
+                if (callback) callback(err, null);
+                return;
+            }
+            
+            Logger.success('Next up items retrieved:', response.Items ? response.Items.length : 0);
+            if (callback) callback(null, response);
+        });
+    }
+
+    /**
+     * Get latest media items for a library
+     */
+    function getLatestMedia(serverAddress, userId, accessToken, parentId, includeItemTypes, callback) {
+        Logger.info('Fetching latest media for parentId:', parentId, 'types:', includeItemTypes);
+        
+        var params = {
+            Limit: 50,
+            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,ProductionYear,ChildCount,RecursiveItemCount',
+            ParentId: parentId,
+            ImageTypeLimit: 1,
+            EnableImageTypes: 'Primary,Backdrop,Thumb'
+        };
+        
+        if (includeItemTypes) {
+            params.IncludeItemTypes = includeItemTypes;
+        }
+        
+        var endpoint = '/Users/' + userId + '/Items/Latest';
+        
+        getItems(serverAddress, accessToken, endpoint, params, function(err, response) {
+            if (err) {
+                Logger.error('Failed to get latest media:', err);
+                if (callback) callback(err, null);
+                return;
+            }
+            
+            // Latest endpoint returns Items directly (not in TotalRecordCount wrapper)
+            var items = response.Items || response;
+            if (!Array.isArray(items)) {
+                items = [items];
+            }
+            
+            Logger.success('Latest media retrieved:', items.length, 'items');
+            
+            // Wrap in standard response format if needed
+            var result = response.Items ? response : { Items: items, TotalRecordCount: items.length };
+            
+            if (callback) callback(null, result);
+        });
+    }
+
+    /**
+     * Check if Live TV is available and get channel count
+     */
+    function getLiveTVInfo(serverAddress, userId, accessToken, callback) {
+        Logger.info('Checking Live TV availability for userId:', userId);
+        
+        // First check if user has Live TV library access
+        getUserViews(serverAddress, userId, accessToken, function(err, views) {
+            if (err) {
+                Logger.error('Failed to check Live TV views:', err);
+                if (callback) callback(err, null);
+                return;
+            }
+            
+            // Look for LiveTV collection type
+            var liveTVView = views.Items.find(function(view) {
+                return view.CollectionType && view.CollectionType.toLowerCase() === 'livetv';
+            });
+            
+            if (!liveTVView) {
+                Logger.info('No Live TV library found');
+                if (callback) callback(null, { available: false, channelCount: 0 });
+                return;
+            }
+            
+            // Get channel count
+            var params = {
+                UserId: userId,
+                Limit: 1,
+                Fields: 'ChannelInfo'
+            };
+            
+            getItems(serverAddress, accessToken, '/LiveTv/Channels', params, function(err, response) {
+                if (err) {
+                    Logger.warn('Failed to get Live TV channels:', err);
+                    if (callback) callback(null, { available: false, channelCount: 0 });
+                    return;
+                }
+                
+                var channelCount = response.TotalRecordCount || 0;
+                Logger.success('Live TV available:', channelCount, 'channels');
+                
+                if (callback) callback(null, { 
+                    available: channelCount > 0, 
+                    channelCount: channelCount,
+                    viewId: liveTVView.Id
+                });
+            });
+        });
+    }
+
+    /**
+     * Get Live TV channels
+     */
+    function getLiveTVChannels(serverAddress, userId, accessToken, callback) {
+        Logger.info('Fetching Live TV channels for userId:', userId);
+        
+        var params = {
+            UserId: userId,
+            Limit: 50,
+            Fields: 'PrimaryImageAspectRatio,ChannelInfo',
+            ImageTypeLimit: 1,
+            EnableImageTypes: 'Primary,Backdrop',
+            SortBy: 'SortName',
+            SortOrder: 'Ascending'
+        };
+        
+        var endpoint = '/LiveTv/Channels';
+        
+        getItems(serverAddress, accessToken, endpoint, params, function(err, response) {
+            if (err) {
+                Logger.error('Failed to get Live TV channels:', err);
+                if (callback) callback(err, null);
+                return;
+            }
+            
+            Logger.success('Live TV channels retrieved:', response.Items ? response.Items.length : 0);
+            if (callback) callback(null, response);
+        });
+    }
+
+    /**
+     * Get Live TV recordings
+     */
+    function getLiveTVRecordings(serverAddress, userId, accessToken, callback) {
+        Logger.info('Fetching Live TV recordings for userId:', userId);
+        
+        var params = {
+            UserId: userId,
+            Limit: 50,
+            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo',
+            ImageTypeLimit: 1,
+            EnableImageTypes: 'Primary,Backdrop,Thumb',
+            SortBy: 'DateCreated',
+            SortOrder: 'Descending'
+        };
+        
+        var endpoint = '/LiveTv/Recordings';
+        
+        getItems(serverAddress, accessToken, endpoint, params, function(err, response) {
+            if (err) {
+                Logger.error('Failed to get Live TV recordings:', err);
+                if (callback) callback(err, null);
+                return;
+            }
+            
+            Logger.success('Live TV recordings retrieved:', response.Items ? response.Items.length : 0);
+            if (callback) callback(null, response);
+        });
+    }
+
+    /**
+     * Get collections (box sets)
+     */
+    function getCollections(serverAddress, userId, accessToken, callback) {
+        Logger.info('Fetching collections for userId:', userId);
+        
+        var params = {
+            UserId: userId,
+            Limit: 50,
+            IncludeItemTypes: 'BoxSet',
+            Recursive: true,
+            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,ChildCount',
+            ImageTypeLimit: 1,
+            EnableImageTypes: 'Primary,Backdrop,Thumb',
+            SortBy: 'SortName',
+            SortOrder: 'Ascending'
+        };
+        
+        var endpoint = '/Users/' + userId + '/Items';
+        
+        getItems(serverAddress, accessToken, endpoint, params, function(err, response) {
+            if (err) {
+                Logger.error('Failed to get collections:', err);
+                if (callback) callback(err, null);
+                return;
+            }
+            
+            Logger.success('Collections retrieved:', response.Items ? response.Items.length : 0);
+            if (callback) callback(null, response);
+        });
+    }
+
     return {
         init: initDeviceId,
         discoverServers: discoverServers,
@@ -567,6 +871,14 @@ var JellyfinAPI = (function() {
         getUserInfo: getUserInfo,
         getUserViews: getUserViews,
         getItems: getItems,
+        getResumeItems: getResumeItems,
+        getNextUpItems: getNextUpItems,
+        getLatestMedia: getLatestMedia,
+        getLiveTVInfo: getLiveTVInfo,
+        getLiveTVChannels: getLiveTVChannels,
+        getLiveTVRecordings: getLiveTVRecordings,
+        getCollections: getCollections,
+        getSystemInfo: getSystemInfo,
         setFavorite: setFavorite,
         setPlayed: setPlayed,
         logout: logout,

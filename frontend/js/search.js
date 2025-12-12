@@ -23,6 +23,8 @@ var SearchController = (function() {
     // Search Constants
     const SEARCH_DEBOUNCE_MS = 300;
     const MIN_SEARCH_LENGTH = 2;
+    const FOCUS_DELAY_MS = 100;
+    const SEARCH_INPUT_DEBOUNCE_MS = 500;
 
     /**
      * Initialize the search controller
@@ -110,7 +112,7 @@ var SearchController = (function() {
                     window.location.href = 'browse.html';
                 });
             }
-        }, 500);
+        }, SEARCH_INPUT_DEBOUNCE_MS);
 
         // Global keyboard navigation
         document.addEventListener('keydown', handleGlobalKeyDown);
@@ -266,7 +268,7 @@ var SearchController = (function() {
             }
             
             if (!data) {
-                JellyfinAPI.Logger.error('No search results returned');
+                JellyfinAPI.Logger.error('No search results returned for query:', query);
                 showNoResults(query);
                 return;
             }

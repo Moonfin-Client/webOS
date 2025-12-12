@@ -122,12 +122,24 @@ var BrowseController = (function() {
             }
             
             if (!response || !response.Items) {
-                JellyfinAPI.Logger.error('No library data returned');
+                JellyfinAPI.Logger.error('No library data returned from getUserViews:', {
+                    hasResponse: !!response,
+                    hasItems: !!(response?.Items)
+                });
                 return;
             }
             
+            // Libraries already filtered in API layer (unsupported types and empty libraries removed)
             userLibraries = response.Items;
-            JellyfinAPI.Logger.info('Loaded libraries:', userLibraries.length);
+            
+            JellyfinAPI.Logger.info('Loaded libraries:', userLibraries.length, 'with content');
+            
+            // Log library details for debugging
+            userLibraries.forEach(function(lib) {
+                JellyfinAPI.Logger.info('  -', lib.Name, 
+                    '(Type:', lib.CollectionType || 'unknown', 
+                    'Items:', lib.ChildCount || '?' + ')');
+            });
         });
     }
 
@@ -501,6 +513,27 @@ var BrowseController = (function() {
             }
         });
     }
+
+    /**
+     * Update backdrop image for a given element
+     * @param {string} elementId - ID of the image element to update
+     * @param {Object} itemData - Item data containing backdrop information
+     * @private
+     */
+    function updateBackdropImage(elementId, itemData) {
+        var element = document.getElementById(elementId);
+        if (!element) return;
+        
+        if (itemData && itemData.backdropImageTag) {
+            var backdropUrl = auth.serverAddress + '/Items/' + itemData.id + 
+                '/Images/Backdrop?tag=' + itemData.backdropImageTag + 
+                '&maxWidth=1920&quality=90';
+            element.src = backdropUrl;
+            element.style.display = 'block';
+        } else {
+            element.style.display = 'none';
+        }
+    }
     
     function updateDetailSection(itemCard) {
         if (!elements.detailSection || !elements.detailTitle || !elements.detailInfoRow || !elements.detailSummary) {
@@ -514,6 +547,10 @@ var BrowseController = (function() {
         if (elements.contentRows) {
             elements.contentRows.classList.add('with-detail');
         }
+        
+        // Update backdrop images using helper function
+        updateBackdropImage('globalBackdropImage', itemData);
+        updateBackdropImage('detailBackdrop', itemData);
         
         // Update title
         elements.detailTitle.textContent = itemData.name || 'Unknown Title';
@@ -821,52 +858,211 @@ var BrowseController = (function() {
             }
             
             if (!views || !views.Items) {
-                JellyfinAPI.Logger.error('No views data returned');
+                JellyfinAPI.Logger.error('No views data returned from getUserViews:', {
+                    hasViews: !!views,
+                    hasItems: !!(views?.Items)
+                });
                 showError('Failed to load libraries');
                 return;
             }
             
-            JellyfinAPI.Logger.success('Loaded user views:', views.Items.length, 'views');
+            if (views.Items.length === 0) {
+                JellyfinAPI.Logger.warn('No supported libraries found');
+                showError('No media libraries available');
+                return;
+            }
+            
+            JellyfinAPI.Logger.success('Loaded user views:', views.Items.length, 'supported libraries');
             
             clearRows();
             loadFeaturedItem();
             
+            // Load home rows settings
+            var homeRowsSettings = getHomeRowsSettings();
+            JellyfinAPI.Logger.info('Home rows settings:', homeRowsSettings);
+            
             var rowsToLoad = [];
-            rowsToLoad.push({ title: 'Continue Watching', type: 'resume' });
-            if (views && views.Items) {
-                views.Items.forEach(function(view) {
-                    if (view.CollectionType === 'movies') {
-                        rowsToLoad.push({ 
-                            title: 'Latest Movies', 
-                            type: 'latest',
-                            parentId: view.Id,
-                            itemType: 'Movie'
-                        });
-                        rowsToLoad.push({ 
-                            title: 'Movies', 
-                            type: 'all',
-                            parentId: view.Id,
-                            itemType: 'Movie'
-                        });
-                    } else if (view.CollectionType === 'tvshows') {
-                        rowsToLoad.push({ 
-                            title: 'Latest Episodes', 
-                            type: 'latest',
-                            parentId: view.Id,
-                            itemType: 'Episode'
-                        });
-                        rowsToLoad.push({ 
-                            title: 'TV Shows', 
-                            type: 'all',
-                            parentId: view.Id,
-                            itemType: 'Series'
-                        });
-                    }
+            
+            // Check which library types are available
+            var hasTVShows = views.Items.some(function(view) {
+                return view.CollectionType && view.CollectionType.toLowerCase() === 'tvshows';
+            });
+            
+            var hasMovies = views.Items.some(function(view) {
+                return view.CollectionType && view.CollectionType.toLowerCase() === 'movies';
+            });
+            
+            var hasMusic = views.Items.some(function(view) {
+                return view.CollectionType && view.CollectionType.toLowerCase() === 'music';
+            });
+            
+            // Helper function to check if a row type is enabled
+            /**
+             * Check if a specific home row type is enabled in settings
+             * @param {string} rowId - Row identifier (e.g., 'resume', 'nextup')
+             * @returns {boolean} True if row is enabled, defaults to true if not found
+             * @private
+             */
+            function isRowEnabled(rowId) {
+                var setting = homeRowsSettings.find(function(r) { return r.id === rowId; });
+                return setting ? setting.enabled : true;
+            }
+            
+            // Add Continue Watching if enabled
+            if (isRowEnabled('resume')) {
+                rowsToLoad.push({ 
+                    title: 'Continue Watching', 
+                    type: 'resume',
+                    settingId: 'resume',
+                    order: getRowOrder('resume', homeRowsSettings)
                 });
             }
             
-            // Load each row
-            loadRows(rowsToLoad);
+            // Add Next Up if enabled and TV shows exist
+            if (isRowEnabled('nextup') && hasTVShows) {
+                rowsToLoad.push({ 
+                    title: 'Next Up', 
+                    type: 'nextup',
+                    settingId: 'nextup',
+                    order: getRowOrder('nextup', homeRowsSettings)
+                });
+            }
+            
+            // Live TV Support: Check for Live TV availability
+            JellyfinAPI.getLiveTVInfo(auth.serverAddress, auth.userId, auth.accessToken,
+                function(liveTVErr, liveTVInfo) {
+                if (!liveTVErr && liveTVInfo && liveTVInfo.available && isRowEnabled('livetv')) {
+                    JellyfinAPI.Logger.success('Live TV detected:', liveTVInfo.channelCount, 'channels');
+                    
+                    // Add Live TV Channels row
+                    rowsToLoad.push({ 
+                        title: 'Live TV Channels', 
+                        type: 'livetv-channels',
+                        viewId: liveTVInfo.viewId,
+                        settingId: 'livetv',
+                        order: getRowOrder('livetv', homeRowsSettings)
+                    });
+                    
+                    // Add Live TV Recordings row
+                    rowsToLoad.push({ 
+                        title: 'Recordings', 
+                        type: 'livetv-recordings',
+                        viewId: liveTVInfo.viewId,
+                        settingId: 'livetv',
+                        order: getRowOrder('livetv', homeRowsSettings) + 0.5
+                    });
+                } else {
+                    JellyfinAPI.Logger.info('Live TV not available or not enabled');
+                }
+                
+                continueLoadingRows();
+            });
+            
+            function continueLoadingRows() {
+                // Add Collections row if enabled
+                if (isRowEnabled('collections')) {
+                    JellyfinAPI.getCollections(auth.serverAddress, auth.userId, auth.accessToken,
+                        function(collErr, collData) {
+                        if (!collErr && collData && collData.Items && collData.Items.length > 0) {
+                            JellyfinAPI.Logger.success('Collections found:', collData.Items.length);
+                            rowsToLoad.push({
+                                title: 'Collections',
+                                type: 'collections',
+                                settingId: 'collections',
+                                order: getRowOrder('collections', homeRowsSettings)
+                            });
+                        } else {
+                            JellyfinAPI.Logger.info('No collections available or not enabled');
+                        }
+                        
+                        continueWithLibraries();
+                    });
+                } else {
+                    continueWithLibraries();
+                }
+            }
+            
+            function continueWithLibraries() {
+                // Libraries already filtered in API layer, just exclude LiveTV here
+                // Note: views.Items already validated in parent function
+                var librariesForRows = views.Items.filter(function(view) {
+                    var collectionType = view.CollectionType ? view.CollectionType.toLowerCase() : '';
+                    // Skip LiveTV from regular library list (handled separately above)
+                    return collectionType !== 'livetv';
+                });
+                
+                JellyfinAPI.Logger.info('Libraries for home rows:', 
+                    librariesForRows.length, 'of', views.Items.length);
+                
+                // Add Library Tiles row 
+                if (librariesForRows.length > 0 && isRowEnabled('library-tiles')) {
+                    rowsToLoad.push({
+                        title: 'My Media',
+                        type: 'library-tiles',
+                        libraries: librariesForRows,
+                        settingId: 'library-tiles',
+                        order: getRowOrder('library-tiles', homeRowsSettings)
+                    });
+                }
+                    
+                    // Organize rows by library with proper ordering
+                    librariesForRows.forEach(function(view) {
+                        var collectionType = view.CollectionType ? view.CollectionType.toLowerCase() : '';
+                        
+                        if (collectionType === 'movies' && isRowEnabled('latest-movies')) {
+                            rowsToLoad.push({ 
+                                title: 'Recently added in ' + view.Name, 
+                                type: 'latest',
+                                parentId: view.Id,
+                                itemType: 'Movie',
+                                libraryName: view.Name,
+                                collectionType: collectionType,
+                                settingId: 'latest-movies',
+                                order: getRowOrder('latest-movies', homeRowsSettings)
+                            });
+                        } else if (collectionType === 'tvshows' && isRowEnabled('latest-shows')) {
+                            rowsToLoad.push({ 
+                                title: 'Recently added in ' + view.Name, 
+                                type: 'latest',
+                                parentId: view.Id,
+                                itemType: 'Episode',
+                                libraryName: view.Name,
+                                collectionType: collectionType,
+                                settingId: 'latest-shows',
+                                order: getRowOrder('latest-shows', homeRowsSettings)
+                            });
+                        } else if (collectionType === 'music' && isRowEnabled('latest-music')) {
+                            rowsToLoad.push({
+                                title: 'Recently added ' + view.Name,
+                                type: 'latest',
+                                parentId: view.Id,
+                                itemType: 'Audio',
+                                libraryName: view.Name,
+                                collectionType: collectionType,
+                                settingId: 'latest-music',
+                                order: getRowOrder('latest-music', homeRowsSettings)
+                            });
+                        } else {
+                            // Generic library type
+                            rowsToLoad.push({
+                                title: 'Recently added in ' + view.Name,
+                                type: 'latest',
+                                parentId: view.Id,
+                                libraryName: view.Name,
+                                collectionType: collectionType,
+                                order: 999 // Put generic rows at the end
+                            });
+                        }
+                    });
+                
+                // Sort rows by order setting
+                rowsToLoad.sort(function(a, b) {
+                    return a.order - b.order;
+                });
+                
+                // Load each row
+                loadRows(rowsToLoad);
+            }
         });
     }
 
@@ -876,14 +1072,14 @@ var BrowseController = (function() {
         stopCarouselAutoPlay();
         clearRows();
         
-        // Hide featured banner for library views (Android TV doesn't show featured banner in library views)
+        // Hide featured banner for library views
         if (elements.featuredBanner) {
             elements.featuredBanner.style.display = 'none';
         }
         
         var rowsToLoad = [];
         
-        // Build rows based on collection type (matching Android TV structure)
+        // Build rows based on collection type
         if (collectionType === 'movies') {
             // Continue Watching (Resume)
             rowsToLoad.push({
@@ -1050,6 +1246,121 @@ var BrowseController = (function() {
     }
 
     function loadRow(rowDef, callback) {
+        JellyfinAPI.Logger.info('Loading row:', rowDef.title, 'type:', rowDef.type);
+        
+        // Handle library tiles row (special case - no API call needed)
+        if (rowDef.type === 'library-tiles') {
+            if (rowDef.libraries && rowDef.libraries.length > 0) {
+                JellyfinAPI.Logger.success('Rendering library tiles:', rowDef.libraries.length, 'libraries');
+                renderRow(rowDef.title, rowDef.libraries, rowDef.type);
+                if (callback) callback(true);
+            } else {
+                JellyfinAPI.Logger.info('No libraries for tiles row');
+                if (callback) callback(false);
+            }
+            return;
+        }
+        
+        // Use specialized API functions for specific row types
+        if (rowDef.type === 'resume') {
+            // Continue Watching - use dedicated resume endpoint
+            JellyfinAPI.getResumeItems(auth.serverAddress, auth.userId, auth.accessToken, function(err, data) {
+                if (err || !data || !data.Items || data.Items.length === 0) {
+                    JellyfinAPI.Logger.info('No resume items available');
+                    if (callback) callback(false);
+                    return;
+                }
+                
+                JellyfinAPI.Logger.success('Loaded row:', rowDef.title, '(' + data.Items.length + ' items)');
+                renderRow(rowDef.title, data.Items, rowDef.type);
+                if (callback) callback(true);
+            });
+            return;
+        }
+        
+        if (rowDef.type === 'nextup') {
+            // Next Up - use dedicated next up endpoint
+            JellyfinAPI.getNextUpItems(auth.serverAddress, auth.userId, auth.accessToken, function(err, data) {
+                if (err || !data || !data.Items || data.Items.length === 0) {
+                    JellyfinAPI.Logger.info('No next up items available');
+                    if (callback) callback(false);
+                    return;
+                }
+                
+                JellyfinAPI.Logger.success('Loaded row:', rowDef.title, '(' + data.Items.length + ' items)');
+                renderRow(rowDef.title, data.Items, rowDef.type);
+                if (callback) callback(true);
+            });
+            return;
+        }
+        
+        if (rowDef.type === 'latest' && rowDef.parentId) {
+            // Latest Media - use dedicated latest endpoint
+            var includeTypes = rowDef.itemType || null;
+            JellyfinAPI.getLatestMedia(auth.serverAddress, auth.userId, auth.accessToken,
+                rowDef.parentId, includeTypes, function(err, data) {
+                if (err || !data || !data.Items || data.Items.length === 0) {
+                    JellyfinAPI.Logger.info('No latest items for:', rowDef.title);
+                    if (callback) callback(false);
+                    return;
+                }
+                
+                JellyfinAPI.Logger.success('Loaded row:', rowDef.title, '(' + data.Items.length + ' items)');
+                renderRow(rowDef.title, data.Items, rowDef.type);
+                if (callback) callback(true);
+            });
+            return;
+        }
+        
+        // Live TV Support: Handle Live TV channels
+        if (rowDef.type === 'livetv-channels') {
+            JellyfinAPI.getLiveTVChannels(auth.serverAddress, auth.userId, auth.accessToken, function(err, data) {
+                if (err || !data || !data.Items || data.Items.length === 0) {
+                    JellyfinAPI.Logger.info('No Live TV channels available');
+                    if (callback) callback(false);
+                    return;
+                }
+                
+                JellyfinAPI.Logger.success('Loaded row:', rowDef.title, '(' + data.Items.length + ' channels)');
+                renderRow(rowDef.title, data.Items, rowDef.type);
+                if (callback) callback(true);
+            });
+            return;
+        }
+        
+        // Live TV Support: Handle Live TV recordings
+        if (rowDef.type === 'livetv-recordings') {
+            JellyfinAPI.getLiveTVRecordings(auth.serverAddress, auth.userId, auth.accessToken, function(err, data) {
+                if (err || !data || !data.Items || data.Items.length === 0) {
+                    JellyfinAPI.Logger.info('No Live TV recordings available');
+                    if (callback) callback(false);
+                    return;
+                }
+                
+                JellyfinAPI.Logger.success('Loaded row:', rowDef.title, '(' + data.Items.length + ' recordings)');
+                renderRow(rowDef.title, data.Items, rowDef.type);
+                if (callback) callback(true);
+            });
+            return;
+        }
+        
+        // Collections Support: Handle Collections (Box Sets)
+        if (rowDef.type === 'collections') {
+            JellyfinAPI.getCollections(auth.serverAddress, auth.userId, auth.accessToken, function(err, data) {
+                if (err || !data || !data.Items || data.Items.length === 0) {
+                    JellyfinAPI.Logger.info('No collections available');
+                    if (callback) callback(false);
+                    return;
+                }
+                
+                JellyfinAPI.Logger.success('Loaded row:', rowDef.title, '(' + data.Items.length + ' collections)');
+                renderRow(rowDef.title, data.Items, rowDef.type);
+                if (callback) callback(true);
+            });
+            return;
+        }
+        
+        // For other row types, use generic getItems with appropriate params
         var params = {
             userId: auth.userId,
             limit: 20,
@@ -1073,29 +1384,7 @@ var BrowseController = (function() {
         
         var endpoint = '';
         
-        // Match Android TV row types
-        if (rowDef.type === 'resume') {
-            // Continue Watching
-            endpoint = '/Users/' + auth.userId + '/Items/Resume';
-            params.filters = 'IsResumable';
-            params.sortBy = 'DatePlayed';
-            params.sortOrder = 'Descending';
-            params.limit = 12;
-            
-        } else if (rowDef.type === 'nextup') {
-            // Next Up (TV Shows)
-            endpoint = '/Shows/NextUp';
-            params.limit = 12;
-            
-        } else if (rowDef.type === 'latest') {
-            // Latest Items
-            endpoint = '/Users/' + auth.userId + '/Items/Latest';
-            params.limit = 16;
-            if (rowDef.groupItems) {
-                params.groupItems = true;
-            }
-            
-        } else if (rowDef.type === 'favorites') {
+        if (rowDef.type === 'favorites') {
             // Favorites
             endpoint = '/Users/' + auth.userId + '/Items';
             params.filters = 'IsFavorite';
@@ -1104,13 +1393,13 @@ var BrowseController = (function() {
             params.limit = 50;
             
         } else if (rowDef.type === 'collections') {
-            // Collections/Box Sets (exclude from regular browsing per Android TV)
+            // Collections/Box Sets
             endpoint = '/Users/' + auth.userId + '/Items';
             params.includeItemTypes = 'BoxSet';
             params.sortBy = 'SortName';
             params.sortOrder = 'Ascending';
             params.limit = 50;
-            delete params.recursive; // Box sets are at parent level
+            delete params.recursive;
             
         } else if (rowDef.type === 'playlists') {
             // Playlists
@@ -1144,7 +1433,7 @@ var BrowseController = (function() {
             }
             
             JellyfinAPI.Logger.success('Loaded row:', rowDef.title, '(' + data.Items.length + ' items)');
-            renderRow(rowDef.title, data.Items);
+            renderRow(rowDef.title, data.Items, rowDef.type);
             if (callback) callback(true);
         });
     }
@@ -1162,7 +1451,8 @@ var BrowseController = (function() {
             recursive: true
         };
         
-        JellyfinAPI.getItems(auth.serverAddress, auth.accessToken, '/Users/' + auth.userId + '/Items', params, function(err, data) {
+        JellyfinAPI.getItems(auth.serverAddress, auth.accessToken,
+            '/Users/' + auth.userId + '/Items', params, function(err, data) {
             if (!err && data && data.Items && data.Items.length > 0) {
                 featuredCarousel.items = data.Items;
                 displayFeaturedItem(0);
@@ -1231,7 +1521,8 @@ var BrowseController = (function() {
             }
             
             if (item.BackdropImageTags && item.BackdropImageTags.length > 0) {
-                var backdropUrl = auth.serverAddress + '/Items/' + item.Id + '/Images/Backdrop/0?quality=90&maxWidth=1920';
+                var backdropUrl = auth.serverAddress + '/Items/' + item.Id +
+                    '/Images/Backdrop/0?quality=90&maxWidth=1920';
                 elements.featuredBackdrop.src = backdropUrl;
             } else if (item.ImageTags && item.ImageTags.Primary) {
                 var primaryUrl = auth.serverAddress + '/Items/' + item.Id + '/Images/Primary?quality=90&maxWidth=1920';
@@ -1296,14 +1587,25 @@ var BrowseController = (function() {
     
     function carouselPrevious() {
         stopCarouselAutoPlay();
-        var prevIndex = (featuredCarousel.currentIndex - 1 + featuredCarousel.items.length) % featuredCarousel.items.length;
+        var prevIndex = (featuredCarousel.currentIndex - 1 + featuredCarousel.items.length) %
+            featuredCarousel.items.length;
         displayFeaturedItem(prevIndex);
         startCarouselAutoPlay();
     }
 
-    function renderRow(title, items) {
+    function renderRow(title, items, type) {
         var rowDiv = document.createElement('div');
         rowDiv.className = 'content-row';
+        
+        if (type === 'resume') {
+            rowDiv.classList.add('continue-watching-row');
+        } else if (type === 'library-tiles') {
+            rowDiv.classList.add('library-tiles-row');
+        } else if (type === 'livetv-channels' || type === 'livetv-recordings') {
+            rowDiv.classList.add('livetv-row');
+        } else if (type === 'collections') {
+            rowDiv.classList.add('collections-row');
+        }
         
         var titleDiv = document.createElement('h2');
         titleDiv.className = 'row-title';
@@ -1315,10 +1617,18 @@ var BrowseController = (function() {
         var itemsDiv = document.createElement('div');
         itemsDiv.className = 'row-items';
         
-        items.forEach(function(item) {
-            var itemDiv = createItemCard(item);
-            itemsDiv.appendChild(itemDiv);
-        });
+        // Handle library tiles differently
+        if (type === 'library-tiles') {
+            items.forEach(function(library) {
+                var tileDiv = createLibraryTile(library);
+                itemsDiv.appendChild(tileDiv);
+            });
+        } else {
+            items.forEach(function(item) {
+                var itemDiv = createItemCard(item);
+                itemsDiv.appendChild(itemDiv);
+            });
+        }
         
         scrollerDiv.appendChild(itemsDiv);
         rowDiv.appendChild(titleDiv);
@@ -1327,10 +1637,93 @@ var BrowseController = (function() {
         elements.contentRows.appendChild(rowDiv);
     }
 
+    /**
+     * Create a library tile card (for My Media row)
+     * @private
+     */
+    function createLibraryTile(library) {
+        var tile = document.createElement('div');
+        tile.className = 'item-card library-tile';
+        tile.setAttribute('data-library-id', library.Id);
+        
+        var img = document.createElement('img');
+        img.className = 'item-image';
+        
+        // Use library primary image or a default icon
+        var imageUrl = '';
+        if (library.ImageTags && library.ImageTags.Primary) {
+            imageUrl = auth.serverAddress + '/Items/' + library.Id + '/Images/Primary?quality=90&maxHeight=400';
+        } else {
+            // Use a placeholder based on collection type
+            var collectionType = library.CollectionType ? library.CollectionType.toLowerCase() : '';
+            // For now, use a simple colored placeholder
+            var bgColor = collectionType === 'movies' ? '%23e50914' : 
+                         collectionType === 'tvshows' ? '%23564d80' :
+                         collectionType === 'music' ? '%231db954' : '%23333';
+            imageUrl = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" ' +
+                'width="200" height="200"%3E%3Crect fill="' + bgColor + '" width="200" ' +
+                'height="200"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" ' +
+                'fill="white" font-size="24"%3E' + encodeURIComponent(library.Name.charAt(0)) +
+                '%3C/text%3E%3C/svg%3E';
+        }
+        
+        img.src = imageUrl;
+        img.alt = library.Name;
+        
+        var titleDiv = document.createElement('div');
+        titleDiv.className = 'item-title';
+        titleDiv.textContent = library.Name;
+        
+        var countDiv = document.createElement('div');
+        countDiv.className = 'library-count';
+        if (library.ChildCount !== undefined) {
+            countDiv.textContent = library.ChildCount + ' items';
+        }
+        
+        tile.appendChild(img);
+        tile.appendChild(titleDiv);
+        tile.appendChild(countDiv);
+        
+        tile.addEventListener('click', function() {
+            handleLibraryTileClick(library);
+        });
+        
+        tile.libraryData = library;
+        
+        return tile;
+    }
+
+    /**
+     * Handle library tile clicks
+     * @private
+     */
+    function handleLibraryTileClick(library) {
+        JellyfinAPI.Logger.info('Library tile clicked:', library.Name, library.Id);
+        loadLibraryContent(library.Id, library.Name, library.CollectionType);
+    }
+
     function createItemCard(item) {
         var card = document.createElement('div');
         card.className = 'item-card';
         card.setAttribute('data-item-id', item.Id);
+        
+        // Live TV Support: Check if this is a Live TV channel or recording
+        var isLiveTVChannel = item.Type === 'TvChannel';
+        var isLiveTVRecording = item.Type === 'Recording';
+        
+        // Collections Support: Check if this is a box set
+        var isBoxSet = item.Type === 'BoxSet';
+        
+        // TV Shows Support: Check if this is a series
+        var isSeries = item.Type === 'Series';
+        
+        if (isLiveTVChannel) {
+            card.classList.add('livetv-channel');
+        } else if (isLiveTVRecording) {
+            card.classList.add('livetv-recording');
+        } else if (isBoxSet) {
+            card.classList.add('collection-item');
+        }
         
         // Add data attributes for detail section
         card.dataset.name = item.Name || '';
@@ -1338,6 +1731,15 @@ var BrowseController = (function() {
         card.dataset.rating = item.OfficialRating || '';
         card.dataset.runtime = item.RunTimeTicks || '';
         card.dataset.overview = item.Overview || '';
+        card.dataset.id = item.Id || '';
+        
+        // Store backdrop image tag if available
+        if (item.BackdropImageTags && item.BackdropImageTags.length > 0) {
+            card.dataset.backdropImageTag = item.BackdropImageTags[0];
+        } else if (item.ParentBackdropImageTags && item.ParentBackdropImageTags.length > 0) {
+            card.dataset.backdropImageTag = item.ParentBackdropImageTags[0];
+            card.dataset.id = item.ParentBackdropItemId || item.SeriesId || item.Id;
+        }
         
         if (item.Genres && item.Genres.length > 0) {
             card.dataset.genres = item.Genres.slice(0, 3).join(', ');
@@ -1345,20 +1747,37 @@ var BrowseController = (function() {
             card.dataset.genres = '';
         }
         
+        // Store child count for collections and series
+        if ((isBoxSet || isSeries) && item.ChildCount) {
+            card.dataset.childCount = item.ChildCount;
+        }
+        
         var img = document.createElement('img');
         img.className = 'item-image';
         
         var imageUrl = '';
-        if (item.ImageTags && item.ImageTags.Primary) {
+        
+        // Live TV Support: Handle channel images
+        if (isLiveTVChannel) {
+            // Use channel logo/primary image
+            if (item.ImageTags && item.ImageTags.Primary) {
+                imageUrl = auth.serverAddress + '/Items/' + item.Id + '/Images/Primary?quality=90&maxWidth=400';
+            }
+        } else if (item.ImageTags && item.ImageTags.Primary) {
             imageUrl = auth.serverAddress + '/Items/' + item.Id + '/Images/Primary?quality=90&maxHeight=400';
         } else if (item.SeriesId && item.SeriesPrimaryImageTag) {
-            imageUrl = auth.serverAddress + '/Items/' + item.SeriesId + '/Images/Primary?quality=90&maxHeight=400&tag=' + item.SeriesPrimaryImageTag;
+            imageUrl = auth.serverAddress + '/Items/' + item.SeriesId +
+                '/Images/Primary?quality=90&maxHeight=400&tag=' + item.SeriesPrimaryImageTag;
         }
         
         if (imageUrl) {
             img.src = imageUrl;
         } else {
-            img.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="300"%3E%3Crect fill="%23333" width="200" height="300"/%3E%3C/svg%3E';
+            // Live TV channels get special placeholder
+            var placeholderColor = isLiveTVChannel ? '%23e74c3c' : '%23333';
+            img.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" ' +
+                'width="200" height="300"%3E%3Crect fill="' + placeholderColor +
+                '" width="200" height="300"/%3E%3C/svg%3E';
         }
         
         img.alt = item.Name;
@@ -1367,8 +1786,38 @@ var BrowseController = (function() {
         titleDiv.className = 'item-title';
         titleDiv.textContent = item.Name;
         
-        card.appendChild(img);
-        card.appendChild(titleDiv);
+        // Live TV Support: Add channel number for channels
+        if (isLiveTVChannel && item.ChannelNumber) {
+            var channelInfo = document.createElement('div');
+            channelInfo.className = 'channel-info';
+            channelInfo.textContent = 'Ch ' + item.ChannelNumber;
+            card.appendChild(img);
+            card.appendChild(channelInfo);
+            card.appendChild(titleDiv);
+        } else if (isBoxSet || isSeries) {
+            // Collections & TV Shows: Add count badge in top right corner
+            // Series: Use RecursiveItemCount (episode count)
+            // BoxSet: Use ChildCount (item count)
+            var itemCount = isSeries ? item.RecursiveItemCount : item.ChildCount;
+            
+            if (itemCount) {
+                var countBadge = document.createElement('div');
+                countBadge.className = 'count-badge';
+                var displayCount = itemCount > 99 ? '99+' : itemCount.toString();
+                countBadge.textContent = displayCount;
+                
+                card.appendChild(img);
+                card.appendChild(countBadge);
+                card.appendChild(titleDiv);
+            } else {
+                // No count available
+                card.appendChild(img);
+                card.appendChild(titleDiv);
+            }
+        } else {
+            card.appendChild(img);
+            card.appendChild(titleDiv);
+        }
         
         card.addEventListener('click', function() {
             handleItemClick(item);
@@ -1380,7 +1829,21 @@ var BrowseController = (function() {
     }
 
     function handleItemClick(item) {
-        JellyfinAPI.Logger.info('Item clicked:', item.Name, item.Id);
+        JellyfinAPI.Logger.info('Item clicked:', item.Name, item.Id, 'Type:', item.Type);
+        
+        // Live TV Support: Handle Live TV channel playback
+        if (item.Type === 'TvChannel') {
+            JellyfinAPI.Logger.info('Starting Live TV channel:', item.Name);
+            window.location.href = 'player.html?id=' + item.Id + '&mediaType=livetv';
+            return;
+        }
+        
+        // Live TV Support: Handle recording playback
+        if (item.Type === 'Recording') {
+            JellyfinAPI.Logger.info('Playing Live TV recording:', item.Name);
+            window.location.href = 'player.html?id=' + item.Id + '&mediaType=recording';
+            return;
+        }
         
         // Save current focus position before navigating away
         saveFocusPosition();
@@ -1435,7 +1898,8 @@ var BrowseController = (function() {
             }
             
             // If was in featured banner, restore featured banner focus
-            if (position.inFeaturedBanner && elements.featuredBanner && elements.featuredBanner.style.display !== 'none') {
+            if (position.inFeaturedBanner && elements.featuredBanner &&
+                elements.featuredBanner.style.display !== 'none') {
                 JellyfinAPI.Logger.info('Restoring featured banner focus');
                 focusManager.inFeaturedBanner = true;
                 focusManager.inNavBar = false;
@@ -1476,7 +1940,8 @@ var BrowseController = (function() {
 
     function defaultFocus() {
         // Check if featured banner is enabled and visible
-        if (elements.featuredBanner && elements.featuredBanner.style.display !== 'none' && featuredCarousel.items && featuredCarousel.items.length > 0) {
+        if (elements.featuredBanner && elements.featuredBanner.style.display !== 'none' &&
+            featuredCarousel.items && featuredCarousel.items.length > 0) {
             JellyfinAPI.Logger.info('Default focus: featured banner');
             focusManager.inFeaturedBanner = true;
             focusManager.inNavBar = false;
@@ -1524,11 +1989,85 @@ var BrowseController = (function() {
         window.location.href = 'login.html';
     }
 
+    function reloadCurrentView() {
+        if (!auth) {
+            auth = JellyfinAPI.getStoredAuth();
+            if (!auth) return;
+        }
+        
+        JellyfinAPI.Logger.info('Reloading current view:', currentView);
+        
+        if (currentView === 'home') {
+            loadHomeContent();
+        } else if (currentView === 'movies' || currentView === 'shows') {
+            var libraryType = currentView === 'movies' ? 'movies' : 'tvshows';
+            var library = userLibraries.find(function(lib) {
+                return lib.CollectionType === libraryType;
+            });
+            if (library) {
+                loadLibraryContent(library.Id, library.Name, library.CollectionType);
+            }
+        }
+    }
+
+    /**
+     * Get home rows settings from storage or return defaults
+     * Retrieves user-configured home row preferences including enabled state and display order
+     * @returns {Array<Object>} Array of home row configuration objects with id, name, enabled, and order properties
+     * @private
+     */
+    function getHomeRowsSettings() {
+        var stored = storage.get('jellyfin_settings');
+        if (stored) {
+            try {
+                var parsedSettings = JSON.parse(stored);
+                if (parsedSettings.homeRows) {
+                    return parsedSettings.homeRows;
+                }
+            } catch (e) {
+                JellyfinAPI.Logger.error('Failed to parse settings:', e);
+            }
+        }
+        
+        // Return default settings
+        return [
+            { id: 'resume', name: 'Continue Watching', enabled: true, order: 0 },
+            { id: 'nextup', name: 'Next Up', enabled: true, order: 1 },
+            { id: 'livetv', name: 'Live TV', enabled: true, order: 2 },
+            { id: 'library-tiles', name: 'My Media', enabled: true, order: 3 },
+            { id: 'collections', name: 'Collections', enabled: true, order: 4 },
+            { id: 'latest-movies', name: 'Latest Movies', enabled: true, order: 5 },
+            { id: 'latest-shows', name: 'Latest TV Shows', enabled: true, order: 6 },
+            { id: 'latest-music', name: 'Latest Music', enabled: true, order: 7 }
+        ];
+    }
+
+    /**
+     * Get the order value for a specific row type
+     * Used to determine display position of home rows based on user preferences
+     * @param {string} rowId - Row identifier (e.g., 'resume', 'nextup', 'library-tiles')
+     * @param {Array<Object>} settings - Home rows settings array from getHomeRowsSettings()
+     * @returns {number} Order value for sorting, defaults to 999 if row not found
+     * @private
+     */
+    function getRowOrder(rowId, settings) {
+        var setting = settings.find(function(r) { return r.id === rowId; });
+        return setting ? setting.order : 999;
+    }
+
     return {
-        init: init
+        init: init,
+        reloadCurrentView: reloadCurrentView
     };
 })();
 
 window.addEventListener('load', function() {
     BrowseController.init();
+});
+
+window.addEventListener('visibilitychange', function() {
+    if (!document.hidden) {
+        JellyfinAPI.Logger.info('Page became visible, reloading content...');
+        BrowseController.reloadCurrentView();
+    }
 });

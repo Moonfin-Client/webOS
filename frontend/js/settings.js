@@ -18,6 +18,9 @@ var SettingsController = (function() {
     };
 
     var elements = {};
+    
+    // Timing Constants
+    const FOCUS_DELAY_MS = 100;
 
     var settings = {
         autoLogin: false,
@@ -28,7 +31,34 @@ var SettingsController = (function() {
         audioLanguage: 'en',
         subtitleLanguage: 'none',
         theme: 'dark',
-        carouselSpeed: 8000
+        carouselSpeed: 8000,
+        homeRows: null, // Will be initialized with defaults
+        showShuffleButton: true,
+        showGenresButton: true,
+        showFavoritesButton: true,
+        showLibrariesInToolbar: true
+    };
+
+    // Default home rows configuration
+    var defaultHomeRows = [
+        { id: 'resume', name: 'Continue Watching', enabled: true, order: 0 },
+        { id: 'nextup', name: 'Next Up', enabled: true, order: 1 },
+        { id: 'livetv', name: 'Live TV', enabled: true, order: 2 },
+        { id: 'library-tiles', name: 'My Media', enabled: true, order: 3 },
+        { id: 'collections', name: 'Collections', enabled: true, order: 4 },
+        { id: 'latest-movies', name: 'Latest Movies', enabled: true, order: 5 },
+        { id: 'latest-shows', name: 'Latest TV Shows', enabled: true, order: 6 },
+        { id: 'latest-music', name: 'Latest Music', enabled: true, order: 7 }
+    ];
+
+    var homeRowsModal = {
+        isOpen: false,
+        focusedIndex: 0,
+        rows: [],
+        // Store references to event handlers for cleanup
+        saveHandler: null,
+        cancelHandler: null,
+        resetHandler: null
     };
 
     /**
@@ -90,6 +120,51 @@ var SettingsController = (function() {
         if (serverValue) {
             serverValue.textContent = auth.serverAddress;
         }
+        
+        // Fetch and display server version
+        var serverVersionValue = document.getElementById('serverVersionValue');
+        if (serverVersionValue && auth.serverAddress && auth.accessToken) {
+            JellyfinAPI.getSystemInfo(auth.serverAddress, auth.accessToken, function(err, data) {
+                if (!err && data && data.Version) {
+                    serverVersionValue.textContent = data.Version;
+                } else {
+                    serverVersionValue.textContent = 'Unknown';
+                }
+            });
+        }
+    }
+
+    /**
+     * Apply default values for any missing settings
+     * @private
+     * @param {Object} loadedSettings - Settings object to populate with defaults
+     * @returns {boolean} True if settings were modified
+     */
+    function applyDefaultSettings(loadedSettings) {
+        var modified = false;
+        
+        // Ensure homeRows exists
+        if (!loadedSettings.homeRows) {
+            loadedSettings.homeRows = JSON.parse(JSON.stringify(defaultHomeRows));
+            modified = true;
+        }
+        
+        // Ensure toolbar settings exist
+        var toolbarDefaults = {
+            showShuffleButton: true,
+            showGenresButton: true,
+            showFavoritesButton: true,
+            showLibrariesInToolbar: true
+        };
+        
+        for (var key in toolbarDefaults) {
+            if (typeof loadedSettings[key] === 'undefined') {
+                loadedSettings[key] = toolbarDefaults[key];
+                modified = true;
+            }
+        }
+        
+        return modified;
     }
 
     /**
@@ -101,9 +176,18 @@ var SettingsController = (function() {
         if (stored) {
             try {
                 settings = JSON.parse(stored);
+                
+                // Apply defaults for any missing settings and save if modified
+                if (applyDefaultSettings(settings)) {
+                    saveSettings();
+                }
             } catch (e) {
                 JellyfinAPI.Logger.error('Failed to parse settings:', e);
+                settings.homeRows = JSON.parse(JSON.stringify(defaultHomeRows));
             }
+        } else {
+            settings.homeRows = JSON.parse(JSON.stringify(defaultHomeRows));
+            saveSettings();
         }
     }
 
@@ -164,6 +248,27 @@ var SettingsController = (function() {
         if (carouselSpeedValue) {
             carouselSpeedValue.textContent = (settings.carouselSpeed / 1000) + ' seconds';
         }
+        
+        // Moonfin settings
+        var showShuffleButtonValue = document.getElementById('showShuffleButtonValue');
+        if (showShuffleButtonValue) {
+            showShuffleButtonValue.textContent = settings.showShuffleButton ? 'On' : 'Off';
+        }
+        
+        var showGenresButtonValue = document.getElementById('showGenresButtonValue');
+        if (showGenresButtonValue) {
+            showGenresButtonValue.textContent = settings.showGenresButton ? 'On' : 'Off';
+        }
+        
+        var showFavoritesButtonValue = document.getElementById('showFavoritesButtonValue');
+        if (showFavoritesButtonValue) {
+            showFavoritesButtonValue.textContent = settings.showFavoritesButton ? 'On' : 'Off';
+        }
+        
+        var showLibrariesInToolbarValue = document.getElementById('showLibrariesInToolbarValue');
+        if (showLibrariesInToolbarValue) {
+            showLibrariesInToolbarValue.textContent = settings.showLibrariesInToolbar ? 'On' : 'Off';
+        }
     }
 
     function attachEventListeners() {
@@ -192,6 +297,12 @@ var SettingsController = (function() {
 
     function handleKeyDown(evt) {
         evt = evt || window.event;
+        
+        // Check if modal is open
+        if (homeRowsModal.isOpen) {
+            handleHomeRowsModalNavigation(evt);
+            return;
+        }
         
         if (evt.keyCode === KeyCodes.BACK) {
             evt.preventDefault();
@@ -492,6 +603,10 @@ var SettingsController = (function() {
         var settingName = item.dataset.setting;
         
         switch (settingName) {
+            case 'homeSections':
+                openHomeRowsModal();
+                break;
+                
             case 'autoLogin':
                 settings.autoLogin = !settings.autoLogin;
                 saveSettings();
@@ -514,16 +629,329 @@ var SettingsController = (function() {
                 updateSettingValues();
                 break;
                 
+            case 'showShuffleButton':
+                settings.showShuffleButton = !settings.showShuffleButton;
+                saveSettings();
+                updateSettingValues();
+                applyToolbarSettingsLive();
+                break;
+                
+            case 'showGenresButton':
+                settings.showGenresButton = !settings.showGenresButton;
+                saveSettings();
+                updateSettingValues();
+                applyToolbarSettingsLive();
+                break;
+                
+            case 'showFavoritesButton':
+                settings.showFavoritesButton = !settings.showFavoritesButton;
+                saveSettings();
+                updateSettingValues();
+                applyToolbarSettingsLive();
+                break;
+                
+            case 'showLibrariesInToolbar':
+                settings.showLibrariesInToolbar = !settings.showLibrariesInToolbar;
+                saveSettings();
+                updateSettingValues();
+                applyToolbarSettingsLive();
+                break;
+                
             case 'logout':
                 handleLogout();
                 break;
                 
-            case 'clearCache':
-                handleClearCache();
-                break;
-                
             default:
                 JellyfinAPI.Logger.warn('Setting not implemented:', settingName);
+        }
+    }
+
+    /**
+     * Open the Home Rows configuration modal
+     * @private
+     */
+    function openHomeRowsModal() {
+        var modal = document.getElementById('homeRowsModal');
+        if (!modal) return;
+        
+        homeRowsModal.rows = JSON.parse(JSON.stringify(settings.homeRows));
+        homeRowsModal.isOpen = true;
+        homeRowsModal.focusedIndex = 0;
+        
+        renderHomeRowsList();
+        modal.style.display = 'flex';
+        
+        // Setup modal event listeners with cleanup support
+        var saveBtn = document.getElementById('saveRowsBtn');
+        var cancelBtn = document.getElementById('cancelRowsBtn');
+        var resetBtn = document.getElementById('resetRowsBtn');
+        
+        if (saveBtn) {
+            homeRowsModal.saveHandler = saveHomeRows;
+            saveBtn.addEventListener('click', homeRowsModal.saveHandler);
+        }
+        if (cancelBtn) {
+            homeRowsModal.cancelHandler = closeHomeRowsModal;
+            cancelBtn.addEventListener('click', homeRowsModal.cancelHandler);
+        }
+        if (resetBtn) {
+            homeRowsModal.resetHandler = resetHomeRows;
+            resetBtn.addEventListener('click', homeRowsModal.resetHandler);
+        }
+        
+        // Focus first item
+        setTimeout(function() {
+            updateHomeRowsFocus();
+        }, 100);
+    }
+
+    /**
+     * Render the home rows list in the modal
+     * @private
+     */
+    function renderHomeRowsList() {
+        var list = document.getElementById('homeRowsList');
+        if (!list) return;
+        
+        list.innerHTML = '';
+        
+        // Sort by order
+        homeRowsModal.rows.sort(function(a, b) {
+            return a.order - b.order;
+        });
+        
+        homeRowsModal.rows.forEach(function(row, index) {
+            var rowDiv = document.createElement('div');
+            rowDiv.className = 'home-row-item';
+            rowDiv.dataset.rowId = row.id;
+            rowDiv.dataset.index = index;
+            rowDiv.tabIndex = 0;
+            
+            var checkbox = document.createElement('div');
+            checkbox.className = 'row-checkbox ' + (row.enabled ? 'checked' : '');
+            checkbox.textContent = row.enabled ? '✓' : '';
+            
+            var name = document.createElement('div');
+            name.className = 'row-name';
+            name.textContent = row.name;
+            
+            var controls = document.createElement('div');
+            controls.className = 'row-controls';
+            
+            var upBtn = document.createElement('button');
+            upBtn.className = 'row-btn';
+            upBtn.textContent = '▲';
+            upBtn.disabled = index === 0;
+            upBtn.onclick = function(e) {
+                e.stopPropagation();
+                moveRowUp(index);
+            };
+            
+            var downBtn = document.createElement('button');
+            downBtn.className = 'row-btn';
+            downBtn.textContent = '▼';
+            downBtn.disabled = index === homeRowsModal.rows.length - 1;
+            downBtn.onclick = function(e) {
+                e.stopPropagation();
+                moveRowDown(index);
+            };
+            
+            controls.appendChild(upBtn);
+            controls.appendChild(downBtn);
+            
+            rowDiv.appendChild(checkbox);
+            rowDiv.appendChild(name);
+            rowDiv.appendChild(controls);
+            
+            rowDiv.onclick = function() {
+                toggleRowEnabled(index);
+            };
+            
+            list.appendChild(rowDiv);
+        });
+    }
+
+    /**
+     * Toggle a row's enabled state
+     * @param {number} index - Row index
+     * @private
+     */
+    function toggleRowEnabled(index) {
+        homeRowsModal.rows[index].enabled = !homeRowsModal.rows[index].enabled;
+        renderHomeRowsList();
+        updateHomeRowsFocus();
+    }
+
+    /**
+     * Move a row up in the order
+     * @param {number} index - Row index
+     * @private
+     */
+    function moveRowUp(index) {
+        if (index === 0) return;
+        
+        var temp = homeRowsModal.rows[index];
+        homeRowsModal.rows[index] = homeRowsModal.rows[index - 1];
+        homeRowsModal.rows[index - 1] = temp;
+        
+        // Update order values
+        homeRowsModal.rows.forEach(function(row, i) {
+            row.order = i;
+        });
+        
+        homeRowsModal.focusedIndex = index - 1;
+        renderHomeRowsList();
+        updateHomeRowsFocus();
+    }
+
+    /**
+     * Move a row down in the order
+     * @param {number} index - Row index
+     * @private
+     */
+    function moveRowDown(index) {
+        if (index >= homeRowsModal.rows.length - 1) return;
+        
+        var temp = homeRowsModal.rows[index];
+        homeRowsModal.rows[index] = homeRowsModal.rows[index + 1];
+        homeRowsModal.rows[index + 1] = temp;
+        
+        // Update order values
+        homeRowsModal.rows.forEach(function(row, i) {
+            row.order = i;
+        });
+        
+        homeRowsModal.focusedIndex = index + 1;
+        renderHomeRowsList();
+        updateHomeRowsFocus();
+    }
+
+    /**
+     * Update focus in home rows list
+     * @private
+     */
+    function updateHomeRowsFocus() {
+        var items = document.querySelectorAll('.home-row-item');
+        items.forEach(function(item, index) {
+            if (index === homeRowsModal.focusedIndex) {
+                item.classList.add('focused');
+                item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            } else {
+                item.classList.remove('focused');
+            }
+        });
+    }
+
+    /**
+     * Save home rows configuration
+     * @private
+     */
+    function saveHomeRows() {
+        settings.homeRows = JSON.parse(JSON.stringify(homeRowsModal.rows));
+        saveSettings();
+        closeHomeRowsModal();
+        
+        JellyfinAPI.Logger.success('Home rows configuration saved');
+    }
+
+    /**
+     * Reset home rows to defaults
+     * @private
+     */
+    function resetHomeRows() {
+        homeRowsModal.rows = JSON.parse(JSON.stringify(defaultHomeRows));
+        homeRowsModal.focusedIndex = 0;
+        renderHomeRowsList();
+        updateHomeRowsFocus();
+    }
+
+    /**
+     * Close the home rows modal
+     * Cleans up event listeners to prevent memory leaks
+     * @private
+     */
+    function closeHomeRowsModal() {
+        var modal = document.getElementById('homeRowsModal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+        
+        // Remove event listeners to prevent memory leaks
+        var saveBtn = document.getElementById('saveRowsBtn');
+        var cancelBtn = document.getElementById('cancelRowsBtn');
+        var resetBtn = document.getElementById('resetRowsBtn');
+        
+        if (saveBtn && homeRowsModal.saveHandler) {
+            saveBtn.removeEventListener('click', homeRowsModal.saveHandler);
+        }
+        if (cancelBtn && homeRowsModal.cancelHandler) {
+            cancelBtn.removeEventListener('click', homeRowsModal.cancelHandler);
+        }
+        if (resetBtn && homeRowsModal.resetHandler) {
+            resetBtn.removeEventListener('click', homeRowsModal.resetHandler);
+        }
+        
+        // Clear handler references
+        homeRowsModal.saveHandler = null;
+        homeRowsModal.cancelHandler = null;
+        homeRowsModal.resetHandler = null;
+        
+        homeRowsModal.isOpen = false;
+        focusToContent();
+    }
+
+    /**
+     * Handle keyboard navigation in home rows modal
+     * @param {KeyboardEvent} evt - Keyboard event
+     * @private
+     */
+    function handleHomeRowsModalNavigation(evt) {
+        var items = document.querySelectorAll('.home-row-item');
+        var buttons = document.querySelectorAll('.modal-actions button');
+        var totalItems = items.length;
+        
+        switch (evt.keyCode) {
+            case KeyCodes.UP:
+                evt.preventDefault();
+                if (homeRowsModal.focusedIndex > 0) {
+                    homeRowsModal.focusedIndex--;
+                    updateHomeRowsFocus();
+                }
+                break;
+                
+            case KeyCodes.DOWN:
+                evt.preventDefault();
+                if (homeRowsModal.focusedIndex < totalItems - 1) {
+                    homeRowsModal.focusedIndex++;
+                    updateHomeRowsFocus();
+                } else if (homeRowsModal.focusedIndex === totalItems - 1) {
+                    // Move to buttons
+                    buttons[0].focus();
+                }
+                break;
+                
+            case KeyCodes.LEFT:
+                evt.preventDefault();
+                moveRowUp(homeRowsModal.focusedIndex);
+                break;
+                
+            case KeyCodes.RIGHT:
+                evt.preventDefault();
+                moveRowDown(homeRowsModal.focusedIndex);
+                break;
+                
+            case KeyCodes.ENTER:
+                evt.preventDefault();
+                var currentItem = items[homeRowsModal.focusedIndex];
+                if (currentItem) {
+                    currentItem.click();
+                }
+                break;
+                
+            case KeyCodes.BACK:
+                evt.preventDefault();
+                closeHomeRowsModal();
+                break;
         }
     }
 
@@ -532,8 +960,55 @@ var SettingsController = (function() {
         window.location.href = 'login.html';
     }
 
+    /**
+     * Apply toolbar settings live to the current page's navbar
+     * @private
+     */
+    function applyToolbarSettingsLive() {
+        var shuffleBtn = document.getElementById('shuffleBtn');
+        var genresBtn = document.getElementById('genresBtn');
+        var favoritesBtn = document.getElementById('favoritesBtn');
+        var libraryButtons = document.querySelectorAll('.nav-btn[data-library-id]');
+        
+        if (shuffleBtn) {
+            shuffleBtn.style.display = settings.showShuffleButton ? '' : 'none';
+        }
+        
+        if (genresBtn) {
+            genresBtn.style.display = settings.showGenresButton ? '' : 'none';
+        }
+        
+        if (favoritesBtn) {
+            favoritesBtn.style.display = settings.showFavoritesButton ? '' : 'none';
+        }
+        
+        libraryButtons.forEach(function(btn) {
+            btn.style.display = settings.showLibrariesInToolbar ? '' : 'none';
+        });
+    }
+
+    /**
+     * Get home rows settings for use by other pages
+     * @returns {Array} Array of home row configurations
+     */
+    function getHomeRowsSettings() {
+        var stored = storage.get('jellyfin_settings');
+        if (stored) {
+            try {
+                var parsedSettings = JSON.parse(stored);
+                if (parsedSettings.homeRows) {
+                    return parsedSettings.homeRows;
+                }
+            } catch (e) {
+                JellyfinAPI.Logger.error('Failed to parse settings:', e);
+            }
+        }
+        return JSON.parse(JSON.stringify(defaultHomeRows));
+    }
+
     return {
-        init: init
+        init: init,
+        getHomeRowsSettings: getHomeRowsSettings
     };
 })();
 

@@ -10,12 +10,45 @@ body {
     height: 100%;
     width: 100%;
     overflow: hidden;
+    background: #0a0a0a;
 }
 
 body {
     font-family: -apple-system, "Helvetica", system-ui, BlinkMacSystemFont, "Segoe UI", "Roboto", sans-serif;
-    background: #0a0a0a;
     color: #ffffff;
+}
+
+/* Global Backdrop */
+.global-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    overflow: hidden;
+}
+
+.global-backdrop-image {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: blur(20px);
+    transform: scale(1.1);
+    opacity: 1;
+    transition: opacity 0.5s ease;
+}
+
+.global-backdrop-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(10, 10, 10, 0.75);
 }
 
 /* Main Content */
@@ -28,6 +61,8 @@ body {
     overflow-y: auto;
     overflow-x: hidden;
     padding-top: 0;
+    background: transparent;
+    z-index: 1;
 }
 
 /* Featured Banner */
@@ -258,16 +293,41 @@ body {
     top: 80px;
     left: 0;
     right: 0;
-    height: 240px;
-    padding: 24px 60px;
-    background: linear-gradient(to bottom, rgba(10, 10, 10, 0.95) 0%, rgba(10, 10, 10, 0.85) 100%);
+    height: auto;
+    padding: 0;
     z-index: 100;
-    backdrop-filter: blur(20px);
-    overflow: hidden;
+    overflow: visible;
+}
+
+.detail-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: blur(20px);
+    transform: scale(1.1);
+}
+
+.detail-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(10, 10, 10, 0.75);
+    backdrop-filter: blur(10px);
+}
+
+.detail-content-wrapper {
+    position: relative;
+    z-index: 1;
+    padding: 24px 60px;
 }
 
 .detail-title {
-    font-size: 32px;
+    font-size: 42px;
     font-weight: 700;
     margin: 0 0 12px 0;
     color: #ffffff;
@@ -289,23 +349,18 @@ body {
     padding: 5px 12px;
     background: rgba(255, 255, 255, 0.15);
     border-radius: 4px;
-    font-size: 16px;
+    font-size: 20px;
     font-weight: 600;
     color: rgba(255, 255, 255, 0.9);
     backdrop-filter: blur(10px);
 }
 
 .detail-summary {
-    font-size: 22px;
+    font-size: 26px;
     line-height: 1.6;
     color: rgba(255, 255, 255, 0.85);
     margin: 0;
     text-shadow: 1px 1px 4px rgba(0, 0, 0, 0.8);
-    max-height: 105px;
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
 }
 
 /* Content Rows */
@@ -325,11 +380,16 @@ body {
 
 .content-row {
     margin-bottom: 50px;
+    margin-top: 200px;
     overflow: visible;
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
     will-change: transform;
     transform: translateZ(0);
     backface-visibility: hidden;
+}
+
+.content-row:first-child {
+    margin-top: 200px;
 }
 
 .content-row.row-hidden {
@@ -345,7 +405,7 @@ body {
 }
 
 .row-scroller {
-    overflow: hidden;
+    overflow: visible;
     overflow-y: visible;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
@@ -366,6 +426,7 @@ body {
     transition: transform 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
     will-change: transform;
     backface-visibility: hidden;
+    overflow: visible;
 }
 
 /* Item Cards */
@@ -373,15 +434,8 @@ body {
     flex: 0 0 auto;
     width: 240px;
     cursor: pointer;
-    transition: transform 0.25s cubic-bezier(0.25, 0.1, 0.25, 1), 
-                box-shadow 0.25s ease, 
-                border-color 0.25s ease,
-                background 0.25s ease;
+    transition: transform 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
     outline: none;
-    border-radius: 8px;
-    overflow: hidden;
-    background: rgba(255, 255, 255, 0.05);
-    border: 3px solid transparent;
     transform: translateZ(0);
     backface-visibility: hidden;
 }
@@ -389,16 +443,11 @@ body {
 .item-card.focused {
     transform: scale(1.03) translateZ(0);
     z-index: 10;
-    box-shadow: 0 12px 40px rgba(0, 164, 220, 0.7);
-    background: rgba(255, 255, 255, 0.12);
-    border-color: #00a4dc;
 }
 
 .item-card:hover {
     transform: scale(1.05) translateZ(0);
     z-index: 9;
-    box-shadow: 0 8px 30px rgba(0, 164, 220, 0.4);
-    background: rgba(255, 255, 255, 0.08);
 }
 
 .item-image {
@@ -406,19 +455,148 @@ body {
     height: 360px;
     object-fit: cover;
     display: block;
-    border-radius: 8px 8px 0 0;
+    border-radius: 8px;
     transform: translateZ(0);
     backface-visibility: hidden;
 }
 
 .item-title {
-    padding: 10px 10px 12px 10px;
+    padding: 10px 0;
     font-size: 20px;
     font-weight: 500;
     color: #ffffff;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/* Phase 3: Library Tiles Styling */
+.library-tiles-row .row-items {
+    gap: 30px;
+}
+
+.library-tile {
+    width: 280px;
+}
+
+.library-tile .item-image {
+    height: 280px;
+    border-radius: 12px;
+}
+
+.library-tile .item-title {
+    font-size: 24px;
+    font-weight: 600;
+    padding: 12px 0 4px 0;
+}
+
+.library-count {
+    font-size: 18px;
+    color: #b3b3b3;
+    padding: 0 0 10px 0;
+}
+
+.library-tile.focused .library-count,
+.library-tile:hover .library-count {
+    color: #00a4dc;
+}
+
+/* Live TV Styling */
+.livetv-row .item-card {
+    position: relative;
+}
+
+.livetv-channel .item-image,
+.livetv-recording .item-image {
+    height: 200px;
+}
+
+.channel-info {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: rgba(0, 0, 0, 0.85);
+    color: #00a4dc;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: 600;
+    z-index: 2;
+}
+
+.livetv-channel.focused .channel-info,
+.livetv-channel:hover .channel-info {
+    background: rgba(0, 164, 220, 0.95);
+    color: #ffffff;
+}
+
+.livetv-recording::after {
+    content: '●';
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    color: #e74c3c;
+    font-size: 24px;
+    text-shadow: 0 0 10px rgba(231, 76, 60, 0.8);
+}
+
+/* Collections Styling */
+.collections-row .item-card {
+    position: relative;
+}
+
+.collection-item .item-image {
+    border: 3px solid rgba(255, 255, 255, 0.1);
+}
+
+.collection-item.focused .item-image,
+.collection-item:hover .item-image {
+    border-color: rgba(255, 255, 255, 0.3);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+}
+
+.collection-badge {
+    position: absolute;
+    bottom: 70px;
+    left: 10px;
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.95), rgba(255, 165, 0, 0.95));
+    color: #000;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 700;
+    z-index: 2;
+    text-shadow: none;
+}
+
+.collection-item.focused .collection-badge,
+.collection-item:hover .collection-badge {
+    background: linear-gradient(135deg, #ffd700, #ffa500);
+    transform: scale(1.1);
+}
+
+/* Count badge for TV shows and collections */
+.count-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 40px;
+    height: 40px;
+    background-color: #00a4dc;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+    color: white;
+    z-index: 2;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.item-card.focused .count-badge,
+.item-card:hover .count-badge {
+    transform: scale(1.1);
 }
 
 /* Loading Indicator */

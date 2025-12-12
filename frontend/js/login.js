@@ -9,6 +9,12 @@ var LoginController = (function() {
     var quickConnectSecret = null;
     var quickConnectInterval = null;
     var elements = {};
+    
+    // Timing Constants
+    const FOCUS_DELAY_MS = 100;
+    const UI_TRANSITION_DELAY_MS = 500;
+    const QUICK_CONNECT_POLL_INTERVAL_MS = 3000;
+    const LOGIN_SUCCESS_DELAY_MS = 1000;
 
     function init() {
         JellyfinAPI.Logger.info('Initializing login controller...');
@@ -109,7 +115,7 @@ var LoginController = (function() {
             showStatus('Resuming session as ' + auth.username + '...', 'info');
             setTimeout(function() {
                 window.location.href = 'browse.html';
-            }, 500);
+            }, UI_TRANSITION_DELAY_MS);
             return true;
         }
         return false;
@@ -130,7 +136,7 @@ var LoginController = (function() {
             // Automatically connect and show user selection
             setTimeout(function() {
                 handleConnect();
-            }, 100);
+            }, FOCUS_DELAY_MS);
         }
     }
 
@@ -376,7 +382,7 @@ var LoginController = (function() {
                 if (firstCard) {
                     firstCard.focus();
                 }
-            }, 100);
+            }, FOCUS_DELAY_MS);
         }
     }
 
@@ -552,7 +558,11 @@ var LoginController = (function() {
             }
             
             if (!authData || !authData.AccessToken) {
-                JellyfinAPI.Logger.error('No access token received');
+                JellyfinAPI.Logger.error('No access token received. Auth data:', {
+                    hasAuthData: !!authData,
+                    hasUser: !!(authData?.User),
+                    hasAccessToken: !!(authData?.AccessToken)
+                });
                 showError('Login failed! Invalid response from server.');
                 return;
             }
@@ -620,7 +630,7 @@ var LoginController = (function() {
         
         quickConnectInterval = setInterval(function() {
             checkQuickConnectStatus();
-        }, 3000); // Poll every 3 seconds
+        }, QUICK_CONNECT_POLL_INTERVAL_MS);
         
         // Also check immediately
         checkQuickConnectStatus();
@@ -673,7 +683,11 @@ var LoginController = (function() {
             }
             
             if (!authData || !authData.AccessToken) {
-                JellyfinAPI.Logger.error('No access token from QuickConnect');
+                JellyfinAPI.Logger.error('No access token from QuickConnect. Auth data:', {
+                    hasAuthData: !!authData,
+                    hasUser: !!(authData?.User),
+                    hasAccessToken: !!(authData?.AccessToken)
+                });
                 showError('Quick Connect authentication failed');
                 backToUserSelection();
                 return;

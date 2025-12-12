@@ -7,36 +7,38 @@
     <link rel="stylesheet" href="css/player.css">
     <script src="webOSTVjs-1.2.11/webOSTV.js" charset="utf-8"></script>
     <script src="webOSTVjs-1.2.11/webOSTV-dev.js" charset="utf-8"></script>
+    <script src="shaka-player.js" charset="utf-8"></script>
     <script src="js/storage.js" charset="utf-8"></script>
     <script src="js/ajax.js" charset="utf-8"></script>
     <script src="js/keycodes.js" charset="utf-8"></script>
     <script src="js/jellyfin-api.js" charset="utf-8"></script>
     <script src="js/track-selector.js" charset="utf-8"></script>
+    <script src="js/video-player-adapter.js" charset="utf-8"></script>
     <script src="js/player.js" charset="utf-8"></script>
 </head>
 <body>
-    <video id="videoPlayer" class="video-player"></video>
+    <video id="videoPlayer" class="video-player" preload="metadata"></video>
+    
+    <!-- Video darkening overlay -->
+    <div id="videoDimmer" class="video-dimmer"></div>
+    
+    <!-- Playback indicators -->
+    <div class="playback-indicators">
+        <div id="speedIndicator" class="speed-indicator" style="display: none;">1.0x</div>
+        <div id="bitrateIndicator" class="bitrate-indicator" style="display: none;">0 Mbps</div>
+    </div>
     
     <!-- Player Controls Overlay -->
     <div id="playerControls" class="player-controls">
         <div class="controls-top">
             <div class="media-info">
-                <h1 id="mediaTitle" class="media-title"></h1>
+                <img id="mediaLogo" class="media-logo" alt="" style="display: none;">
+                <h1 id="mediaTitle" class="media-title" style="display: none;"></h1>
                 <p id="mediaSubtitle" class="media-subtitle"></p>
             </div>
         </div>
         
         <div class="controls-bottom">
-            <div class="progress-container">
-                <div id="progressBar" class="progress-bar">
-                    <div id="progressFill" class="progress-fill"></div>
-                </div>
-                <div class="time-info">
-                    <span id="currentTime" class="time-current">0:00</span>
-                    <span id="totalTime" class="time-total">0:00</span>
-                </div>
-            </div>
-            
             <div class="control-buttons">
                 <button id="playPauseBtn" class="control-btn" tabindex="0">
                     <img src="assets/pause.png" alt="Play/Pause" class="btn-icon">
@@ -53,8 +55,39 @@
                 <button id="subtitleBtn" class="control-btn" tabindex="0">
                     <img src="assets/subtitle.png" alt="Subtitles" class="btn-icon">
                 </button>
-                <button id="backBtn" class="control-btn" tabindex="0">
-                    <img src="assets/chevron-left.svg" alt="Back" class="btn-icon">
+            </div>
+            
+            <div class="progress-container">
+                <div class="time-info-top">
+                    <span id="endTime" class="time-end">Ends at 0:00</span>
+                </div>
+                <div id="progressBar" class="progress-bar">
+                    <div id="progressFill" class="progress-fill"></div>
+                    <div id="seekIndicator" class="seek-indicator"></div>
+                </div>
+                <div class="time-info">
+                    <span id="timeDisplay" class="time-display">0:00 / 0:00</span>
+                </div>
+            </div>
+            
+            <div class="control-buttons-bottom">
+                <button id="chaptersBtn" class="control-btn" tabindex="0">
+                    <img src="assets/select_chapter.png" alt="Chapters" class="btn-icon">
+                </button>
+                <button id="previousItemBtn" class="control-btn" tabindex="0">
+                    <img src="assets/previous.png" alt="Previous Item" class="btn-icon">
+                </button>
+                <button id="nextItemBtn" class="control-btn" tabindex="0">
+                    <img src="assets/play_next.png" alt="Next Item" class="btn-icon">
+                </button>
+                <button id="speedBtn" class="control-btn" tabindex="0">
+                    <img src="assets/playback_speed.png" alt="Speed" class="btn-icon">
+                </button>
+                <button id="qualityBtn" class="control-btn" tabindex="0">
+                    <img src="assets/request_hd.png" alt="Quality" class="btn-icon">
+                </button>
+                <button id="videoInfoBtn" class="control-btn" tabindex="0">
+                    <img src="assets/trailer.png" alt="Video Info" class="btn-icon">
                 </button>
             </div>
         </div>
@@ -73,6 +106,44 @@
         <div class="modal-content">
             <h2 class="modal-title">Select Subtitle</h2>
             <div id="subtitleTrackList" class="track-list"></div>
+        </div>
+    </div>
+    
+    <!-- Playback Speed Selection Modal -->
+    <div id="speedModal" class="track-modal">
+        <div class="modal-content">
+            <h2 class="modal-title">Playback Speed</h2>
+            <div id="speedList" class="track-list"></div>
+        </div>
+    </div>
+    
+    <!-- Quality/Bitrate Selection Modal -->
+    <div id="qualityModal" class="track-modal">
+        <div class="modal-content">
+            <h2 class="modal-title">Max Bitrate</h2>
+            <div id="qualityList" class="track-list"></div>
+        </div>
+    </div>
+    
+    <!-- Chapters Modal -->
+    <div id="chaptersModal" class="track-modal">
+        <div class="modal-content chapters-modal">
+            <h2 class="modal-title">Chapters</h2>
+            <div id="chaptersContent" class="chapters-content"></div>
+            <div class="chapters-footer">
+                <p style="text-align: center; opacity: 0.7; margin-top: 20px;">Press BACK to close</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Video Info Modal -->
+    <div id="videoInfoModal" class="track-modal">
+        <div class="modal-content video-info-modal">
+            <h2 class="modal-title">Playback Information</h2>
+            <div id="videoInfoContent" class="video-info-content"></div>
+            <div class="video-info-footer">
+                <p style="text-align: center; opacity: 0.7; margin-top: 20px;">Press BACK to close</p>
+            </div>
         </div>
     </div>
     

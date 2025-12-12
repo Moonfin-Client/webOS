@@ -119,7 +119,7 @@ const LibraryController = {
             }
             
             if (!response || !response.Items) {
-                JellyfinAPI.Logger.error('No library data returned');
+                JellyfinAPI.Logger.error('No library data returned for library:', self.libraryId);
                 self.showError('Failed to load library details');
                 return;
             }
@@ -135,7 +135,7 @@ const LibraryController = {
             const params = {
                 SortBy: self.sortBy,
                 SortOrder: self.sortOrder,
-                Fields: 'PrimaryImageAspectRatio,BasicSyncInfo',
+                Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,ChildCount,RecursiveItemCount',
                 ImageTypeLimit: 1,
                 EnableImageTypes: 'Primary,Backdrop,Thumb',
                 Limit: 300
@@ -172,12 +172,22 @@ const LibraryController = {
                 }
 
                 if (!data || !data.Items) {
-                    JellyfinAPI.Logger.error('No library items returned');
+                    JellyfinAPI.Logger.error('No library items returned. Filters:', {
+                        sortBy: self.currentSort,
+                        sortOrder: self.currentSortOrder,
+                        filter: self.currentFilter
+                    });
                     self.showError('Failed to load library items');
                     return;
                 }
                 
-                self.items = data.Items;
+                // Filter out BoxSets from movie and TV libraries (API doesn't always honor IncludeItemTypes)
+                let items = data.Items;
+                if (library && (library.CollectionType === 'movies' || library.CollectionType === 'tvshows')) {
+                    items = items.filter(item => item.Type !== 'BoxSet');
+                }
+                
+                self.items = items;
                 if (self.items.length === 0) {
                     self.showEmptyLibrary();
                 } else {
@@ -222,6 +232,14 @@ const LibraryController = {
         div.className = 'grid-item';
         div.setAttribute('data-index', index);
         div.setAttribute('tabindex', '0');
+        
+        // Check if this is a TV show series or collection
+        const isSeries = item.Type === 'Series';
+        const isBoxSet = item.Type === 'BoxSet';
+        
+        // Create image wrapper for positioning badges
+        const imgWrapper = document.createElement('div');
+        imgWrapper.className = 'item-image-wrapper';
 
         const img = document.createElement('img');
         img.className = 'item-image';
@@ -236,7 +254,27 @@ const LibraryController = {
             img.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 300"%3E%3Crect width="200" height="300" fill="%23333"/%3E%3C/svg%3E';
         }
 
-        div.appendChild(img);
+        imgWrapper.appendChild(img);
+        
+        // Add count badge for TV shows and collections
+        // Series: Use RecursiveItemCount (episode count)
+        // BoxSet: Use ChildCount (item count)
+        let itemCount = null;
+        if (isSeries && item.RecursiveItemCount) {
+            itemCount = item.RecursiveItemCount;
+        } else if (isBoxSet && item.ChildCount) {
+            itemCount = item.ChildCount;
+        }
+        
+        if (itemCount) {
+            const countBadge = document.createElement('div');
+            countBadge.className = 'count-badge';
+            const displayCount = itemCount > 99 ? '99+' : itemCount.toString();
+            countBadge.textContent = displayCount;
+            imgWrapper.appendChild(countBadge);
+        }
+        
+        div.appendChild(imgWrapper);
 
         if (item.UserData && item.UserData.PlayedPercentage && item.UserData.PlayedPercentage > 0 && item.UserData.PlayedPercentage < 100) {
             const progressBar = document.createElement('div');

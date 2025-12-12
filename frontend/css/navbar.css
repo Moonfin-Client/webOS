@@ -3,7 +3,7 @@
  * Shared across all pages
  */
 
-/* Top Navigation Bar - Android TV Style */
+/* Top Navigation Bar */
 .top-nav {
     position: absolute;
     top: 30px;
@@ -130,6 +130,19 @@
 
 .nav-icon {
     font-size: 36px;
+}
+
+.nav-icon-img {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+    filter: brightness(0) invert(1);
+    opacity: 0.7;
+}
+
+.nav-btn:focus .nav-icon-img,
+.nav-btn.active .nav-icon-img {
+    opacity: 1;
 }
 
 .user-info {

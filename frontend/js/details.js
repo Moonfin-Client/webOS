@@ -236,12 +236,14 @@ var DetailsController = (function() {
     }
 
     function handleModalKeyDown(evt) {
+        JellyfinAPI.Logger.info('[Details] Modal key pressed:', evt.keyCode, 'currentModalFocusIndex:', currentModalFocusIndex, 'focusableItems:', modalFocusableItems.length);
         currentModalFocusIndex = TrackSelector.handleModalKeyDown(
             evt,
             modalFocusableItems,
             currentModalFocusIndex,
             closeModal
         );
+        JellyfinAPI.Logger.info('[Details] New modal focus index:', currentModalFocusIndex);
     }
 
     function getCurrentSectionItems() {
@@ -367,6 +369,20 @@ var DetailsController = (function() {
         if (itemData.Type === 'Person') {
             displayPersonDetails();
             return;
+        }
+        
+        // Hide action buttons for BoxSet/Collection types
+        if (itemData.Type === 'BoxSet') {
+            if (elements.playBtnWrapper) elements.playBtnWrapper.style.display = 'none';
+            if (elements.resumeBtnWrapper) elements.resumeBtnWrapper.style.display = 'none';
+            if (elements.shuffleBtnWrapper) elements.shuffleBtnWrapper.style.display = 'none';
+            if (elements.trailerBtnWrapper) elements.trailerBtnWrapper.style.display = 'none';
+            if (elements.markPlayedBtn && elements.markPlayedBtn.closest('.btn-wrapper')) {
+                elements.markPlayedBtn.closest('.btn-wrapper').style.display = 'none';
+            }
+            if (elements.audioBtnWrapper) elements.audioBtnWrapper.style.display = 'none';
+            if (elements.subtitleBtnWrapper) elements.subtitleBtnWrapper.style.display = 'none';
+            if (elements.moreBtnWrapper) elements.moreBtnWrapper.style.display = 'none';
         }
         
         // Ensure critical elements exist
@@ -558,8 +574,9 @@ var DetailsController = (function() {
             }
         }
         
+        // Show shuffle button for containers (except BoxSet which has buttons hidden)
         if (itemData.Type === 'Series' || itemData.Type === 'Season' || 
-            itemData.Type === 'BoxSet' || itemData.Type === 'Playlist' || 
+            itemData.Type === 'Playlist' || 
             itemData.Type === 'Folder' || itemData.Type === 'CollectionFolder') {
             if (elements.shuffleBtnWrapper) {
                 elements.shuffleBtnWrapper.style.display = 'flex';
@@ -1179,7 +1196,7 @@ var DetailsController = (function() {
     function handleTrailer() {
         JellyfinAPI.Logger.info('Trailer clicked for item:', itemData.Id);
         
-        // First, try to play local trailer file (like Roku does)
+        // First, try to play local trailer file
         var endpoint = '/Users/' + auth.userId + '/Items/' + itemData.Id + '/LocalTrailers';
         
         JellyfinAPI.getItems(auth.serverAddress, auth.accessToken, endpoint, {}, function(err, localTrailers) {
@@ -1384,38 +1401,109 @@ var DetailsController = (function() {
     }
 
     function showAudioTrackSelector(audioStreams) {
+        JellyfinAPI.Logger.info('[Details] showAudioTrackSelector called with', audioStreams.length, 'tracks');
+        
+        // Find currently selected track (default track)
+        var currentIndex = -1;
+        for (var i = 0; i < audioStreams.length; i++) {
+            if (audioStreams[i].IsDefault) {
+                currentIndex = i;
+                JellyfinAPI.Logger.info('[Details] Found default audio track at index:', i);
+                break;
+            }
+        }
+
+        // Use TrackSelector module to build track list with click handlers
+        JellyfinAPI.Logger.info('[Details] Building audio track list, currentIndex:', currentIndex);
         modalFocusableItems = TrackSelector.buildAudioTrackList(
             audioStreams,
-            -1, // No current selection in details view
+            currentIndex,
             elements.audioTrackList,
-            closeModal
+            function(selectedIndex) {
+                JellyfinAPI.Logger.info('[Details] Audio track selected:', selectedIndex, '- saving preference for itemId:', itemId);
+                
+                // Update visual selection in modal
+                modalFocusableItems.forEach(function(item) {
+                    item.classList.remove('selected');
+                });
+                if (modalFocusableItems[selectedIndex]) {
+                    modalFocusableItems[selectedIndex].classList.add('selected');
+                }
+                
+                // Store preference for this item so player can apply it on playback
+                localStorage.setItem('preferredAudioTrack_' + itemId, selectedIndex);
+                
+                // Close after a brief delay to show the selection
+                setTimeout(function() {
+                    closeModal();
+                }, 150);
+            }
         );
-
+        
+        JellyfinAPI.Logger.info('[Details] Created', modalFocusableItems.length, 'focusable audio items');
+        
         activeModal = 'audio';
         elements.audioModal.style.display = 'flex';
-        currentModalFocusIndex = 0;
+        currentModalFocusIndex = Math.max(0, currentIndex);
         if (modalFocusableItems[currentModalFocusIndex]) {
             modalFocusableItems[currentModalFocusIndex].focus();
         }
     }
 
     function showSubtitleTrackSelector(subtitleStreams) {
+        JellyfinAPI.Logger.info('[Details] showSubtitleTrackSelector called with', subtitleStreams.length, 'tracks');
+        
+        // Find currently selected track (default track)
+        var currentIndex = -1;
+        for (var i = 0; i < subtitleStreams.length; i++) {
+            if (subtitleStreams[i].IsDefault) {
+                currentIndex = i;
+                JellyfinAPI.Logger.info('[Details] Found default subtitle track at index:', i);
+                break;
+            }
+        }
+
+        // Use TrackSelector module to build track list with click handlers
+        JellyfinAPI.Logger.info('[Details] Building subtitle track list, currentIndex:', currentIndex);
         modalFocusableItems = TrackSelector.buildSubtitleTrackList(
             subtitleStreams,
-            -1, // No current selection in details view
+            currentIndex,
             elements.subtitleTrackList,
-            closeModal
+            function(selectedIndex) {
+                JellyfinAPI.Logger.info('[Details] Subtitle track selected:', selectedIndex, '- saving preference for itemId:', itemId);
+                
+                // Update visual selection in modal
+                // Account for "None" option at index 0
+                modalFocusableItems.forEach(function(item) {
+                    item.classList.remove('selected');
+                });
+                var modalIndex = selectedIndex === -1 ? 0 : selectedIndex + 1; // +1 because "None" is at position 0
+                if (modalFocusableItems[modalIndex]) {
+                    modalFocusableItems[modalIndex].classList.add('selected');
+                }
+                
+                // Store preference for this item so player can apply it on playback
+                localStorage.setItem('preferredSubtitleTrack_' + itemId, selectedIndex);
+                
+                // Close after a brief delay to show the selection
+                setTimeout(function() {
+                    closeModal();
+                }, 150);
+            }
         );
-
+        
+        JellyfinAPI.Logger.info('[Details] Created', modalFocusableItems.length, 'focusable subtitle items');
+        
         activeModal = 'subtitle';
         elements.subtitleModal.style.display = 'flex';
-        currentModalFocusIndex = 0;
+        currentModalFocusIndex = currentIndex + 1; // +1 for "None" option
         if (modalFocusableItems[currentModalFocusIndex]) {
             modalFocusableItems[currentModalFocusIndex].focus();
         }
     }
 
     function closeModal() {
+        JellyfinAPI.Logger.info('[Details] closeModal called, activeModal:', activeModal);
         if (elements.audioModal) {
             elements.audioModal.style.display = 'none';
         }

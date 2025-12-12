@@ -70,7 +70,7 @@ body {
 .grid-container {
     flex: 1;
     overflow-y: auto;
-    overflow-x: hidden;
+    overflow-x: visible;
     scrollbar-width: none;
     -ms-overflow-style: none;
 }
@@ -96,13 +96,14 @@ body {
     margin: 0 auto;
 }
 
+.item-image-wrapper {
+    position: relative;
+    width: 100%;
+}
+
 .grid-item:focus {
     transform: scale(1.05);
     z-index: 10;
-}
-
-.grid-item:focus .item-image {
-    box-shadow: 0 8px 30px rgba(255, 255, 255, 0.5);
 }
 
 .grid-item:focus .item-title {
@@ -116,7 +117,6 @@ body {
     object-fit: cover;
     border-radius: 8px;
     background: #222;
-    transition: box-shadow 0.2s ease;
 }
 
 .item-banner {
@@ -168,6 +168,29 @@ body {
     height: 100%;
     background: #00a4dc;
     transition: width 0.3s;
+}
+
+/* Count badge for TV shows and collections */
+.count-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 40px;
+    height: 40px;
+    background-color: #00a4dc;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+    color: white;
+    z-index: 2;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.grid-item:focus .count-badge {
+    transform: scale(1.1);
 }
 
 .loading-indicator {
