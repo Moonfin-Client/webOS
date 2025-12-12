@@ -33,6 +33,10 @@
                 <div class="category-icon">🖥</div>
                 <div class="category-label">Display</div>
             </div>
+            <div class="settings-category" data-category="moonfin">
+                <div class="category-icon">🌙</div>
+                <div class="category-label">Moonfin</div>
+            </div>
             <div class="settings-category" data-category="account">
                 <div class="category-icon">👤</div>
                 <div class="category-label">Account</div>
@@ -54,8 +58,8 @@
                     
                     <div class="setting-item" data-setting="homeSections" tabindex="0">
                         <div class="setting-label">
-                            <div class="setting-title">Home Sections</div>
-                            <div class="setting-description">Choose which sections appear on the home screen</div>
+                            <div class="setting-title">Home Rows</div>
+                            <div class="setting-description">Configure which rows appear on the home screen and their order</div>
                         </div>
                         <div class="setting-value">Configure</div>
                     </div>
@@ -135,6 +139,47 @@
                 </div>
             </div>
 
+            <!-- Moonfin Settings -->
+            <div class="settings-panel" id="moonfinPanel">
+                <h1>Moonfin Settings</h1>
+                
+                <div class="settings-group">
+                    <h2>Toolbar Customization</h2>
+                    
+                    <div class="setting-item" data-setting="showShuffleButton" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Show Shuffle Button</div>
+                            <div class="setting-description">Display shuffle button in navigation bar</div>
+                        </div>
+                        <div class="setting-value" id="showShuffleButtonValue">On</div>
+                    </div>
+                    
+                    <div class="setting-item" data-setting="showGenresButton" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Show Genres Button</div>
+                            <div class="setting-description">Display genres button in navigation bar</div>
+                        </div>
+                        <div class="setting-value" id="showGenresButtonValue">On</div>
+                    </div>
+                    
+                    <div class="setting-item" data-setting="showFavoritesButton" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Show Favorites Button</div>
+                            <div class="setting-description">Display favorites button in navigation bar</div>
+                        </div>
+                        <div class="setting-value" id="showFavoritesButtonValue">On</div>
+                    </div>
+                    
+                    <div class="setting-item" data-setting="showLibrariesInToolbar" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Show Libraries in Toolbar</div>
+                            <div class="setting-description">Display library buttons in navigation bar</div>
+                        </div>
+                        <div class="setting-value" id="showLibrariesInToolbarValue">On</div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Display Settings -->
             <div class="settings-panel" id="displayPanel">
                 <h1>Display Settings</h1>
@@ -191,14 +236,6 @@
                 <div class="settings-group">
                     <h2>Actions</h2>
                     
-                    <div class="setting-item action-item" data-setting="clearCache" tabindex="0">
-                        <div class="setting-label">
-                            <div class="setting-title">Clear Cache</div>
-                            <div class="setting-description">Remove cached data and images</div>
-                        </div>
-                        <div class="setting-value">Clear</div>
-                    </div>
-                    
                     <div class="setting-item action-item" data-setting="logout" tabindex="0">
                         <div class="setting-label">
                             <div class="setting-title">Sign Out</div>
@@ -244,6 +281,24 @@
                         <div class="setting-value" id="serverVersionValue">-</div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Home Rows Configuration Modal -->
+    <div id="homeRowsModal" class="modal" style="display: none;">
+        <div class="modal-content home-rows-modal">
+            <h2>Configure Home Rows</h2>
+            <p class="modal-description">Select which rows appear on your home screen and drag to reorder</p>
+            
+            <div class="home-rows-list" id="homeRowsList">
+                <!-- Rows will be dynamically populated -->
+            </div>
+            
+            <div class="modal-actions">
+                <button class="btn-secondary" id="resetRowsBtn" tabindex="0">Reset to Default</button>
+                <button class="btn-primary" id="saveRowsBtn" tabindex="0">Save Changes</button>
+                <button class="btn-secondary" id="cancelRowsBtn" tabindex="0">Cancel</button>
             </div>
         </div>
     </div>

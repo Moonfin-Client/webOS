@@ -19,6 +19,25 @@ body {
     background: #000;
 }
 
+/* Video darkening overlay when controls are visible */
+.video-dimmer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0);
+    transition: background 0.3s ease;
+    pointer-events: none;
+    z-index: 50;
+    opacity: 0;
+}
+
+.video-dimmer.visible {
+    background: rgba(0, 0, 0, 0.5);
+    opacity: 1;
+}
+
 .player-controls {
     position: fixed;
     top: 0;
@@ -45,15 +64,24 @@ body {
     max-width: 70%;
 }
 
+.media-logo {
+    max-height: 150px;
+    max-width: 600px;
+    width: auto;
+    height: auto;
+    margin-bottom: 10px;
+    object-fit: contain;
+}
+
 .media-title {
-    font-size: 42px;
+    font-size: 52px;
     font-weight: 700;
     margin-bottom: 10px;
     color: #fff;
 }
 
 .media-subtitle {
-    font-size: 24px;
+    font-size: 28px;
     color: rgba(255, 255, 255, 0.8);
 }
 
@@ -70,12 +98,21 @@ body {
 }
 
 .progress-bar {
+    position: relative;
     height: 8px;
     background: rgba(255, 255, 255, 0.3);
     border-radius: 4px;
-    overflow: hidden;
+    overflow: visible;
     margin-bottom: 10px;
     cursor: pointer;
+    outline: none;
+    transition: all 0.2s ease;
+}
+
+.progress-bar:focus {
+    height: 12px;
+    background: rgba(255, 255, 255, 0.5);
+    box-shadow: 0 0 0 3px rgba(0, 164, 220, 0.5);
 }
 
 .progress-fill {
@@ -85,25 +122,72 @@ body {
     transition: width 0.1s linear;
 }
 
+.seek-indicator {
+    position: absolute;
+    top: 50%;
+    left: 0%;
+    width: 16px;
+    height: 16px;
+    background: #ffffff;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    transition: left 0.1s linear;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.progress-bar:focus .seek-indicator {
+    width: 20px;
+    height: 20px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.6), 0 0 0 3px rgba(0, 164, 220, 0.3);
+}
+
+.time-info-top {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 8px;
+}
+
+.time-end {
+    font-size: 26px;
+    color: rgba(255, 255, 255, 0.85);
+    font-weight: 500;
+}
+
 .time-info {
     display: flex;
-    justify-content: space-between;
-    font-size: 18px;
+    justify-content: flex-end;
+    margin-top: 10px;
+}
+
+.time-display {
+    font-size: 28px;
     color: rgba(255, 255, 255, 0.9);
+    font-weight: 600;
 }
 
 .control-buttons {
     display: flex;
     gap: 20px;
-    justify-content: center;
+    justify-content: flex-start;
     align-items: center;
+    margin-bottom: 30px;
+}
+
+.control-buttons-bottom {
+    display: flex;
+    gap: 20px;
+    justify-content: flex-start;
+    align-items: center;
+    margin-top: 20px;
 }
 
 .control-btn {
-    width: 80px;
-    height: 80px;
-    background: rgba(255, 255, 255, 0.1);
-    border: 3px solid rgba(255, 255, 255, 0.3);
+    width: 90px;
+    height: 90px;
+    background: rgba(255, 255, 255, 0);
+    border: none;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -115,15 +199,18 @@ body {
 
 .control-btn:hover,
 .control-btn:focus {
-    background: #00a4dc;
-    border-color: #fff;
-    border-width: 4px;
+    background: rgba(255, 255, 255, 1);
     transform: scale(1.15);
 }
 
+.control-btn:hover .btn-icon,
+.control-btn:focus .btn-icon {
+    filter: brightness(0.4);
+}
+
 .btn-icon {
-    width: 40px;
-    height: 40px;
+    width: 48px;
+    height: 48px;
     filter: brightness(0) invert(1);
 }
 
@@ -343,4 +430,185 @@ body {
 .track-info {
     font-size: 20px;
     color: rgba(255, 255, 255, 0.7);
+}
+
+/* Video Info Modal Specific Styles */
+.video-info-modal {
+    max-width: 900px;
+}
+
+.video-info-content {
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+}
+
+.info-section {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.info-header {
+    font-size: 26px;
+    font-weight: 700;
+    color: #00a4dc;
+    margin-bottom: 15px;
+    border-bottom: 2px solid rgba(0, 164, 220, 0.3);
+    padding-bottom: 10px;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.info-row:last-child {
+    border-bottom: none;
+}
+
+.info-label {
+    font-size: 20px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.info-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: #fff;
+    text-align: right;
+}
+
+.video-info-footer {
+    margin-top: 10px;
+}
+
+/* Chapters Modal */
+.chapters-modal {
+    width: 70%;
+    max-width: 1200px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.chapters-content {
+    width: 100%;
+}
+
+.chapter-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.chapter-item {
+    display: flex;
+    align-items: center;
+    padding: 20px 25px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    border: 2px solid transparent;
+}
+
+.chapter-item:hover,
+.chapter-item:focus,
+.chapter-item.focused {
+    background: rgba(0, 164, 220, 0.3);
+    border: 2px solid #00a4dc;
+    outline: none;
+    transform: scale(1.02);
+}
+
+.chapter-item.current-chapter {
+    background: rgba(0, 164, 220, 0.2);
+    border: 2px solid rgba(0, 164, 220, 0.5);
+}
+
+.chapter-item.current-chapter:hover,
+.chapter-item.current-chapter:focus,
+.chapter-item.current-chapter.focused {
+    background: rgba(0, 164, 220, 0.4);
+    border: 2px solid #00a4dc;
+}
+
+.chapter-time {
+    font-size: 24px;
+    font-weight: 700;
+    color: #00a4dc;
+    min-width: 100px;
+    margin-right: 25px;
+}
+
+.chapter-name {
+    font-size: 22px;
+    font-weight: 500;
+    color: #fff;
+    flex: 1;
+}
+
+.no-chapters {
+    text-align: center;
+    padding: 40px 20px;
+}
+
+.no-chapters p {
+    font-size: 24px;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.chapters-footer {
+    margin-top: 10px;
+}
+
+/* Playback indicators (speed and bitrate) */
+.playback-indicators {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+    z-index: 150;
+    pointer-events: none;
+}
+
+.speed-indicator,
+.bitrate-indicator {
+    background: rgba(0, 0, 0, 0.85);
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 18px;
+    font-weight: 600;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    transition: opacity 0.3s ease;
+}
+
+.speed-indicator {
+    color: #ffd700;
+}
+
+.bitrate-indicator {
+    color: #00a4dc;
+}
+
+/* Speed button text styling */
+.speed-btn-text {
+    font-size: 20px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+.control-btn:focus .speed-btn-text {
+    color: #ffd700;
 }

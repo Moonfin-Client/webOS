@@ -54,10 +54,48 @@
         // Load user libraries and add to navbar
         loadUserLibraries();
         
+        // Apply Moonfin toolbar customization settings
+        applyToolbarSettings();
+        
         updateClock();
         setInterval(updateClock, 60000);
         
         setupNavbarHandlers();
+    }
+    
+    function applyToolbarSettings() {
+        var settingsStr = storage.get('jellyfin_settings');
+        if (!settingsStr) return;
+        
+        try {
+            var settings = JSON.parse(settingsStr);
+            
+            var shuffleBtn = document.getElementById('shuffleBtn');
+            var genresBtn = document.getElementById('genresBtn');
+            var favoritesBtn = document.getElementById('favoritesBtn');
+            
+            if (shuffleBtn) {
+                shuffleBtn.style.display = (settings.showShuffleButton === false) ? 'none' : '';
+            }
+            
+            if (genresBtn) {
+                genresBtn.style.display = (settings.showGenresButton === false) ? 'none' : '';
+            }
+            
+            if (favoritesBtn) {
+                favoritesBtn.style.display = (settings.showFavoritesButton === false) ? 'none' : '';
+            }
+            
+            // Hide/show library buttons
+            var libraryButtons = document.querySelectorAll('.nav-btn[data-library-id]');
+            libraryButtons.forEach(function(btn) {
+                btn.style.display = (settings.showLibrariesInToolbar === false) ? 'none' : '';
+            });
+        } catch (e) {
+            if (typeof JellyfinAPI !== 'undefined') {
+                JellyfinAPI.Logger.error('Failed to parse settings:', e);
+            }
+        }
     }
     
     function loadUserLibraries() {
@@ -96,13 +134,12 @@
                         window.location.href = 'library.html?id=' + library.Id;
                     });
                     
-                    // Insert before settingsBtn to keep settings at the end
-                    if (settingsBtn) {
-                        navPill.insertBefore(btn, settingsBtn);
-                    } else {
-                        navPill.appendChild(btn);
-                    }
+                    // Append after settingsBtn (libraries come at the end)
+                    navPill.appendChild(btn);
                 });
+                
+                // Apply toolbar settings after library buttons are added
+                applyToolbarSettings();
             }
         });
     }
@@ -123,9 +160,45 @@
         clockElement.textContent = hours + ':' + minutes + ' ' + ampm;
     }
     
+    function handleShuffleClick() {
+        JellyfinAPI.Logger.info('Shuffle button clicked');
+        
+        var auth = JellyfinAPI.getStoredAuth();
+        if (!auth) {
+            JellyfinAPI.Logger.error('No authentication found');
+            return;
+        }
+        
+        // Fetch random movie or TV show (exclude BoxSets/Collections)
+        var params = {
+            userId: auth.userId,
+            limit: 1,
+            includeItemTypes: 'Movie,Series',
+            filters: 'IsNotFolder',
+            sortBy: 'Random',
+            fields: 'PrimaryImageAspectRatio,BasicSyncInfo',
+            recursive: true,
+            excludeItemTypes: 'BoxSet'
+        };
+        
+        JellyfinAPI.getItems(auth.serverAddress, auth.accessToken, '/Users/' + auth.userId + '/Items', params, function(err, data) {
+            if (err || !data || !data.Items || data.Items.length === 0) {
+                JellyfinAPI.Logger.error('Failed to get random item:', err);
+                return;
+            }
+            
+            var randomItem = data.Items[0];
+            JellyfinAPI.Logger.success('Random item selected:', randomItem.Name, randomItem.Type);
+            window.location.href = 'details.html?id=' + randomItem.Id;
+        });
+    }
+    
     function setupNavbarHandlers() {
         var homeBtn = document.getElementById('homeBtn');
         var searchBtn = document.getElementById('searchBtn');
+        var shuffleBtn = document.getElementById('shuffleBtn');
+        var genresBtn = document.getElementById('genresBtn');
+        var favoritesBtn = document.getElementById('favoritesBtn');
         var settingsBtn = document.getElementById('settingsBtn');
         var userBtn = document.getElementById('userBtn');
         
@@ -166,6 +239,42 @@
                 if (e.keyCode === KeyCodes.ENTER) {
                     e.preventDefault();
                     window.location.href = 'search.html';
+                }
+            });
+        }
+        
+        if (shuffleBtn) {
+            shuffleBtn.addEventListener('click', function() {
+                handleShuffleClick();
+            });
+            shuffleBtn.addEventListener('keydown', function(e) {
+                if (e.keyCode === KeyCodes.ENTER) {
+                    e.preventDefault();
+                    handleShuffleClick();
+                }
+            });
+        }
+        
+        if (genresBtn) {
+            genresBtn.addEventListener('click', function() {
+                window.location.href = 'genres.html';
+            });
+            genresBtn.addEventListener('keydown', function(e) {
+                if (e.keyCode === KeyCodes.ENTER) {
+                    e.preventDefault();
+                    window.location.href = 'genres.html';
+                }
+            });
+        }
+        
+        if (favoritesBtn) {
+            favoritesBtn.addEventListener('click', function() {
+                window.location.href = 'favorites.html';
+            });
+            favoritesBtn.addEventListener('keydown', function(e) {
+                if (e.keyCode === KeyCodes.ENTER) {
+                    e.preventDefault();
+                    window.location.href = 'favorites.html';
                 }
             });
         }

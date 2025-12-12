@@ -170,7 +170,7 @@ body {
 }
 
 .row-scroller {
-    overflow: hidden;
+    overflow: visible;
     position: relative;
 }
 
@@ -178,7 +178,7 @@ body {
     display: flex;
     gap: 20px;
     overflow-x: auto;
-    overflow-y: hidden;
+    overflow-y: visible;
     scroll-behavior: smooth;
     padding-bottom: 10px;
 }
@@ -206,18 +206,14 @@ body {
     flex-shrink: 0;
     width: 200px;
     cursor: pointer;
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    transition: transform 0.3s ease;
     border-radius: 8px;
     overflow: hidden;
-    background: rgba(255, 255, 255, 0.05);
-    border: 3px solid transparent;
 }
 
 .result-card:focus {
     outline: none;
     transform: scale(1.08);
-    border-color: #00a4dc;
-    box-shadow: 0 8px 30px rgba(0, 164, 220, 0.6);
     z-index: 10;
 }
 

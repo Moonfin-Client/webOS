@@ -24,7 +24,7 @@
     <!-- Main Content -->
     <div class="details-container">
         
-        <!-- Header with Two-Column Layout (Android TV Style) -->
+        <!-- Header with Two-Column Layout -->
         <div class="details-header">
             <!-- Left Column: Info Section -->
             <div class="info-section">
@@ -79,7 +79,7 @@
                 <!-- Description/Overview -->
                 <p id="itemOverview" class="item-overview"></p>
                 
-                <!-- Grouped Metadata Cells (Android TV Style) -->
+                <!-- Grouped Metadata Cells -->
                 <div id="metadataGroup" class="metadata-group">
                     <!-- Genres -->
                     <div id="genresCell" class="metadata-cell" style="display: none;">
@@ -102,69 +102,69 @@
                         <span id="itemStudios" class="metadata-value"></span>
                     </div>
                 </div>
-                
-                <!-- Action Buttons -->
-                <div class="action-buttons">
-                    <div class="btn-wrapper" id="playBtnWrapper">
-                        <button id="playBtn" class="btn-action btn-play" tabindex="0">
-                            <img src="assets/play.png" alt="Play">
-                        </button>
-                        <span class="btn-label">Play</span>
-                    </div>
-                    <div class="btn-wrapper" style="display: none;" id="resumeBtnWrapper">
-                        <button id="resumeBtn" class="btn-action btn-secondary" tabindex="0">
-                            <img src="assets/resume.png" alt="Resume">
-                        </button>
-                        <span class="btn-label">Resume</span>
-                    </div>
-                    <div class="btn-wrapper" style="display: none;" id="shuffleBtnWrapper">
-                        <button id="shuffleBtn" class="btn-action btn-secondary" tabindex="0">
-                            <img src="assets/shuffle.png" alt="Shuffle">
-                        </button>
-                        <span class="btn-label">Shuffle</span>
-                    </div>
-                    <div class="btn-wrapper" style="display: none;" id="trailerBtnWrapper">
-                        <button id="trailerBtn" class="btn-action btn-secondary" tabindex="0">
-                            <img src="assets/trailer.png" alt="Trailer">
-                        </button>
-                        <span class="btn-label">Trailer</span>
-                    </div>
-                    <div class="btn-wrapper">
-                        <button id="favoriteBtn" class="btn-action btn-secondary" tabindex="0">
-                            <img id="favoriteIcon" src="assets/heart.png" alt="Favorite">
-                        </button>
-                        <span class="btn-label">Favorite</span>
-                    </div>
-                    <div class="btn-wrapper">
-                        <button id="markPlayedBtn" class="btn-action btn-secondary" tabindex="0">
-                            <img src="assets/watched.png" alt="Watched">
-                        </button>
-                        <span class="btn-label" id="playedText">Watched</span>
-                    </div>
-                    <div class="btn-wrapper" style="display: none;" id="audioBtnWrapper">
-                        <button id="audioBtn" class="btn-action btn-secondary" tabindex="0">
-                            <img src="assets/select_audio.png" alt="Audio">
-                        </button>
-                        <span class="btn-label">Audio</span>
-                    </div>
-                    <div class="btn-wrapper" style="display: none;" id="subtitleBtnWrapper">
-                        <button id="subtitleBtn" class="btn-action btn-secondary" tabindex="0">
-                            <img src="assets/subtitle.png" alt="Subtitles">
-                        </button>
-                        <span class="btn-label">Subtitles</span>
-                    </div>
-                    <div class="btn-wrapper" style="display: none;" id="moreBtnWrapper">
-                        <button id="moreBtn" class="btn-action btn-secondary" tabindex="0">
-                            <img src="assets/more.png" alt="More">
-                        </button>
-                        <span class="btn-label">More</span>
-                    </div>
-                </div>
             </div>
             
             <!-- Right Column: Logo Only -->
             <div class="logo-section">
                 <img id="logoImage" class="logo-image" src="" alt="" style="display: none;">
+            </div>
+        </div>
+        
+        <!-- Action Buttons (Full Width) -->
+        <div class="action-buttons">
+            <div class="btn-wrapper" id="playBtnWrapper">
+                <button id="playBtn" class="btn-action btn-play" tabindex="0">
+                    <img src="assets/play.png" alt="Play">
+                </button>
+                <span class="btn-label">Play</span>
+            </div>
+            <div class="btn-wrapper" style="display: none;" id="resumeBtnWrapper">
+                <button id="resumeBtn" class="btn-action btn-secondary" tabindex="0">
+                    <img src="assets/resume.png" alt="Resume">
+                </button>
+                <span class="btn-label">Resume</span>
+            </div>
+            <div class="btn-wrapper" style="display: none;" id="shuffleBtnWrapper">
+                <button id="shuffleBtn" class="btn-action btn-secondary" tabindex="0">
+                    <img src="assets/shuffle.png" alt="Shuffle">
+                </button>
+                <span class="btn-label">Shuffle</span>
+            </div>
+            <div class="btn-wrapper" style="display: none;" id="trailerBtnWrapper">
+                <button id="trailerBtn" class="btn-action btn-secondary" tabindex="0">
+                    <img src="assets/trailer.png" alt="Trailer">
+                </button>
+                <span class="btn-label">Trailer</span>
+            </div>
+            <div class="btn-wrapper">
+                <button id="favoriteBtn" class="btn-action btn-secondary" tabindex="0">
+                    <img id="favoriteIcon" src="assets/heart.png" alt="Favorite">
+                </button>
+                <span class="btn-label">Favorite</span>
+            </div>
+            <div class="btn-wrapper">
+                <button id="markPlayedBtn" class="btn-action btn-secondary" tabindex="0">
+                    <img src="assets/watched.png" alt="Watched">
+                </button>
+                <span class="btn-label" id="playedText">Watched</span>
+            </div>
+            <div class="btn-wrapper" style="display: none;" id="audioBtnWrapper">
+                <button id="audioBtn" class="btn-action btn-secondary" tabindex="0">
+                    <img src="assets/select_audio.png" alt="Audio">
+                </button>
+                <span class="btn-label">Audio</span>
+            </div>
+            <div class="btn-wrapper" style="display: none;" id="subtitleBtnWrapper">
+                <button id="subtitleBtn" class="btn-action btn-secondary" tabindex="0">
+                    <img src="assets/subtitle.png" alt="Subtitles">
+                </button>
+                <span class="btn-label">Subtitles</span>
+            </div>
+            <div class="btn-wrapper" style="display: none;" id="moreBtnWrapper">
+                <button id="moreBtn" class="btn-action btn-secondary" tabindex="0">
+                    <img src="assets/more.png" alt="More">
+                </button>
+                <span class="btn-label">More</span>
             </div>
         </div>
 
@@ -261,7 +261,7 @@
     <!-- Audio Track Selection Modal -->
     <div id="audioModal" class="track-modal">
         <div class="modal-content">
-            <h2 class="modal-title">Select Audio Track</h2>
+            <h2 class="modal-title">Available Audio Tracks</h2>
             <div id="audioTrackList" class="track-list"></div>
         </div>
     </div>
@@ -269,7 +269,7 @@
     <!-- Subtitle Track Selection Modal -->
     <div id="subtitleModal" class="track-modal">
         <div class="modal-content">
-            <h2 class="modal-title">Select Subtitle</h2>
+            <h2 class="modal-title">Available Subtitles</h2>
             <div id="subtitleTrackList" class="track-list"></div>
         </div>
     </div>

@@ -16,6 +16,12 @@
     <script src="js/browse.js" charset="utf-8"></script>
 </head>
 <body>
+    <!-- Global backdrop for page background -->
+    <div id="globalBackdrop" class="global-backdrop">
+        <img id="globalBackdropImage" class="global-backdrop-image" src="" alt="" style="display: none;">
+        <div class="global-backdrop-overlay"></div>
+    </div>
+    
     <!-- Navbar will be loaded navbar.js -->
 
     <!-- Main Content Area -->
@@ -53,11 +59,13 @@
             </div>
         </div>
 
-        <!-- Split View Detail Section (Android TV style) -->
+        <!-- Split View Detail Section -->
         <div id="detailSection" class="detail-section" style="display: none;">
-            <h2 id="detailTitle" class="detail-title"></h2>
-            <div id="detailInfoRow" class="detail-info-row"></div>
-            <p id="detailSummary" class="detail-summary"></p>
+            <div class="detail-content-wrapper">
+                <h2 id="detailTitle" class="detail-title"></h2>
+                <div id="detailInfoRow" class="detail-info-row"></div>
+                <p id="detailSummary" class="detail-summary"></p>
+            </div>
         </div>
 
         <!-- Content Rows -->

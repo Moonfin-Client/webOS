@@ -17,14 +17,6 @@ var service = new Service(pkgInfo.name);
 var dgram = require('dgram');
 var client4 = dgram.createSocket("udp4");
 
-// var client6;
-// try {
-// 	client6 = dgram.createSocket("udp6");
-// } catch (err) {
-// 	console.log(err);
-// 	client6 = false;
-// }
-
 const JELLYFIN_DISCOVERY_PORT = 7359;
 const JELLYFIN_DISCOVERY_MESSAGE = "who is JellyfinServer?";
 
@@ -37,7 +29,6 @@ var ipScanInProgress = false;
 var scannedIPs = new Set();
 
 function sendScanResults(server_id) {
-	console.log("Sending responses, subscription count=" + Object.keys(subscriptions).length);
 	for (var i in subscriptions) {
 		if (subscriptions.hasOwnProperty(i)) {
 			var s = subscriptions[i];
@@ -150,7 +141,6 @@ function checkIP(ip) {
 									method: 'ip-scan'
 								}
 							};
-							console.log('Found Jellyfin server at ' + ip + ':' + port);
 							sendScanResults(serverId);
 						}
 					} catch (err) {
@@ -178,17 +168,14 @@ function startIPScan() {
 	
 	ipScanInProgress = true;
 	scannedIPs.clear();
-	console.log('Starting IP subnet scan...');
 	
 	var networkPrefix = getLocalNetworkPrefix();
-	console.log('Scanning network: ' + networkPrefix + '.0/24');
 	
 	// Scan all IPs in the subnet (1-254)
 	var currentIP = 1;
 	
 	function scanNext() {
 		if (currentIP > 254) {
-			console.log('IP scan complete. Scanned ' + scannedIPs.size + ' addresses.');
 			ipScanInProgress = false;
 			return;
 		}
@@ -216,7 +203,6 @@ function discoverInitial() {
 
 client4.on("listening", function () {
 	var address = client4.address();
-	console.log('UDP Client listening on ' + address.address + ":" + address.port);
 	client4.setBroadcast(true)
 	client4.setMulticastTTL(128);
 	//client.addMembership('230.185.192.108');
@@ -228,24 +214,6 @@ client4.bind({
 }, discoverInitial);
 
 
-// if (client6) {
-// 	client6.on("listening", function () {
-// 		var address = client4.address();
-// 		console.log('UDP Client listening on ' + address.address + ":" + address.port);
-// 		client6.setMulticastTTL(128);
-// 		//client.addMembership('230.185.192.108');
-// 	});
-
-// 	client6.on("message", handleDiscoveryResponse);
-
-// 	try { // client6 bind failing even in a try catch.
-// 		//client6.bind(JELLYFIN_DISCOVERY_PORT, discoverInitial);
-// 	} catch (err) {
-// 		console.log(err);
-// 	}
-// }
-
-
 var interval;
 var subscriptions = {};
 
@@ -253,7 +221,6 @@ function createInterval() {
 	if (interval) {
 		return;
 	}
-	console.log("create new interval");
 	interval = setInterval(function () {
 		sendJellyfinDiscovery();
 	}, SCAN_INTERVAL);
@@ -263,7 +230,6 @@ var discover = service.register("discover");
 discover.on("request", function (message) {
 	sendScanResults();
 	var uniqueToken = message.uniqueToken;
-	console.log("discover callback, uniqueToken: " + uniqueToken + ", token: " + message.token);
 
 	sendJellyfinDiscovery();
 
@@ -276,11 +242,9 @@ discover.on("request", function (message) {
 });
 discover.on("cancel", function (message) {
 	var uniqueToken = message.uniqueToken;
-	console.log("Canceled " + uniqueToken);
 	delete subscriptions[uniqueToken];
 	var keys = Object.keys(subscriptions);
 	if (keys.length === 0) {
-		console.log("no more subscriptions, canceling interval");
 		clearInterval(interval);
 		interval = undefined;
 	}
