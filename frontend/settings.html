@@ -10,6 +10,7 @@
     <script src="js/keycodes.js"></script>
     <script src="js/storage.js"></script>
     <script src="js/ajax.js"></script>
+    <script src="js/image-helper.js"></script>
     <script src="js/jellyfin-api.js"></script>
     <script src="js/navbar.js"></script>
 </head>
@@ -30,11 +31,11 @@
                 <div class="category-label">Playback</div>
             </div>
             <div class="settings-category" data-category="display">
-                <div class="category-icon">🖥</div>
+                <div class="category-icon"><img src="assets/request_hd.png" alt="Display" style="width: 1em; height: 1em;"></div>
                 <div class="category-label">Display</div>
             </div>
             <div class="settings-category" data-category="moonfin">
-                <div class="category-icon">🌙</div>
+                <div class="category-icon"><img src="assets/icon-transparent130.png" alt="Moonfin" style="width: 1em; height: 1em;"></div>
                 <div class="category-label">Moonfin</div>
             </div>
             <div class="settings-category" data-category="account">
@@ -93,14 +94,6 @@
                 <div class="settings-group">
                     <h2>Video</h2>
                     
-                    <div class="setting-item" data-setting="maxBitrate" tabindex="0">
-                        <div class="setting-label">
-                            <div class="setting-title">Maximum Bitrate</div>
-                            <div class="setting-description">Limit streaming quality to reduce bandwidth</div>
-                        </div>
-                        <div class="setting-value" id="maxBitrateValue">Auto</div>
-                    </div>
-                    
                     <div class="setting-item" data-setting="skipIntro" tabindex="0">
                         <div class="setting-label">
                             <div class="setting-title">Skip Intro</div>
@@ -115,26 +108,6 @@
                             <div class="setting-description">Automatically play the next episode</div>
                         </div>
                         <div class="setting-value" id="autoPlayValue">On</div>
-                    </div>
-                </div>
-
-                <div class="settings-group">
-                    <h2>Audio</h2>
-                    
-                    <div class="setting-item" data-setting="audioLanguage" tabindex="0">
-                        <div class="setting-label">
-                            <div class="setting-title">Preferred Audio Language</div>
-                            <div class="setting-description">Default audio track language</div>
-                        </div>
-                        <div class="setting-value" id="audioLanguageValue">English</div>
-                    </div>
-                    
-                    <div class="setting-item" data-setting="subtitleLanguage" tabindex="0">
-                        <div class="setting-label">
-                            <div class="setting-title">Preferred Subtitle Language</div>
-                            <div class="setting-description">Default subtitle track language</div>
-                        </div>
-                        <div class="setting-value" id="subtitleLanguageValue">None</div>
                     </div>
                 </div>
             </div>
@@ -178,6 +151,62 @@
                         <div class="setting-value" id="showLibrariesInToolbarValue">On</div>
                     </div>
                 </div>
+                
+                <div class="settings-group">
+                    <h2>Home Screen</h2>
+                    
+                    <div class="setting-item" data-setting="show-featured-banner" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Show Featured Media</div>
+                            <div class="setting-description">Display the featured media carousel at the top of the home screen</div>
+                        </div>
+                        <div class="setting-value" id="show-featured-banner-value">On</div>
+                    </div>
+                </div>
+                
+                <div class="settings-group">
+                    <h2>Continue Watching</h2>
+                    
+                    <div class="setting-item" data-setting="merge-continue-watching" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Merge Continue Watching & Next Up</div>
+                            <div class="setting-description">Combine both rows into a single row sorted by recently played</div>
+                        </div>
+                        <div class="setting-value" id="merge-continue-watching-value">Off</div>
+                    </div>
+                </div>
+                
+                <div class="settings-group">
+                    <h2>Backdrop Blur</h2>
+                    
+                    <div class="setting-item" data-setting="backdrop-blur-home" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Home Screen Blur Amount</div>
+                            <div class="setting-description">Blur intensity for backdrops on home, genres, and favorites screens (0-5)</div>
+                        </div>
+                        <div class="slider-container" style="display: none;">
+                            <div class="slider-track">
+                                <div class="slider-fill" id="backdrop-blur-home-fill" style="width: 60%"></div>
+                            </div>
+                            <div class="slider-value-display" id="backdrop-blur-home-slider-value">3</div>
+                        </div>
+                        <div class="setting-value" id="backdrop-blur-home-value">3</div>
+                    </div>
+                    
+                    <div class="setting-item" data-setting="backdrop-blur-detail" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Detail Screen Blur Amount</div>
+                            <div class="setting-description">Blur intensity for backdrops on movie, TV show, and episode details (0-5)</div>
+                        </div>
+                        <div class="slider-container" style="display: none;">
+                            <div class="slider-track">
+                                <div class="slider-fill" id="backdrop-blur-detail-fill" style="width: 60%"></div>
+                            </div>
+                            <div class="slider-value-display" id="backdrop-blur-detail-slider-value">3</div>
+                        </div>
+                        <div class="setting-value" id="backdrop-blur-detail-value">3</div>
+                    </div>
+                </div>
             </div>
 
             <!-- Display Settings -->
@@ -193,6 +222,26 @@
                             <div class="setting-description">Choose the app theme</div>
                         </div>
                         <div class="setting-value" id="themeValue">Dark</div>
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <h2>Poster & Artwork</h2>
+                    
+                    <div class="setting-item" data-setting="imageType" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Image Type</div>
+                            <div class="setting-description">Choose portrait posters, landscape thumbnails, or banners</div>
+                        </div>
+                        <div class="setting-value" id="imageTypeValue">Poster</div>
+                    </div>
+                    
+                    <div class="setting-item" data-setting="preferParentThumb" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Use Series Artwork for Episodes</div>
+                            <div class="setting-description">Show series poster/thumbnail instead of episode screenshot</div>
+                        </div>
+                        <div class="setting-value" id="preferParentThumbValue">Off</div>
                     </div>
                 </div>
 

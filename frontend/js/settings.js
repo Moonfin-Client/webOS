@@ -14,7 +14,9 @@ var SettingsController = (function() {
         navBarIndex: 0, 
         sidebarIndex: 0,
         contentIndex: 0,
-        currentCategory: 'general'
+        currentCategory: 'general',
+        inSliderMode: false,
+        sliderSetting: null
     };
 
     var elements = {};
@@ -25,18 +27,25 @@ var SettingsController = (function() {
     var settings = {
         autoLogin: false,
         clockDisplay: '12-hour',
-        maxBitrate: 'auto',
         skipIntro: true,
         autoPlay: true,
-        audioLanguage: 'en',
-        subtitleLanguage: 'none',
         theme: 'dark',
         carouselSpeed: 8000,
         homeRows: null, // Will be initialized with defaults
         showShuffleButton: true,
         showGenresButton: true,
         showFavoritesButton: true,
-        showLibrariesInToolbar: true
+        showLibrariesInToolbar: true,
+        showFeaturedBanner: true,
+        // Image Helper settings
+        imageType: 'Primary',
+        posterSize: 300, // X-Large (always highest quality)
+        preferParentThumb: false,
+        // Continue Watching settings
+        mergeContinueWatchingNextUp: false,
+        // Backdrop blur settings
+        backdropBlurHome: 3,
+        backdropBlurDetail: 3
     };
 
     // Default home rows configuration
@@ -44,11 +53,11 @@ var SettingsController = (function() {
         { id: 'resume', name: 'Continue Watching', enabled: true, order: 0 },
         { id: 'nextup', name: 'Next Up', enabled: true, order: 1 },
         { id: 'livetv', name: 'Live TV', enabled: true, order: 2 },
-        { id: 'library-tiles', name: 'My Media', enabled: true, order: 3 },
-        { id: 'collections', name: 'Collections', enabled: true, order: 4 },
-        { id: 'latest-movies', name: 'Latest Movies', enabled: true, order: 5 },
-        { id: 'latest-shows', name: 'Latest TV Shows', enabled: true, order: 6 },
-        { id: 'latest-music', name: 'Latest Music', enabled: true, order: 7 }
+        { id: 'library-tiles', name: 'My Media', enabled: false, order: 3 },
+        { id: 'latest-movies', name: 'Latest Movies', enabled: true, order: 4 },
+        { id: 'latest-shows', name: 'Latest TV Shows', enabled: true, order: 5 },
+        { id: 'latest-music', name: 'Latest Music', enabled: true, order: 6 },
+        { id: 'collections', name: 'Collections', enabled: false, order: 7 }
     ];
 
     var homeRowsModal = {
@@ -149,17 +158,30 @@ var SettingsController = (function() {
             modified = true;
         }
         
-        // Ensure toolbar settings exist
-        var toolbarDefaults = {
+        // Apply defaults for all settings
+        var defaults = {
+            autoLogin: false,
+            clockDisplay: '12-hour',
+            skipIntro: true,
+            autoPlay: true,
+            theme: 'dark',
+            carouselSpeed: 8000,
             showShuffleButton: true,
             showGenresButton: true,
             showFavoritesButton: true,
-            showLibrariesInToolbar: true
+            showLibrariesInToolbar: true,
+            showFeaturedBanner: true,
+            imageType: 'Primary',
+            posterSize: 300,
+            preferParentThumb: false,
+            mergeContinueWatchingNextUp: false,
+            backdropBlurHome: 3,
+            backdropBlurDetail: 3
         };
         
-        for (var key in toolbarDefaults) {
+        for (var key in defaults) {
             if (typeof loadedSettings[key] === 'undefined') {
-                loadedSettings[key] = toolbarDefaults[key];
+                loadedSettings[key] = defaults[key];
                 modified = true;
             }
         }
@@ -188,6 +210,11 @@ var SettingsController = (function() {
         } else {
             settings.homeRows = JSON.parse(JSON.stringify(defaultHomeRows));
             saveSettings();
+        }
+        
+        // Initialize ImageHelper with settings
+        if (typeof ImageHelper !== 'undefined') {
+            syncImageHelperSettings();
         }
     }
 
@@ -249,6 +276,24 @@ var SettingsController = (function() {
             carouselSpeedValue.textContent = (settings.carouselSpeed / 1000) + ' seconds';
         }
         
+        // Image Helper settings
+        var imageTypeValue = document.getElementById('imageTypeValue');
+        if (imageTypeValue) {
+            var imageTypeText = settings.imageType === 'Primary' ? 'Poster' : 
+                                settings.imageType === 'Thumb' ? 'Thumbnail' : 'Banner';
+            imageTypeValue.textContent = imageTypeText;
+        }
+        
+        var preferParentThumbValue = document.getElementById('preferParentThumbValue');
+        if (preferParentThumbValue) {
+            preferParentThumbValue.textContent = settings.preferParentThumb ? 'On' : 'Off';
+        }
+        
+        var mergeContinueWatchingValue = document.getElementById('merge-continue-watching-value');
+        if (mergeContinueWatchingValue) {
+            mergeContinueWatchingValue.textContent = settings.mergeContinueWatchingNextUp ? 'On' : 'Off';
+        }
+        
         // Moonfin settings
         var showShuffleButtonValue = document.getElementById('showShuffleButtonValue');
         if (showShuffleButtonValue) {
@@ -268,6 +313,22 @@ var SettingsController = (function() {
         var showLibrariesInToolbarValue = document.getElementById('showLibrariesInToolbarValue');
         if (showLibrariesInToolbarValue) {
             showLibrariesInToolbarValue.textContent = settings.showLibrariesInToolbar ? 'On' : 'Off';
+        }
+        
+        var showFeaturedBannerValue = document.getElementById('show-featured-banner-value');
+        if (showFeaturedBannerValue) {
+            showFeaturedBannerValue.textContent = settings.showFeaturedBanner ? 'On' : 'Off';
+        }
+        
+        // Backdrop blur settings
+        var backdropBlurHomeValue = document.getElementById('backdrop-blur-home-value');
+        if (backdropBlurHomeValue) {
+            backdropBlurHomeValue.textContent = settings.backdropBlurHome !== undefined ? settings.backdropBlurHome : 3;
+        }
+        
+        var backdropBlurDetailValue = document.getElementById('backdrop-blur-detail-value');
+        if (backdropBlurDetailValue) {
+            backdropBlurDetailValue.textContent = settings.backdropBlurDetail !== undefined ? settings.backdropBlurDetail : 3;
         }
     }
 
@@ -306,13 +367,7 @@ var SettingsController = (function() {
         
         if (evt.keyCode === KeyCodes.BACK) {
             evt.preventDefault();
-            if (!focusManager.inSidebar && !focusManager.inNavBar) {
-                focusToSidebar();
-            } else if (focusManager.inSidebar) {
-                focusToNavBar();
-            } else if (focusManager.inNavBar) {
-                window.location.href = 'browse.html';
-            }
+            window.location.href = 'browse.html';
             return;
         }
         
@@ -411,7 +466,7 @@ var SettingsController = (function() {
                 evt.preventDefault();
                 if (focusManager.sidebarIndex > 0) {
                     focusManager.sidebarIndex--;
-                    updateSidebarFocus();
+                    selectCategory(focusManager.sidebarIndex);
                 } else {
                     focusToNavBar();
                 }
@@ -421,7 +476,7 @@ var SettingsController = (function() {
                 evt.preventDefault();
                 if (focusManager.sidebarIndex < categories.length - 1) {
                     focusManager.sidebarIndex++;
-                    updateSidebarFocus();
+                    selectCategory(focusManager.sidebarIndex);
                 }
                 break;
                 
@@ -444,6 +499,12 @@ var SettingsController = (function() {
      * @private
      */
     function handleContentNavigation(evt) {
+        // If in slider mode, handle slider navigation
+        if (focusManager.inSliderMode) {
+            handleSliderNavigation(evt);
+            return;
+        }
+        
         var panel = document.querySelector('.settings-panel.active');
         if (!panel) return;
         
@@ -617,6 +678,17 @@ var SettingsController = (function() {
                     'Auto-login disabled. You will need to login manually.';
                 break;
                 
+            case 'clockDisplay':
+                // Toggle between 12-hour and 24-hour format
+                settings.clockDisplay = settings.clockDisplay === '12-hour' ? '24-hour' : '12-hour';
+                saveSettings();
+                updateSettingValues();
+                // Update clock immediately
+                if (typeof NavbarComponent !== 'undefined' && NavbarComponent.updateClock) {
+                    NavbarComponent.updateClock();
+                }
+                break;
+                
             case 'skipIntro':
                 settings.skipIntro = !settings.skipIntro;
                 saveSettings();
@@ -655,6 +727,63 @@ var SettingsController = (function() {
                 saveSettings();
                 updateSettingValues();
                 applyToolbarSettingsLive();
+                break;
+                
+            case 'theme':
+                // Theme switching not implemented yet
+                break;
+                
+            case 'carouselSpeed':
+                // Cycle through speeds: 5s, 8s, 10s, 15s, 20s
+                var speeds = [5000, 8000, 10000, 15000, 20000];
+                var currentIndex = speeds.indexOf(settings.carouselSpeed);
+                var nextIndex = (currentIndex + 1) % speeds.length;
+                settings.carouselSpeed = speeds[nextIndex];
+                saveSettings();
+                updateSettingValues();
+                break;
+                
+            case 'imageType':
+                // Cycle through: Primary -> Thumb -> Banner -> Primary
+                if (settings.imageType === 'Primary') {
+                    settings.imageType = 'Thumb';
+                } else if (settings.imageType === 'Thumb') {
+                    settings.imageType = 'Banner';
+                } else {
+                    settings.imageType = 'Primary';
+                }
+                // Always keep posterSize at maximum (300)
+                settings.posterSize = 300;
+                saveSettings();
+                updateSettingValues();
+                syncImageHelperSettings();
+                break;
+                
+            case 'preferParentThumb':
+                settings.preferParentThumb = !settings.preferParentThumb;
+                saveSettings();
+                updateSettingValues();
+                syncImageHelperSettings();
+                break;
+                
+            case 'merge-continue-watching':
+                settings.mergeContinueWatchingNextUp = !settings.mergeContinueWatchingNextUp;
+                saveSettings();
+                updateSettingValues();
+                break;
+                
+            case 'show-featured-banner':
+                settings.showFeaturedBanner = !settings.showFeaturedBanner;
+                saveSettings();
+                updateSettingValues();
+                break;
+                
+            case 'backdrop-blur-home':
+                enterSliderMode('backdrop-blur-home', settings.backdropBlurHome);
+                break;
+                
+            case 'backdrop-blur-detail':
+                enterSliderMode('backdrop-blur-detail', settings.backdropBlurDetail);
                 break;
                 
             case 'logout':
@@ -982,9 +1111,24 @@ var SettingsController = (function() {
             favoritesBtn.style.display = settings.showFavoritesButton ? '' : 'none';
         }
         
-        libraryButtons.forEach(function(btn) {
-            btn.style.display = settings.showLibrariesInToolbar ? '' : 'none';
-        });
+        // Apply library buttons visibility
+        if (libraryButtons && libraryButtons.length > 0) {
+            libraryButtons.forEach(function(btn) {
+                btn.style.display = settings.showLibrariesInToolbar ? '' : 'none';
+            });
+        }
+    }
+    
+    /**
+     * Sync settings with ImageHelper module
+     * @private
+     */
+    function syncImageHelperSettings() {
+        if (typeof ImageHelper === 'undefined') return;
+        
+        ImageHelper.setImageType(settings.imageType);
+        ImageHelper.setPosterSize(settings.posterSize);
+        ImageHelper.setPreferParentThumb(settings.preferParentThumb);
     }
 
     /**
@@ -1004,6 +1148,178 @@ var SettingsController = (function() {
             }
         }
         return JSON.parse(JSON.stringify(defaultHomeRows));
+    }
+
+    /**
+     * Enter slider mode for blur settings
+     * @param {string} settingName - The setting name
+     * @param {number} currentValue - The current value
+     * @private
+     */
+    function enterSliderMode(settingName, currentValue) {
+        focusManager.inSliderMode = true;
+        focusManager.sliderSetting = settingName;
+        
+        var settingItem = document.querySelector('[data-setting="' + settingName + '"]');
+        if (!settingItem) return;
+        
+        // Initialize slider with current value
+        var percentage = (currentValue / 5) * 100;
+        var fillElement = settingItem.querySelector('.slider-fill');
+        var sliderValueDisplay = settingItem.querySelector('.slider-value-display');
+        
+        if (fillElement) {
+            fillElement.style.width = percentage + '%';
+        }
+        if (sliderValueDisplay) {
+            sliderValueDisplay.textContent = currentValue;
+        }
+        
+        // Hide the value display, show the slider
+        var valueDisplay = settingItem.querySelector('.setting-value');
+        var sliderContainer = settingItem.querySelector('.slider-container');
+        
+        if (valueDisplay) valueDisplay.style.display = 'none';
+        if (sliderContainer) sliderContainer.style.display = 'flex';
+        
+        settingItem.classList.add('slider-active');
+    }
+
+    /**
+     * Exit slider mode and update setting
+     * @param {string} settingName - The setting name
+     * @param {number} newValue - The new value
+     * @private
+     */
+    function exitSliderMode(settingName, newValue) {
+        focusManager.inSliderMode = false;
+        focusManager.sliderSetting = null;
+        
+        // Update the setting based on which blur control
+        if (settingName === 'backdrop-blur-home') {
+            settings.backdropBlurHome = newValue;
+        } else if (settingName === 'backdrop-blur-detail') {
+            settings.backdropBlurDetail = newValue;
+        }
+        
+        saveSettings();
+        updateSettingValues();
+        
+        var settingItem = document.querySelector('[data-setting="' + settingName + '"]');
+        if (!settingItem) return;
+        
+        // Show the value display, hide the slider
+        var valueDisplay = settingItem.querySelector('.setting-value');
+        var sliderContainer = settingItem.querySelector('.slider-container');
+        
+        if (valueDisplay) valueDisplay.style.display = 'block';
+        if (sliderContainer) sliderContainer.style.display = 'none';
+        
+        settingItem.classList.remove('slider-active');
+    }
+
+    /**
+     * Handle navigation within slider mode
+     * @param {KeyboardEvent} evt - Keyboard event
+     * @private
+     */
+    function handleSliderNavigation(evt) {
+        var settingName = focusManager.sliderSetting;
+        var currentValue = settingName === 'backdrop-blur-home' ? settings.backdropBlurHome : settings.backdropBlurDetail;
+        
+        switch (evt.keyCode) {
+            case KeyCodes.LEFT: // Left - decrease value
+                evt.preventDefault();
+                if (currentValue > 0) {
+                    var newValue = Math.max(0, currentValue - 1);
+                    updateSliderDisplay(settingName, newValue);
+                }
+                break;
+                
+            case KeyCodes.RIGHT: // Right - increase value
+                evt.preventDefault();
+                if (currentValue < 5) {
+                    var newValue = Math.min(5, currentValue + 1);
+                    updateSliderDisplay(settingName, newValue);
+                }
+                break;
+                
+            case KeyCodes.UP: // Up - increase value
+                evt.preventDefault();
+                if (currentValue < 5) {
+                    var newValue = Math.min(5, currentValue + 1);
+                    updateSliderDisplay(settingName, newValue);
+                }
+                break;
+                
+            case KeyCodes.DOWN: // Down - decrease value
+                evt.preventDefault();
+                if (currentValue > 0) {
+                    var newValue = Math.max(0, currentValue - 1);
+                    updateSliderDisplay(settingName, newValue);
+                }
+                break;
+                
+            case KeyCodes.ENTER: // Enter - confirm and exit slider mode
+                evt.preventDefault();
+                exitSliderMode(settingName, currentValue);
+                break;
+                
+            case KeyCodes.BACKSPACE: // Back - cancel slider mode
+            case KeyCodes.ESCAPE:
+                evt.preventDefault();
+                // Reset to original value
+                exitSliderMode(settingName, settingName === 'backdrop-blur-home' ? settings.backdropBlurHome : settings.backdropBlurDetail);
+                break;
+        }
+    }
+
+    /**
+     * Update the slider display as user adjusts value
+     * @param {string} settingName - The setting name
+     * @param {number} newValue - The new value
+     * @private
+     */
+    function updateSliderDisplay(settingName, newValue) {
+        // Update setting temporarily (for display)
+        if (settingName === 'backdrop-blur-home') {
+            settings.backdropBlurHome = newValue;
+        } else if (settingName === 'backdrop-blur-detail') {
+            settings.backdropBlurDetail = newValue;
+        }
+        
+        // Temporarily save to apply the blur in real-time
+        saveSettings();
+        
+        // Apply blur to current page in real-time (if applicable)
+        if (settingName === 'backdrop-blur-home') {
+            var homeBackdrop = document.getElementById('globalBackdropImage');
+            if (homeBackdrop && typeof storage !== 'undefined') {
+                storage.applyBackdropBlur(homeBackdrop, 'backdropBlurHome', 20);
+            }
+        } else if (settingName === 'backdrop-blur-detail') {
+            var detailBackdrop = document.querySelector('.backdrop-image');
+            if (detailBackdrop && typeof storage !== 'undefined') {
+                storage.applyBackdropBlur(detailBackdrop, 'backdropBlurDetail', 15);
+            }
+        }
+        
+        // Find the setting item - first try active panel, then search all panels
+        var settingItem = document.querySelector('[data-setting="' + settingName + '"]');
+        if (!settingItem) return;
+        
+        // Update the slider fill width (0-5 maps to 0-100%)
+        var fillElement = settingItem.querySelector('.slider-fill');
+        if (fillElement) {
+            var percentage = (newValue / 5) * 100;
+            fillElement.style.width = percentage + '%';
+        }
+        
+        // Update the slider value display
+        var sliderValueDisplay = settingItem.querySelector('.slider-value-display');
+        if (sliderValueDisplay) {
+            sliderValueDisplay.textContent = newValue;
+        }
     }
 
     return {
