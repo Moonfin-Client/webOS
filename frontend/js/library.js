@@ -1,6 +1,7 @@
 const LibraryController = {
     libraryId: null,
     libraryName: null,
+    libraryType: null,
     items: [],
     currentIndex: 0,
     columns: 7,
@@ -8,7 +9,8 @@ const LibraryController = {
     sortOrder: 'Ascending',
     filters: {
         isPlayed: null,
-        isFavorite: null
+        isFavorite: null,
+        itemType: null  // For music: 'Album', 'Artist', 'Song'
     },
     inNavBar: false,
     navBarIndex: 0,
@@ -75,10 +77,40 @@ const LibraryController = {
 
         if (sortBtn) {
             sortBtn.addEventListener('click', () => this.showSortMenu());
+            sortBtn.addEventListener('keydown', (e) => {
+                if (e.keyCode === KeyCodes.ENTER) {
+                    e.preventDefault();
+                    this.showSortMenu();
+                } else if (e.keyCode === KeyCodes.RIGHT) {
+                    e.preventDefault();
+                    if (filterBtn) filterBtn.focus();
+                } else if (e.keyCode === KeyCodes.DOWN) {
+                    e.preventDefault();
+                    this.focusFirstGridItem();
+                } else if (e.keyCode === KeyCodes.UP) {
+                    e.preventDefault();
+                    this.focusToNavBar();
+                }
+            });
         }
 
         if (filterBtn) {
             filterBtn.addEventListener('click', () => this.showFilterMenu());
+            filterBtn.addEventListener('keydown', (e) => {
+                if (e.keyCode === KeyCodes.ENTER) {
+                    e.preventDefault();
+                    this.showFilterMenu();
+                } else if (e.keyCode === KeyCodes.LEFT) {
+                    e.preventDefault();
+                    if (sortBtn) sortBtn.focus();
+                } else if (e.keyCode === KeyCodes.DOWN) {
+                    e.preventDefault();
+                    this.focusFirstGridItem();
+                } else if (e.keyCode === KeyCodes.UP) {
+                    e.preventDefault();
+                    this.focusToNavBar();
+                }
+            });
         }
     },
 
@@ -125,10 +157,13 @@ const LibraryController = {
             }
 
             const library = response.Items.find(item => item.Id === self.libraryId);
-            if (library && library.Name) {
-                self.libraryName = library.Name;
-                if (self.elements.libraryTitle) {
-                    self.elements.libraryTitle.textContent = library.Name;
+            if (library) {
+                self.libraryType = library.CollectionType;
+                if (library.Name) {
+                    self.libraryName = library.Name;
+                    if (self.elements.libraryTitle) {
+                        self.elements.libraryTitle.textContent = library.Name;
+                    }
                 }
             }
 
@@ -150,6 +185,18 @@ const LibraryController = {
                 params.Recursive = true;
             } else if (library && library.CollectionType === 'movies') {
                 params.IncludeItemTypes = 'Movie';
+                params.ParentId = self.libraryId;
+                params.Recursive = true;
+            } else if (library && library.CollectionType === 'music') {
+                // For music, check what we're filtering for
+                if (self.filters.itemType === 'Artist') {
+                    params.IncludeItemTypes = 'MusicArtist';
+                } else if (self.filters.itemType === 'Song') {
+                    params.IncludeItemTypes = 'Audio';
+                } else {
+                    // Default: show all music items (albums, artists, songs)
+                    params.IncludeItemTypes = 'MusicAlbum,MusicArtist,Audio';
+                }
                 params.ParentId = self.libraryId;
                 params.Recursive = true;
             } else {
@@ -189,7 +236,17 @@ const LibraryController = {
                 
                 self.items = items;
                 if (self.items.length === 0) {
-                    self.showEmptyLibrary();
+                    // Check if we have active filters
+                    const hasActiveFilters = self.filters.isPlayed !== null || 
+                                            self.filters.isFavorite !== null || 
+                                            self.filters.itemType !== null;
+                    if (hasActiveFilters) {
+                        // Show inline message for empty filtered results
+                        self.showEmptyFilteredResults();
+                    } else {
+                        // Show popup for truly empty library
+                        self.showEmptyLibrary();
+                    }
                 } else {
                     self.displayItems();
                 }
@@ -246,12 +303,31 @@ const LibraryController = {
         img.alt = item.Name;
         img.loading = 'lazy';
 
-        if (item.ImageTags && item.ImageTags.Primary) {
-            img.src = auth.serverAddress + '/Items/' + item.Id + '/Images/Primary?quality=90&maxHeight=400&tag=' + item.ImageTags.Primary;
-        } else if (item.Type === 'Episode' && item.SeriesId && item.SeriesPrimaryImageTag) {
-            img.src = auth.serverAddress + '/Items/' + item.SeriesId + '/Images/Primary?quality=90&maxHeight=400&tag=' + item.SeriesPrimaryImageTag;
+        // Use ImageHelper for smart image selection
+        let imageUrl = '';
+        if (typeof ImageHelper !== 'undefined') {
+            imageUrl = ImageHelper.getImageUrl(auth.serverAddress, item);
+            
+            // Apply aspect ratio class based on selected image type
+            const aspect = ImageHelper.getAspectRatio(item, ImageHelper.getImageType());
+            if (aspect > 1.5) {
+                div.classList.add('landscape-card');
+            } else if (aspect > 1.1) {
+                div.classList.add('wide-card');
+            } else {
+                div.classList.add('portrait-card');
+            }
+            
+            img.src = imageUrl || ImageHelper.getPlaceholderUrl(item);
         } else {
-            img.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 300"%3E%3Crect width="200" height="300" fill="%23333"/%3E%3C/svg%3E';
+            // Fallback to old logic if ImageHelper not loaded
+            if (item.ImageTags && item.ImageTags.Primary) {
+                img.src = auth.serverAddress + '/Items/' + item.Id + '/Images/Primary?quality=90&maxHeight=400&tag=' + item.ImageTags.Primary;
+            } else if (item.Type === 'Episode' && item.SeriesId && item.SeriesPrimaryImageTag) {
+                img.src = auth.serverAddress + '/Items/' + item.SeriesId + '/Images/Primary?quality=90&maxHeight=400&tag=' + item.SeriesPrimaryImageTag;
+            } else {
+                img.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 300"%3E%3Crect width="200" height="300" fill="%23333"/%3E%3C/svg%3E';
+            }
         }
 
         imgWrapper.appendChild(img);
@@ -330,6 +406,12 @@ const LibraryController = {
             return;
         }
 
+        // Don't handle if focus is on filter buttons (they have their own handlers)
+        const activeElement = document.activeElement;
+        if (activeElement && (activeElement.id === 'sort-btn' || activeElement.id === 'filter-btn')) {
+            return;
+        }
+
         if (this.items.length === 0) return;
 
         const row = Math.floor(this.currentIndex / this.columns);
@@ -359,8 +441,8 @@ const LibraryController = {
                     this.currentIndex = newIndexUp;
                     this.updateFocus();
                 } else if (row === 0) {
-                    // At the first row, pressing UP focuses the navbar
-                    this.focusToNavBar();
+                    // At the first row, pressing UP focuses the filter buttons
+                    this.focusToFilterBar();
                 }
                 break;
 
@@ -414,6 +496,144 @@ const LibraryController = {
     },
 
     /**
+     * Show sort menu modal
+     * @private
+     */
+    showSortMenu() {
+        console.log('Sort button activated');
+        
+        // Different sort options based on library type
+        let sortOptions;
+        
+        if (this.libraryType === 'music') {
+            sortOptions = [
+                { by: 'SortName', order: 'Ascending', label: 'Name (A-Z)' },
+                { by: 'SortName', order: 'Descending', label: 'Name (Z-A)' },
+                { by: 'Album', order: 'Ascending', label: 'Album (A-Z)' },
+                { by: 'Album', order: 'Descending', label: 'Album (Z-A)' },
+                { by: 'AlbumArtist', order: 'Ascending', label: 'Artist (A-Z)' },
+                { by: 'AlbumArtist', order: 'Descending', label: 'Artist (Z-A)' },
+                { by: 'DateCreated', order: 'Descending', label: 'Date Added (Newest)' },
+                { by: 'DateCreated', order: 'Ascending', label: 'Date Added (Oldest)' },
+                { by: 'PremiereDate', order: 'Descending', label: 'Release Date (Newest)' },
+                { by: 'PremiereDate', order: 'Ascending', label: 'Release Date (Oldest)' },
+                { by: 'CommunityRating', order: 'Descending', label: 'Rating (Highest)' },
+                { by: 'CommunityRating', order: 'Ascending', label: 'Rating (Lowest)' }
+            ];
+        } else {
+            // Default options for movies/tv
+            sortOptions = [
+                { by: 'SortName', order: 'Ascending', label: 'Name (A-Z)' },
+                { by: 'SortName', order: 'Descending', label: 'Name (Z-A)' },
+                { by: 'DateCreated', order: 'Descending', label: 'Date Added (Newest)' },
+                { by: 'DateCreated', order: 'Ascending', label: 'Date Added (Oldest)' },
+                { by: 'PremiereDate', order: 'Descending', label: 'Release Date (Newest)' },
+                { by: 'PremiereDate', order: 'Ascending', label: 'Release Date (Oldest)' }
+            ];
+        }
+        
+        // Find current sort index
+        let currentIndex = sortOptions.findIndex(opt => 
+            opt.by === this.sortBy && opt.order === this.sortOrder
+        );
+        
+        // Move to next option (cycle)
+        currentIndex = (currentIndex + 1) % sortOptions.length;
+        const nextSort = sortOptions[currentIndex];
+        
+        this.sortBy = nextSort.by;
+        this.sortOrder = nextSort.order;
+        
+        // Update button label to show current sort
+        const sortBtn = document.getElementById('sort-btn');
+        if (sortBtn) {
+            const label = sortBtn.querySelector('.filter-label');
+            if (label) label.textContent = `Sort: ${nextSort.label}`;
+        }
+        
+        // Reload library with new sort
+        this.loadLibrary();
+    },
+
+    /**
+     * Show filter menu modal
+     * @private
+     */
+    showFilterMenu() {
+        console.log('Filter button activated');
+        
+        // Different filter options based on library type
+        let filterStates;
+        
+        if (this.libraryType === 'music') {
+            filterStates = [
+                { isPlayed: null, isFavorite: null, itemType: null, label: 'Albums' },
+                { isPlayed: null, isFavorite: null, itemType: 'Artist', label: 'Artists' },
+                { isPlayed: null, isFavorite: null, itemType: 'Song', label: 'Songs' },
+                { isPlayed: null, isFavorite: true, itemType: null, label: 'Favorite Albums' },
+                { isPlayed: null, isFavorite: true, itemType: 'Artist', label: 'Favorite Artists' },
+                { isPlayed: null, isFavorite: true, itemType: 'Song', label: 'Favorite Songs' }
+            ];
+            
+            // Find current filter index
+            let currentIndex = filterStates.findIndex(f => 
+                f.isPlayed === this.filters.isPlayed && 
+                f.isFavorite === this.filters.isFavorite &&
+                f.itemType === this.filters.itemType
+            );
+            
+            // Move to next filter (cycle)
+            currentIndex = (currentIndex + 1) % filterStates.length;
+            const nextFilter = filterStates[currentIndex];
+            
+            this.filters.isPlayed = nextFilter.isPlayed;
+            this.filters.isFavorite = nextFilter.isFavorite;
+            this.filters.itemType = nextFilter.itemType;
+        } else {
+            // Default filters for movies/tv
+            filterStates = [
+                { isPlayed: null, isFavorite: null, label: 'All' },
+                { isPlayed: false, isFavorite: null, label: 'Unplayed' },
+                { isPlayed: true, isFavorite: null, label: 'Played' },
+                { isPlayed: null, isFavorite: true, label: 'Favorites' }
+            ];
+            
+            // Find current filter index
+            let currentIndex = filterStates.findIndex(f => 
+                f.isPlayed === this.filters.isPlayed && f.isFavorite === this.filters.isFavorite
+            );
+            
+            // Move to next filter (cycle)
+            currentIndex = (currentIndex + 1) % filterStates.length;
+            const nextFilter = filterStates[currentIndex];
+            
+            this.filters.isPlayed = nextFilter.isPlayed;
+            this.filters.isFavorite = nextFilter.isFavorite;
+        }
+        
+        // Update button label to show current filter
+        const filterBtn = document.getElementById('filter-btn');
+        if (filterBtn) {
+            const label = filterBtn.querySelector('.filter-label');
+            // Find the label from the current state
+            const currentState = this.libraryType === 'music' ? 
+                filterStates.find(f => 
+                    f.isPlayed === this.filters.isPlayed && 
+                    f.isFavorite === this.filters.isFavorite &&
+                    f.itemType === this.filters.itemType
+                ) :
+                filterStates.find(f => 
+                    f.isPlayed === this.filters.isPlayed && 
+                    f.isFavorite === this.filters.isFavorite
+                );
+            if (label && currentState) label.textContent = `Filter: ${currentState.label}`;
+        }
+        
+        // Reload library with new filter
+        this.loadLibrary();
+    },
+
+    /**
      * Show loading indicator, hide grid and errors
      * @private
      */
@@ -441,6 +661,37 @@ const LibraryController = {
             this.elements.errorDisplay.style.display = 'flex';
             const errorMessage = this.elements.errorDisplay.querySelector('p');
             if (errorMessage) errorMessage.textContent = message;
+        }
+    },
+    /**
+     * Show inline message for empty filtered results
+     * @private
+     */
+    showEmptyFilteredResults() {
+        // Hide loading
+        if (this.elements.loading) this.elements.loading.style.display = 'none';
+        if (this.elements.errorDisplay) this.elements.errorDisplay.style.display = 'none';
+        
+        // Clear and show grid with message
+        if (this.elements.itemGrid) {
+            this.elements.itemGrid.style.display = 'flex';
+            this.elements.itemGrid.style.flexDirection = 'column';
+            this.elements.itemGrid.style.alignItems = 'center';
+            this.elements.itemGrid.style.justifyContent = 'center';
+            this.elements.itemGrid.style.padding = '60px 20px';
+            this.elements.itemGrid.innerHTML = `
+                <div style="text-align: center; color: #aaa;">
+                    <h3 style="font-size: 28px; margin-bottom: 16px; color: #fff;">No Items Found</h3>
+                    <p style="font-size: 18px; margin-bottom: 24px;">No items match the current filter.</p>
+                    <p style="font-size: 16px; opacity: 0.7;">Try changing the filter or sort options above.</p>
+                </div>
+            `;
+        }
+        
+        // Focus back to filter button so user can easily change filter
+        const filterBtn = document.getElementById('filter-btn');
+        if (filterBtn) {
+            setTimeout(() => filterBtn.focus(), 100);
         }
     },
 
@@ -506,8 +757,28 @@ const LibraryController = {
         return Array.from(document.querySelectorAll('.nav-left .nav-btn, .nav-center .nav-btn'));
     },
 
+    /**     * Focus to the filter bar
+     * @private
+     */
+    focusToFilterBar() {
+        const sortBtn = document.getElementById('sort-btn');
+        if (sortBtn) {
+            sortBtn.focus();
+        }
+    },
+
     /**
-     * Move focus from grid to navbar
+     * Focus to the first grid item
+     * @private
+     */
+    focusFirstGridItem() {
+        if (this.items.length > 0) {
+            this.currentIndex = 0;
+            this.updateFocus();
+        }
+    },
+
+    /**     * Move focus from grid to navbar
      * @private
      */
     focusToNavBar() {

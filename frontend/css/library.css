@@ -96,6 +96,33 @@ body {
     margin: 0 auto;
 }
 
+/* Landscape grid items (16:9 aspect ratio) */
+.grid-item.landscape-card {
+    max-width: 320px; /* 200 * 1.6 for landscape aspect */
+}
+
+.grid-item.landscape-card .item-image {
+    height: 180px; /* 320 / 1.778 */
+}
+
+/* Wide grid items (between portrait and landscape) */
+.grid-item.wide-card {
+    max-width: 250px;
+}
+
+.grid-item.wide-card .item-image {
+    height: 225px;
+}
+
+/* Portrait grid items (default 2:3 aspect ratio) */
+.grid-item.portrait-card {
+    max-width: 200px;
+}
+
+.grid-item.portrait-card .item-image {
+    height: 300px; /* 200 / 0.667 */
+}
+
 .item-image-wrapper {
     position: relative;
     width: 100%;
