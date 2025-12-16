@@ -20,6 +20,7 @@
         }
         
         JellyfinAPI.Logger.success('Authenticated as:', auth.username);
+        storage.applyBackdropBlur(document.getElementById('globalBackdropImage'), 'backdropBlurHome', 20);
         loadFavorites();
     }
     
