@@ -148,16 +148,27 @@
         var clockElement = document.getElementById('navClock');
         if (!clockElement) return;
         
+        // Check clock display setting
+        var settings = storage.get('jellyfin_settings');
+        var use24Hour = settings && JSON.parse(settings).clockDisplay === '24-hour';
+        
         var now = new Date();
         var hours = now.getHours();
         var minutes = now.getMinutes();
-        var ampm = hours >= 12 ? 'PM' : 'AM';
         
-        hours = hours % 12;
-        hours = hours ? hours : 12; // 0 becomes 12
         minutes = minutes < 10 ? '0' + minutes : minutes;
         
-        clockElement.textContent = hours + ':' + minutes + ' ' + ampm;
+        if (use24Hour) {
+            // 24-hour format
+            hours = hours < 10 ? '0' + hours : hours;
+            clockElement.textContent = hours + ':' + minutes;
+        } else {
+            // 12-hour format with AM/PM
+            var ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12;
+            hours = hours ? hours : 12; // 0 becomes 12
+            clockElement.textContent = hours + ':' + minutes + ' ' + ampm;
+        }
     }
     
     function handleShuffleClick() {
@@ -300,6 +311,32 @@
                 }
             });
         }
+        
+        // Add global navigation handler for all navbar buttons
+        setupNavbarNavigation();
+    }
+    
+    function setupNavbarNavigation() {
+        var navButtons = document.querySelectorAll('.nav-btn');
+        
+        navButtons.forEach(function(button, index) {
+            button.addEventListener('keydown', function(e) {
+                var allButtons = Array.from(document.querySelectorAll('.nav-btn'));
+                var currentIndex = allButtons.indexOf(button);
+                
+                if (e.keyCode === KeyCodes.LEFT) {
+                    e.preventDefault();
+                    if (currentIndex > 0) {
+                        allButtons[currentIndex - 1].focus();
+                    }
+                } else if (e.keyCode === KeyCodes.RIGHT) {
+                    e.preventDefault();
+                    if (currentIndex < allButtons.length - 1) {
+                        allButtons[currentIndex + 1].focus();
+                    }
+                }
+            });
+        });
     }
     
     if (document.readyState === 'loading') {
@@ -312,6 +349,71 @@
     
     window.NavbarComponent = {
         load: loadNavbar,
-        init: initNavbar
+        init: initNavbar,
+        scrollNavButtonIntoView: scrollNavButtonIntoView,
+        updateClock: updateClock
     };
+    
+    function setActivePage(page) {
+        // Remove active class from all buttons
+        var buttons = document.querySelectorAll('.nav-btn');
+        buttons.forEach(function(btn) {
+            btn.classList.remove('active');
+        });
+        
+        // Add active class to the appropriate button
+        var activeBtn = null;
+        switch(page) {
+            case 'browse':
+            case 'home':
+                activeBtn = document.getElementById('homeBtn');
+                break;
+            case 'search':
+                activeBtn = document.getElementById('searchBtn');
+                break;
+            case 'genres':
+                activeBtn = document.getElementById('genresBtn');
+                break;
+            case 'favorites':
+                activeBtn = document.getElementById('favoritesBtn');
+                break;
+            case 'discover':
+                activeBtn = document.getElementById('discoverBtn');
+                break;
+            case 'settings':
+                activeBtn = document.getElementById('settingsBtn');
+                break;
+        }
+        
+        if (activeBtn) {
+            activeBtn.classList.add('active');
+        }
+    }
+    
+    /**
+     * Scroll a navbar button into view within the nav-pill container
+     * @param {HTMLElement} button - The button to scroll into view
+     */
+    function scrollNavButtonIntoView(button) {
+        if (!button) return;
+        
+        var navPill = document.querySelector('.nav-pill');
+        if (!navPill) return;
+        
+        var buttonLeft = button.offsetLeft;
+        var buttonRight = buttonLeft + button.offsetWidth;
+        var scrollLeft = navPill.scrollLeft;
+        var pillWidth = navPill.offsetWidth;
+        
+        var SCROLL_PADDING = 20;
+        
+        // Check if button is out of view on the right
+        if (buttonRight > scrollLeft + pillWidth) {
+            navPill.scrollLeft = buttonRight - pillWidth + SCROLL_PADDING;
+        }
+        // Check if button is out of view on the left
+        else if (buttonLeft < scrollLeft) {
+            navPill.scrollLeft = buttonLeft - SCROLL_PADDING;
+        }
+    }
 })();

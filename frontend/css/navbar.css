@@ -43,6 +43,16 @@
     backdrop-filter: blur(20px);
     border-radius: 40px;
     padding: 10px;
+    max-width: 1400px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-behavior: smooth;
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE/Edge */
+}
+
+.nav-pill::-webkit-scrollbar {
+    display: none; /* Chrome/Safari/Opera */
 }
 
 .nav-right {

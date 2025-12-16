@@ -12,7 +12,6 @@ body {
 }
 
 body {
-    font-family: -apple-system, "Helvetica", system-ui, BlinkMacSystemFont, "Segoe UI", "Roboto", sans-serif;
     background: #0a0a0a;
     color: #ffffff;
 }
@@ -236,6 +235,13 @@ body {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    border: 2px solid transparent;
+    transition: border-color 0.2s;
+}
+
+.result-card:focus .card-image,
+.result-card:hover .card-image {
+    border-color: rgba(255, 255, 255, 0.8);
 }
 
 .card-placeholder {
