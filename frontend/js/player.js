@@ -35,6 +35,12 @@ var PlayerController = (function() {
     const PLAYBACK_SPEEDS = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
     let bitrateUpdateInterval = null;
     
+    // Skip intro/outro variables
+    let mediaSegments = [];
+    let currentSkipSegment = null;
+    let skipOverlayVisible = false;
+    let nextEpisodeData = null;
+    
     // Loading state machine
     const LoadingState = {
         IDLE: 'idle',
@@ -185,7 +191,11 @@ var PlayerController = (function() {
             bitrateIndicator: document.getElementById('bitrateIndicator'),
             qualityBtn: document.getElementById('qualityBtn'),
             qualityModal: document.getElementById('qualityModal'),
-            qualityList: document.getElementById('qualityList')
+            qualityList: document.getElementById('qualityList'),
+            skipOverlay: document.getElementById('skipOverlay'),
+            skipButton: document.getElementById('skipButton'),
+            skipButtonText: document.getElementById('skipButtonText'),
+            skipButtonTime: document.getElementById('skipButtonTime')
         };
 
         videoPlayer = elements.videoPlayer;
@@ -319,10 +329,25 @@ var PlayerController = (function() {
             // Now load the item and start playback
             loadItemAndPlay();
             
+            // Load skip segments and next episode data
+            loadMediaSegments();
+            loadNextEpisode();
+            
         } catch (error) {
             JellyfinAPI.Logger.error('Failed to initialize player adapter:', error);
             alert('Failed to initialize video player: ' + error.message);
             window.history.back();
+        }
+        
+        // Skip button event listeners
+        if (elements.skipButton) {
+            elements.skipButton.addEventListener('click', executeSkip);
+            elements.skipButton.addEventListener('keydown', function(evt) {
+                if (evt.keyCode === KeyCodes.ENTER) {
+                    evt.preventDefault();
+                    executeSkip();
+                }
+            });
         }
     }
 
@@ -377,7 +402,13 @@ var PlayerController = (function() {
             case KeyCodes.BACK:
             case 461: // webOS back button
                 evt.preventDefault();
-                exitPlayer();
+                // If controls are visible, just hide them instead of exiting
+                if (controlsVisible) {
+                    hideControls();
+                    controlsVisible = false;
+                } else {
+                    exitPlayer();
+                }
                 break;
 
             case KeyCodes.UP:
@@ -1136,6 +1167,13 @@ var PlayerController = (function() {
             elements.videoDimmer.classList.add('visible');
         }
         document.body.classList.add('controls-visible');
+        controlsVisible = true;
+        
+        // Temporarily hide skip button when controls are shown to avoid focus conflicts
+        if (skipOverlayVisible && elements.skipOverlay) {
+            elements.skipOverlay.style.opacity = '0';
+            elements.skipOverlay.style.pointerEvents = 'none';
+        }
 
         if (controlsTimeout) clearTimeout(controlsTimeout);
         
@@ -1160,6 +1198,17 @@ var PlayerController = (function() {
             elements.videoDimmer.classList.remove('visible');
         }
         document.body.classList.remove('controls-visible');
+        controlsVisible = false;
+        
+        // Restore skip button visibility when controls hide
+        if (skipOverlayVisible && elements.skipOverlay) {
+            elements.skipOverlay.style.opacity = '1';
+            elements.skipOverlay.style.pointerEvents = 'all';
+            // Refocus skip button if it was visible
+            if (elements.skipButton) {
+                elements.skipButton.focus();
+            }
+        }
     }
 
     // ============================================================================
@@ -1298,6 +1347,15 @@ var PlayerController = (function() {
             hours = hours ? hours : 12; // 0 should be 12
             var timeString = hours + ':' + (minutes < 10 ? '0' + minutes : minutes) + ' ' + ampm;
             elements.endTime.textContent = 'Ends at ' + timeString;
+        }
+        
+        // Check for skip segments
+        checkSkipSegments(videoPlayer.currentTime);
+        
+        // Update skip button countdown if visible
+        if (skipOverlayVisible && currentSkipSegment) {
+            var timeLeft = Math.ceil(currentSkipSegment.EndTicks / 10000000 - videoPlayer.currentTime);
+            updateSkipButtonTime(timeLeft);
         }
     }
 
@@ -2330,6 +2388,275 @@ var PlayerController = (function() {
         }
         activeModal = null;
         modalFocusableItems = [];
+    }
+
+    /**
+     * Load media segments (intro/outro markers) from Jellyfin server
+     */
+    function loadMediaSegments() {
+        console.log('[SKIP] loadMediaSegments called, auth:', !!auth, 'itemId:', itemId);
+        if (!auth || !itemId) {
+            console.log('[SKIP] Cannot load media segments: missing auth or itemId');
+            return;
+        }
+        
+        var url = auth.serverAddress + '/MediaSegments/' + itemId;
+        console.log('[SKIP] Loading media segments from:', url);
+        
+        var authHeader = 'MediaBrowser Client="' + JellyfinAPI.appName + '", Device="' + JellyfinAPI.deviceName + 
+                         '", DeviceId="' + JellyfinAPI.deviceId + '", Version="' + JellyfinAPI.appVersion + '", Token="' + auth.accessToken + '"';
+        
+        ajax.request(url, {
+            method: 'GET',
+            headers: {
+                'X-Emby-Authorization': authHeader
+            },
+            success: function(response) {
+                console.log('[SKIP] Media segments response:', response);
+                try {
+                    var data = response;
+                    if (data && data.Items && data.Items.length > 0) {
+                        console.log('[SKIP] Raw segments before filtering:', data.Items.length);
+                        console.log('[SKIP] First segment structure:', JSON.stringify(data.Items[0], null, 2));
+                        data.Items.forEach(function(seg, idx) {
+                            var duration = (seg.EndTicks - seg.StartTicks) / 10000000;
+                            console.log('[SKIP] Segment', idx + ':', seg.Type, 'duration:', duration.toFixed(1), 'seconds', 
+                                        'from', (seg.StartTicks / 10000000).toFixed(0), 'to', (seg.EndTicks / 10000000).toFixed(0));
+                        });
+                        
+                        // Filter out very short segments (< 1 second)
+                        mediaSegments = data.Items.filter(function(segment) {
+                            var duration = (segment.EndTicks - segment.StartTicks) / 10000000;
+                            return duration >= 1;
+                        });
+                        console.log('[SKIP] Loaded media segments:', mediaSegments.length, 'segments');
+                        mediaSegments.forEach(function(seg) {
+                            console.log('[SKIP] Segment:', seg.Type, 'at', (seg.StartTicks / 10000000).toFixed(0), '-', (seg.EndTicks / 10000000).toFixed(0), 'seconds');
+                        });
+                    } else {
+                        console.log('[SKIP] No media segments in response');
+                        mediaSegments = [];
+                    }
+                } catch (e) {
+                    console.error('[SKIP] Failed to parse media segments:', e);
+                    mediaSegments = [];
+                }
+            },
+            error: function(errorObj) {
+                console.log('[SKIP] No media segments available (status:', errorObj.error, ') - this is normal if intro skipper plugin is not installed');
+                mediaSegments = [];
+            }
+        });
+    }
+
+    /**
+     * Load next episode data for "Play Next Episode" button
+     */
+    function loadNextEpisode() {
+        console.log('[SKIP] loadNextEpisode called, auth:', !!auth, 'itemData:', !!itemData);
+        if (!auth || !itemData) return;
+        
+        console.log('[SKIP] itemData.Type:', itemData.Type, 'SeriesId:', itemData.SeriesId);
+        // Only load next episode for TV episodes
+        if (itemData.Type !== 'Episode' || !itemData.SeriesId) {
+            console.log('[SKIP] Not a TV episode, skipping next episode load');
+            return;
+        }
+        
+        var url = auth.serverAddress + '/Shows/' + itemData.SeriesId + '/Episodes';
+        var params = {
+            UserId: auth.userId,
+            StartItemId: itemId,
+            Limit: 2,
+            Fields: 'Overview'
+        };
+        
+        var queryString = Object.keys(params).map(function(key) {
+            return encodeURIComponent(key) + '=' + encodeURIComponent(params[key]);
+        }).join('&');
+        
+        ajax.request(url + '?' + queryString, {
+            method: 'GET',
+            headers: {
+                'X-Emby-Authorization': JellyfinAPI.getAuthHeader(auth.accessToken)
+            },
+            success: function(response) {
+                try {
+                    var data = response;
+                    if (data && data.Items && data.Items.length > 1) {
+                        nextEpisodeData = data.Items[1]; // Second item is the next episode
+                        JellyfinAPI.Logger.success('Loaded next episode:', nextEpisodeData.Name);
+                    } else {
+                        nextEpisodeData = null;
+                    }
+                } catch (e) {
+                    JellyfinAPI.Logger.error('Failed to parse next episode:', e);
+                    nextEpisodeData = null;
+                }
+            },
+            error: function(status, response) {
+                JellyfinAPI.Logger.warn('Failed to load next episode');
+                nextEpisodeData = null;
+            }
+        });
+    }
+
+    /**
+     * Check if current playback position is within a skip segment
+     */
+    function checkSkipSegments(currentTime) {
+        if (!mediaSegments || mediaSegments.length === 0) return;
+        
+        // Check if skip intro feature is enabled
+        var stored = storage.get('jellyfin_settings');
+        if (stored) {
+            try {
+                var settings = JSON.parse(stored);
+                if (settings.skipIntro === false) {
+                    // Skip intro is disabled, don't show skip buttons
+                    if (skipOverlayVisible) {
+                        hideSkipOverlay();
+                    }
+                    return;
+                }
+            } catch (e) {
+                // If parsing fails, continue with default behavior
+            }
+        }
+        
+        var currentTicks = currentTime * 10000000;
+        
+        // Check each segment
+        for (var i = 0; i < mediaSegments.length; i++) {
+            var segment = mediaSegments[i];
+            
+            if (currentTicks >= segment.StartTicks && currentTicks <= segment.EndTicks) {
+                // We're in a skip segment
+                if (!skipOverlayVisible || currentSkipSegment !== segment) {
+                    currentSkipSegment = segment;
+                    showSkipOverlay(segment);
+                }
+                return;
+            }
+        }
+        
+        // Not in any segment - hide overlay if visible
+        if (skipOverlayVisible) {
+            hideSkipOverlay();
+        }
+    }
+
+    /**
+     * Show skip overlay button
+     */
+    function showSkipOverlay(segment) {
+        if (!elements.skipOverlay || !elements.skipButton || !elements.skipButtonText) return;
+        
+        var buttonText = getSkipButtonText(segment.Type);
+        elements.skipButtonText.textContent = buttonText;
+        
+        elements.skipOverlay.style.display = 'block';
+        setTimeout(function() {
+            elements.skipOverlay.classList.add('visible');
+            // Auto-focus the skip button for remote control
+            if (elements.skipButton) {
+                elements.skipButton.focus();
+            }
+        }, 10);
+        
+        skipOverlayVisible = true;
+        console.log('[SKIP] Showing skip button:', segment.Type);
+    }
+
+    /**
+     * Hide skip overlay button
+     */
+    function hideSkipOverlay() {
+        if (!elements.skipOverlay) return;
+        
+        elements.skipOverlay.classList.remove('visible');
+        setTimeout(function() {
+            elements.skipOverlay.style.display = 'none';
+        }, 300);
+        
+        skipOverlayVisible = false;
+        currentSkipSegment = null;
+    }
+
+    /**
+     * Get button text based on segment type
+     */
+    function getSkipButtonText(segmentType) {
+        switch (segmentType) {
+            case 'Intro':
+                return 'Skip Intro';
+            case 'Outro':
+            case 'Credits':
+                // Check if we have next episode data
+                if (nextEpisodeData) {
+                    return 'Play Next Episode';
+                }
+                return 'Skip Credits';
+            case 'Preview':
+                return 'Skip Preview';
+            case 'Recap':
+                return 'Skip Recap';
+            default:
+                return 'Skip';
+        }
+    }
+
+    /**
+     * Update skip button countdown time
+     */
+    function updateSkipButtonTime(seconds) {
+        if (!elements.skipButtonTime) return;
+        
+        if (seconds > 0) {
+            elements.skipButtonTime.textContent = seconds + 's';
+        } else {
+            elements.skipButtonTime.textContent = '';
+        }
+    }
+
+    /**
+     * Execute skip action (seek past segment or play next episode)
+     */
+    function executeSkip() {
+        if (!currentSkipSegment) return;
+        
+        var segmentType = currentSkipSegment.Type;
+        console.log('[SKIP] Executing skip for segment type:', segmentType, 'nextEpisodeData:', !!nextEpisodeData);
+        
+        // For outro/credits with next episode available, check autoPlay setting
+        if ((segmentType === 'Outro' || segmentType === 'Credits') && nextEpisodeData) {
+            // Check if autoPlay is enabled
+            var stored = storage.get('jellyfin_settings');
+            var autoPlayEnabled = true; // Default to enabled
+            if (stored) {
+                try {
+                    var settings = JSON.parse(stored);
+                    autoPlayEnabled = settings.autoPlay !== false;
+                } catch (e) {
+                    // If parsing fails, use default
+                }
+            }
+            
+            if (autoPlayEnabled) {
+                console.log('[SKIP] Playing next episode:', nextEpisodeData.Id);
+                window.location.href = 'player.html?id=' + nextEpisodeData.Id;
+                return;
+            } else {
+                console.log('[SKIP] AutoPlay disabled, not playing next episode');
+                // Just skip the credits, don't autoplay
+            }
+        }
+        
+        // Otherwise, seek past the segment
+        var skipToTime = currentSkipSegment.EndTicks / 10000000;
+        console.log('[SKIP] Seeking to end of segment:', skipToTime);
+        videoPlayer.currentTime = skipToTime;
+        hideSkipOverlay();
     }
 
     return {
