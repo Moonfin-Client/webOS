@@ -15,6 +15,7 @@
         }
         
         JellyfinAPI.Logger.success('Authenticated as:', auth.username);
+        storage.applyBackdropBlur(document.getElementById('globalBackdropImage'), 'backdropBlurHome', 20);
         loadGenres();
     }
     
@@ -115,10 +116,25 @@
         poster.className = 'item-poster';
         poster.alt = item.Name;
         
-        if (item.ImageTags && item.ImageTags.Primary) {
-            poster.src = auth.serverAddress + '/Items/' + item.Id + '/Images/Primary?maxHeight=450&quality=90';
+        // Use ImageHelper for smart image selection
+        if (typeof ImageHelper !== 'undefined') {
+            var imageUrl = ImageHelper.getImageUrl(auth.serverAddress, item);
+            poster.src = imageUrl || ImageHelper.getPlaceholderUrl(item);
+            
+            // Apply aspect ratio class
+            var aspect = ImageHelper.getAspectRatio(item, ImageHelper.getImageType());
+            if (aspect > 1.5) {
+                card.classList.add('landscape-card');
+            } else if (aspect > 1.1) {
+                card.classList.add('wide-card');
+            }
         } else {
-            poster.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 300"%3E%3Crect fill="%23333" width="200" height="300"/%3E%3C/svg%3E';
+            // Fallback to old logic
+            if (item.ImageTags && item.ImageTags.Primary) {
+                poster.src = auth.serverAddress + '/Items/' + item.Id + '/Images/Primary?maxHeight=450&quality=90';
+            } else {
+                poster.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 300"%3E%3Crect fill="%23333" width="200" height="300"/%3E%3C/svg%3E';
+            }
         }
         
         card.appendChild(poster);
@@ -212,9 +228,11 @@
                     currentRowIndex--;
                     focusCurrentItem();
                 } else {
-                    // Navigate to navbar
-                    var homeBtn = document.getElementById('homeBtn');
-                    if (homeBtn) homeBtn.focus();
+                    // Navigate to navbar - wait for it to be loaded
+                    setTimeout(function() {
+                        var homeBtn = document.getElementById('homeBtn');
+                        if (homeBtn) homeBtn.focus();
+                    }, 100);
                 }
             } else if (e.keyCode === KeyCodes.DOWN) {
                 e.preventDefault();
@@ -240,18 +258,20 @@
             });
         });
         
-        // Handle navigation from navbar back to content
-        var navButtons = document.querySelectorAll('.nav-btn');
-        navButtons.forEach(function(btn) {
-            btn.addEventListener('keydown', function(e) {
-                if (e.keyCode === KeyCodes.DOWN) {
-                    e.preventDefault();
-                    currentRowIndex = 0;
-                    currentItemIndex = 0;
-                    focusCurrentItem();
-                }
+        // Set up navbar navigation after a delay to ensure navbar is loaded
+        setTimeout(function() {
+            var navButtons = document.querySelectorAll('.nav-btn');
+            navButtons.forEach(function(btn) {
+                btn.addEventListener('keydown', function(e) {
+                    if (e.keyCode === KeyCodes.DOWN) {
+                        e.preventDefault();
+                        currentRowIndex = 0;
+                        currentItemIndex = 0;
+                        focusCurrentItem();
+                    }
+                });
             });
-        });
+        }, 500);
         
         // Focus first item
         if (genreRows.length > 0) {
