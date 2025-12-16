@@ -13,7 +13,6 @@ body {
 }
 
 body {
-    font-family: -apple-system, "Helvetica", system-ui, BlinkMacSystemFont, "Segoe UI", "Roboto", sans-serif;
     background: #0a0a0a;
     color: #ffffff;
 }
@@ -32,7 +31,6 @@ body {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    filter: blur(15px);
     transform: scale(1.1);
     opacity: 0.8;
 }
@@ -341,7 +339,7 @@ body {
 .nextup-list {
     display: flex;
     gap: 20px;
-    padding: 20px 0 30px 0;
+    padding: 20px 60px 30px 60px;
 }
 
 .nextup-card {
@@ -364,6 +362,12 @@ body {
     border-radius: 8px;
     margin-bottom: 12px;
     background: #222;
+    border: 2px solid transparent;
+    transition: border-color 0.2s;
+}
+
+.nextup-card:focus .nextup-image {
+    border-color: rgba(255, 255, 255, 0.8);
 }
 
 .nextup-title {
@@ -408,7 +412,7 @@ body {
 .cast-list {
     display: flex;
     gap: 20px;
-    padding: 20px 0 30px 0;
+    padding: 20px 60px 30px 60px;
 }
 
 .cast-card {
@@ -467,7 +471,7 @@ body {
 .seasons-list {
     display: flex;
     gap: 20px;
-    padding: 20px 0 30px 0;
+    padding: 20px 60px 30px 60px;
 }
 
 .season-card {
@@ -492,6 +496,14 @@ body {
     width: 100%;
     height: 360px;
     object-fit: cover;
+    border: 2px solid transparent;
+    border-radius: 8px 8px 0 0;
+    transition: border-color 0.2s;
+}
+
+.season-card:focus .season-image,
+.season-card:hover .season-image {
+    border-color: rgba(255, 255, 255, 0.8);
 }
 
 .season-name {
@@ -520,7 +532,7 @@ body {
 .episodes-list {
     display: flex;
     gap: 20px;
-    padding: 20px 0 30px 0;
+    padding: 20px 60px 30px 60px;
 }
 
 .episode-card {
@@ -544,6 +556,12 @@ body {
     border-radius: 8px;
     margin-bottom: 12px;
     background: #222;
+    border: 2px solid transparent;
+    transition: border-color 0.2s;
+}
+
+.episode-card:focus .episode-image {
+    border-color: rgba(255, 255, 255, 0.8);
 }
 
 .episode-title {
@@ -602,7 +620,7 @@ body {
 .similar-list {
     display: flex;
     gap: 20px;
-    padding: 20px 0 30px 0;
+    padding: 20px 60px 30px 60px;
 }
 
 .similar-card {
@@ -611,31 +629,38 @@ body {
     cursor: pointer;
     transition: all 0.3s ease;
     border-radius: 8px;
-    overflow: hidden;
-    background: rgba(255, 255, 255, 0.05);
+    overflow: visible;
+    background: transparent;
     outline: none;
 }
 
 .similar-card:hover,
 .similar-card:focus {
     transform: scale(1.05);
-    background: rgba(255, 255, 255, 0.1);
-    box-shadow: 0 8px 20px rgba(0, 164, 220, 0.4);
 }
 
 .similar-image {
     width: 100%;
     height: 360px;
     object-fit: cover;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    transition: border-color 0.2s;
+}
+
+.similar-card:focus .similar-image,
+.similar-card:hover .similar-image {
+    border-color: rgba(255, 255, 255, 0.8);
 }
 
 .similar-title {
-    padding: 12px;
+    padding: 12px 0;
     font-size: 20px;
     font-weight: 500;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    background: transparent;
 }
 
 .technical-info {

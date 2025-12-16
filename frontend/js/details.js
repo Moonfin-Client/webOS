@@ -7,7 +7,7 @@ var DetailsController = (function() {
     const focusManager = {
         currentSection: 'buttons',
         currentIndex: 0,
-        sections: ['buttons', 'nextup', 'seasons', 'episodes', 'cast', 'similar']
+        sections: ['buttons', 'nextup', 'seasons', 'episodes', 'remainingepisodes', 'cast', 'similar']
     };
     let modalFocusableItems = [];
     let currentModalFocusIndex = 0;
@@ -40,6 +40,7 @@ var DetailsController = (function() {
         JellyfinAPI.Logger.info('Loading details for item:', itemId);
         
         cacheElements();
+        storage.applyBackdropBlur(document.querySelector('.backdrop-image'), 'backdropBlurDetail', 15);
         setupNavigation();
         loadItemDetails();
     }
@@ -120,12 +121,13 @@ var DetailsController = (function() {
             seasonsList: document.getElementById('seasonsList'),
             episodesSection: document.getElementById('episodesSection'),
             episodesList: document.getElementById('episodesList'),
+            remainingEpisodesSection: document.getElementById('remainingEpisodesSection'),
+            remainingEpisodesList: document.getElementById('remainingEpisodesList'),
             similarSection: document.getElementById('similarSection'),
             similarList: document.getElementById('similarList'),
             extrasSection: document.getElementById('extrasSection'),
             extrasList: document.getElementById('extrasList'),
             technicalSection: document.getElementById('technicalSection'),
-            technicalDetails: document.getElementById('technicalDetails'),
             loadingIndicator: document.getElementById('loadingIndicator'),
             errorDisplay: document.getElementById('errorDisplay'),
             errorText: document.getElementById('errorText'),
@@ -268,6 +270,11 @@ var DetailsController = (function() {
                     return Array.from(elements.episodesList.querySelectorAll('.episode-card'));
                 }
                 return [];
+            case 'remainingepisodes':
+                if (elements.remainingEpisodesSection.style.display === 'block') {
+                    return Array.from(elements.remainingEpisodesList.querySelectorAll('.episode-card'));
+                }
+                return [];
             case 'cast':
                 if (elements.castSection.style.display === 'block') {
                     return Array.from(elements.castList.querySelectorAll('.cast-card'));
@@ -373,16 +380,10 @@ var DetailsController = (function() {
         
         // Hide action buttons for BoxSet/Collection types
         if (itemData.Type === 'BoxSet') {
-            if (elements.playBtnWrapper) elements.playBtnWrapper.style.display = 'none';
-            if (elements.resumeBtnWrapper) elements.resumeBtnWrapper.style.display = 'none';
-            if (elements.shuffleBtnWrapper) elements.shuffleBtnWrapper.style.display = 'none';
-            if (elements.trailerBtnWrapper) elements.trailerBtnWrapper.style.display = 'none';
-            if (elements.markPlayedBtn && elements.markPlayedBtn.closest('.btn-wrapper')) {
-                elements.markPlayedBtn.closest('.btn-wrapper').style.display = 'none';
+            var actionButtons = document.querySelector('.action-buttons');
+            if (actionButtons) {
+                actionButtons.style.display = 'none';
             }
-            if (elements.audioBtnWrapper) elements.audioBtnWrapper.style.display = 'none';
-            if (elements.subtitleBtnWrapper) elements.subtitleBtnWrapper.style.display = 'none';
-            if (elements.moreBtnWrapper) elements.moreBtnWrapper.style.display = 'none';
         }
         
         // Ensure critical elements exist
@@ -522,6 +523,9 @@ var DetailsController = (function() {
             } else if (itemData.ParentBackdropImageTags && itemData.ParentBackdropImageTags.length > 0) {
                 elements.backdropImage.src = auth.serverAddress + '/Items/' + itemData.ParentBackdropItemId + '/Images/Backdrop/0?quality=90&maxWidth=1920';
             }
+            
+            // Reapply blur settings
+            storage.applyBackdropBlur(elements.backdropImage, 'backdropBlurDetail', 15);
         }
         
         if (itemData.UserData) {
@@ -680,7 +684,6 @@ var DetailsController = (function() {
         
         if (itemData.Type === 'BoxSet' || itemData.Type === 'Collection') {
             loadCollectionMovies();
-            displayTechnicalDetails();
             return;
         }
         
@@ -693,12 +696,15 @@ var DetailsController = (function() {
             loadEpisodes();
         }
         
+        if (itemData.Type === 'Episode') {
+            loadRemainingEpisodes();
+        }
+        
         if (itemData.People && itemData.People.length > 0) {
             displayCast(itemData.People);
         }
         
         loadSimilarItems();
-        displayTechnicalDetails();
     }
 
     function loadCollectionMovies() {
@@ -750,8 +756,25 @@ var DetailsController = (function() {
                 window.location.href = 'details.html?id=' + item.Id;
             });
             
+            card.addEventListener('keydown', function(evt) {
+                if (evt.keyCode === KeyCodes.ENTER) {
+                    evt.preventDefault();
+                    window.location.href = 'details.html?id=' + item.Id;
+                }
+            });
+            
             elements.similarList.appendChild(card);
         });
+        
+        // Focus on the first collection item
+        setTimeout(function() {
+            var firstCard = elements.similarList.querySelector('.similar-card');
+            if (firstCard) {
+                focusManager.currentSection = 'similar';
+                focusManager.currentIndex = 0;
+                firstCard.focus();
+            }
+        }, FOCUS_DELAY_MS);
     }
 
     function loadPersonFilmography() {
@@ -1110,6 +1133,97 @@ var DetailsController = (function() {
         });
     }
 
+    function loadRemainingEpisodes() {
+        if (!itemData.SeasonId || !itemData.SeriesId) {
+            JellyfinAPI.Logger.info('Episode missing SeasonId or SeriesId, cannot load remaining episodes');
+            return;
+        }
+        
+        var params = {
+            userId: auth.userId,
+            seasonId: itemData.SeasonId,
+            fields: 'Overview,PrimaryImageAspectRatio,MediaStreams',
+            enableImages: true,
+            enableUserData: true
+        };
+        
+        var endpoint = '/Shows/' + itemData.SeasonId + '/Episodes';
+        
+        JellyfinAPI.getItems(auth.serverAddress, auth.accessToken, endpoint, params, function(err, data) {
+            if (err || !data || !data.Items || data.Items.length === 0) {
+                JellyfinAPI.Logger.info('No episodes found for season');
+                return;
+            }
+            
+            // Filter to only episodes after current episode that are unwatched
+            var currentEpisodeIndex = itemData.IndexNumber || 0;
+            var remainingEpisodes = data.Items.filter(function(ep) {
+                var epIndex = ep.IndexNumber || 0;
+                return epIndex > currentEpisodeIndex && (!ep.UserData || !ep.UserData.Played);
+            });
+            
+            if (remainingEpisodes.length > 0) {
+                displayRemainingEpisodes(remainingEpisodes);
+            } else {
+                JellyfinAPI.Logger.info('No remaining unwatched episodes in season');
+            }
+        });
+    }
+    
+    function displayRemainingEpisodes(episodes) {
+        elements.remainingEpisodesSection.style.display = 'block';
+        elements.remainingEpisodesList.innerHTML = '';
+        
+        episodes.forEach(function(episode) {
+            var card = document.createElement('div');
+            card.className = 'episode-card';
+            card.setAttribute('tabindex', '0');
+            
+            var img = document.createElement('img');
+            img.className = 'episode-image';
+            if (episode.ImageTags && episode.ImageTags.Primary) {
+                img.src = auth.serverAddress + '/Items/' + episode.Id + '/Images/Primary?quality=90&maxWidth=420';
+            } else if (episode.SeriesPrimaryImageTag && episode.SeriesId) {
+                img.src = auth.serverAddress + '/Items/' + episode.SeriesId + '/Images/Primary?quality=90&maxWidth=420';
+            }
+            
+            var title = document.createElement('div');
+            title.className = 'episode-title';
+            title.textContent = episode.Name;
+            
+            var info = document.createElement('div');
+            info.className = 'episode-info';
+            var episodeNum = 'Episode ' + (episode.IndexNumber || 0);
+            if (episode.RunTimeTicks) {
+                var minutes = Math.round(episode.RunTimeTicks / 600000000);
+                episodeNum += ' • ' + minutes + ' min';
+            }
+            info.textContent = episodeNum;
+            
+            var overview = document.createElement('div');
+            overview.className = 'episode-overview';
+            overview.textContent = episode.Overview || '';
+            
+            card.appendChild(img);
+            card.appendChild(title);
+            card.appendChild(info);
+            card.appendChild(overview);
+            
+            card.addEventListener('click', function() {
+                window.location.href = 'details.html?id=' + episode.Id;
+            });
+            
+            card.addEventListener('keydown', function(evt) {
+                if (evt.keyCode === KeyCodes.ENTER) {
+                    evt.preventDefault();
+                    window.location.href = 'details.html?id=' + episode.Id;
+                }
+            });
+            
+            elements.remainingEpisodesList.appendChild(card);
+        });
+    }
+
     function loadSimilarItems() {
         var params = {
             userId: auth.userId,
@@ -1156,35 +1270,44 @@ var DetailsController = (function() {
         });
     }
 
-    function displayTechnicalDetails() {
-        elements.technicalSection.style.display = 'block';
-        var html = '';
-        
-        if (itemData.Studios && itemData.Studios.length > 0) {
-            html += '<div class="tech-row"><span class="tech-label">Studio:</span><span class="tech-value">' + itemData.Studios.map(s => s.Name).join(', ') + '</span></div>';
-        }
-        
-        if (itemData.PremiereDate) {
-            var date = new Date(itemData.PremiereDate);
-            html += '<div class="tech-row"><span class="tech-label">Release Date:</span><span class="tech-value">' + date.toLocaleDateString() + '</span></div>';
-        }
-        
-        if (itemData.ProviderIds) {
-            if (itemData.ProviderIds.Imdb) {
-                html += '<div class="tech-row"><span class="tech-label">IMDb:</span><span class="tech-value">' + itemData.ProviderIds.Imdb + '</span></div>';
-            }
-        }
-        
-        elements.technicalDetails.innerHTML = html;
-    }
-
     /**
      * Handle play button activation
      * Navigates to player page to start playback
+     * For Series, plays the next episode to watch
      * @private
      */
     function handlePlay() {
-        JellyfinAPI.Logger.info('Play clicked for item:', itemData.Id);
+        JellyfinAPI.Logger.info('Play clicked for item:', itemData.Id, 'Type:', itemData.Type);
+        
+        // For Series, find and play the next episode to watch
+        if (itemData.Type === 'Series') {
+            var params = {
+                userId: auth.userId,
+                seriesId: itemData.Id,
+                fields: 'Overview',
+                enableImages: true,
+                enableUserData: true,
+                limit: 1
+            };
+            
+            var endpoint = '/Shows/NextUp';
+            
+            JellyfinAPI.getItems(auth.serverAddress, auth.accessToken, endpoint, params, function(err, data) {
+                if (!err && data && data.Items && data.Items.length > 0) {
+                    // Play the next episode
+                    var nextEpisode = data.Items[0];
+                    JellyfinAPI.Logger.success('Playing next episode:', nextEpisode.Id);
+                    window.location.href = 'player.html?id=' + nextEpisode.Id;
+                } else {
+                    // No next up episode, just navigate to the series (might be fully watched)
+                    JellyfinAPI.Logger.info('No next episode found for series');
+                    alert('No episodes available to play');
+                }
+            });
+            return;
+        }
+        
+        // For all other types, play directly
         window.location.href = 'player.html?id=' + itemData.Id;
     }
 
