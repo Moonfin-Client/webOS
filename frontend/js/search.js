@@ -3,11 +3,13 @@ var SearchController = (function() {
 
     let auth = null;
     let searchTimeout = null;
+    let jellyseerrEnabled = false;
     let currentResults = {
         movies: [],
         shows: [],
         episodes: [],
-        people: []
+        people: [],
+        jellyseerr: []
     };
     
     const focusManager = {
@@ -31,25 +33,33 @@ var SearchController = (function() {
      * Caches elements, sets up listeners, and focuses search input
      */
     function init() {
-        JellyfinAPI.Logger.info('Initializing search controller...');
         
         auth = JellyfinAPI.getStoredAuth();
         if (!auth) {
-            JellyfinAPI.Logger.error('No authentication found, redirecting to login');
             window.location.href = 'login.html';
             return;
         }
 
-        JellyfinAPI.Logger.success('Authenticated as:', auth.username);
         
         cacheElements();
+        initializeJellyseerr();
         setupNavbar();
         setupEventListeners();
         
-        // Focus search input on load
+        // Focus search input on load and open keyboard
         setTimeout(function() {
             if (elements.searchInput) {
+                focusManager.inInput = true;
                 elements.searchInput.focus();
+                
+                // Trigger keyboard on webOS
+                if (typeof webOSTV !== 'undefined') {
+                    try {
+                        elements.searchInput.click();
+                    } catch (e) {
+                        // Fallback - keyboard should open on focus
+                    }
+                }
             }
         }, 100);
     }
@@ -71,11 +81,72 @@ var SearchController = (function() {
             showsRow: document.getElementById('showsRow'),
             episodesRow: document.getElementById('episodesRow'),
             castRow: document.getElementById('castRow'),
+            jellyseerrRow: document.getElementById('jellyseerrRow'),
             moviesList: document.getElementById('moviesList'),
             showsList: document.getElementById('showsList'),
             episodesList: document.getElementById('episodesList'),
-            castList: document.getElementById('castList')
+            castList: document.getElementById('castList'),
+            jellyseerrList: document.getElementById('jellyseerrList')
         };
+    }
+
+    /**
+     * Initialize Jellyseerr integration
+     * @private
+     */
+    function initializeJellyseerr() {
+        // Try initializeFromPreferences first (for existing auth)
+        return JellyseerrAPI.initializeFromPreferences()
+            .then(function(success) {
+                if (success) {
+                    console.log('[Search] initializeFromPreferences succeeded');
+                    jellyseerrEnabled = true;
+                    return success;
+                }
+                
+                // If initializeFromPreferences returns false, it means no auth yet
+                // But we still need to initialize the API with the server URL for searches to work
+                console.log('[Search] initializeFromPreferences returned false, trying direct initialization');
+                var settings = storage.get('jellyfin_settings');
+                if (!settings) {
+                    jellyseerrEnabled = false;
+                    return false;
+                }
+                
+                try {
+                    var parsedSettings = JSON.parse(settings);
+                    if (!parsedSettings.jellyseerrUrl) {
+                        jellyseerrEnabled = false;
+                        return false;
+                    }
+                    
+                    // Get user ID for cookie storage
+                    var auth = JellyfinAPI.getStoredAuth();
+                    var userId = auth && auth.userId ? auth.userId : null;
+                    
+                    // Initialize directly with just the server URL (no auth required)
+                    return JellyseerrAPI.initialize(parsedSettings.jellyseerrUrl, null, userId)
+                        .then(function() {
+                            console.log('[Search] Direct initialization succeeded');
+                            // Try auto-login to get authenticated
+                            return JellyseerrAPI.attemptAutoLogin()
+                                .then(function(loginSuccess) {
+                                    jellyseerrEnabled = loginSuccess;
+                                    console.log('[Search] Auto-login result:', loginSuccess);
+                                    return loginSuccess;
+                                });
+                        })
+                        .catch(function(error) {
+                            console.error('[Search] Direct initialization failed:', error);
+                            jellyseerrEnabled = false;
+                            return false;
+                        });
+                } catch (e) {
+                    console.error('[Search] Settings parsing failed:', e);
+                    jellyseerrEnabled = false;
+                    return false;
+                }
+            });
     }
 
     /**
@@ -126,7 +197,6 @@ var SearchController = (function() {
     function handleSearchInput(evt) {
         const query = evt.target.value.trim();
         
-        JellyfinAPI.Logger.info('Search input changed:', query, 'Length:', query.length);
         
         // Show/hide clear button
         if (elements.clearBtn) {
@@ -139,12 +209,10 @@ var SearchController = (function() {
         }
 
         if (query.length < MIN_SEARCH_LENGTH) {
-            JellyfinAPI.Logger.info('Query too short, showing empty state');
             showEmptyState();
             return;
         }
 
-        JellyfinAPI.Logger.info('Setting search timeout for query:', query);
         searchTimeout = setTimeout(function() {
             performSearch(query);
         }, SEARCH_DEBOUNCE_MS);
@@ -167,7 +235,7 @@ var SearchController = (function() {
                 break;
             case KeyCodes.BACK:
                 evt.preventDefault();
-                window.location.href = 'browse.html';
+                window.history.back();
                 break;
         }
     }
@@ -232,7 +300,7 @@ var SearchController = (function() {
 
             case KeyCodes.BACK:
                 evt.preventDefault();
-                window.location.href = 'browse.html';
+                window.history.back();
                 break;
         }
     }
@@ -243,10 +311,17 @@ var SearchController = (function() {
      * @private
      */
     function performSearch(query) {
-        JellyfinAPI.Logger.info('Searching for:', query);
         
         showLoading();
+        performJellyfinSearch(query);
+    }
 
+    /**
+     * Perform search against Jellyfin
+     * @param {string} query - Search query string
+     * @private
+     */
+    function performJellyfinSearch(query) {
         const endpoint = '/Users/' + auth.userId + '/Items';
         const params = {
             searchTerm: query,
@@ -258,47 +333,71 @@ var SearchController = (function() {
             Limit: 100
         };
         
-        JellyfinAPI.Logger.info('Search API call:', auth.serverAddress + endpoint + '?searchTerm=' + query);
-
-        JellyfinAPI.getItems(auth.serverAddress, auth.accessToken, endpoint, params, function(err, data) {
-            if (err) {
-                JellyfinAPI.Logger.error('Search failed:', err);
-                showNoResults(query);
-                return;
+        // Build query string manually
+        var queryParts = [];
+        for (var key in params) {
+            if (params.hasOwnProperty(key)) {
+                queryParts.push(encodeURIComponent(key) + '=' + encodeURIComponent(params[key]));
             }
-            
-            if (!data) {
-                JellyfinAPI.Logger.error('No search results returned for query:', query);
+        }
+        var queryString = queryParts.join('&');
+        
+        const url = auth.serverAddress + endpoint + '?' + queryString;
+        
+        // Perform Jellyfin search using ajax.request with auth headers
+        ajax.request(url, {
+            method: 'GET',
+            headers: {
+                'X-Emby-Authorization': JellyfinAPI.getAuthHeader(auth.accessToken)
+            },
+            success: function(response) {
+                processJellyfinResults(response.Items || [], query);
+                
+                // Also search Jellyseerr if enabled and authenticated
+                if (jellyseerrEnabled) {
+                    console.log('Jellyseerr enabled, starting search...');
+                    JellyseerrAPI.search(query).then(function(jellyseerrResponse) {
+                        console.log('Jellyseerr search results:', jellyseerrResponse);
+                        // Add Jellyseerr results to current results
+                        currentResults.jellyseerr = jellyseerrResponse.results || [];
+                        console.log('Added', currentResults.jellyseerr.length, 'Jellyseerr results');
+                        // Re-display to show Jellyseerr row
+                        displayResults();
+                    }).catch(function(error) {
+                        console.error('Jellyseerr search failed:', error);
+                        // Still show Jellyfin results even if Jellyseerr fails
+                    });
+                } else {
+                    console.log('Jellyseerr not enabled or not authenticated');
+                }
+            },
+            error: function(error) {
+                console.error('Jellyfin search failed:', error);
                 showNoResults(query);
-                return;
             }
-            
-            JellyfinAPI.Logger.info('Search API response:', data);
-
-            processSearchResults(data.Items || [], query);
         });
     }
 
     /**
-     * Process and categorize search results
+     * Process and categorize search results from Jellyfin
      * @param {Object[]} items - Array of search result items
      * @param {string} query - Original search query
      * @private
      */
-    function processSearchResults(items, query) {
-        JellyfinAPI.Logger.info('Processing search results - Total items:', items.length);
+    function processJellyfinResults(items, query) {
         
-        // Reset results
+        // Reset results (keep jellyseerr if it exists)
+        var jellyseerrResults = currentResults.jellyseerr || [];
         currentResults = {
             movies: [],
             shows: [],
             episodes: [],
-            people: []
+            people: [],
+            jellyseerr: jellyseerrResults
         };
 
         // Categorize items
         items.forEach(function(item) {
-            JellyfinAPI.Logger.info('Item:', item.Name, 'Type:', item.Type);
             
             switch (item.Type) {
                 case 'Movie':
@@ -314,16 +413,8 @@ var SearchController = (function() {
                     currentResults.people.push(item);
                     break;
                 default:
-                    JellyfinAPI.Logger.warn('Unknown item type:', item.Type, 'for item:', item.Name);
                     break;
             }
-        });
-        
-        JellyfinAPI.Logger.info('Categorized results:', {
-            movies: currentResults.movies.length,
-            shows: currentResults.shows.length,
-            episodes: currentResults.episodes.length,
-            people: currentResults.people.length
         });
 
         // Check if we have any results
@@ -340,41 +431,81 @@ var SearchController = (function() {
         displayResults();
     }
 
+    /**
+     * Process and categorize search results from Jellyseerr
+     * @param {Object[]} items - Array of search result items
+     * @param {string} query - Original search query
+     * @private
+     */
+    function processJellyseerrResults(items, query) {
+        
+        // Reset results
+        currentResults = {
+            movies: [],
+            shows: [],
+            episodes: [],
+            people: [],
+            jellyseerr: []
+        };
+
+        // For Jellyseerr mode, just store all results in jellyseerr array
+        currentResults.jellyseerr = items;
+
+        // Check if we have any results
+        const hasResults = currentResults.jellyseerr.length > 0;
+
+        if (!hasResults) {
+            showNoResults(query);
+            return;
+        }
+
+        displayResults();
+    }
+
     function displayResults() {
         hideAllStates();
         elements.resultsContainer.style.display = 'block';
 
-        // Display Movies
-        if (currentResults.movies.length > 0) {
-            elements.moviesRow.style.display = 'block';
-            renderResultCards(currentResults.movies, elements.moviesList, 'movie');
-        } else {
-            elements.moviesRow.style.display = 'none';
-        }
+        // Display all result rows
+            // Display Movies
+            if (currentResults.movies.length > 0) {
+                elements.moviesRow.style.display = 'block';
+                renderResultCards(currentResults.movies, elements.moviesList, 'movie');
+            } else {
+                elements.moviesRow.style.display = 'none';
+            }
 
-        // Display TV Shows
-        if (currentResults.shows.length > 0) {
-            elements.showsRow.style.display = 'block';
-            renderResultCards(currentResults.shows, elements.showsList, 'show');
-        } else {
-            elements.showsRow.style.display = 'none';
-        }
+            // Display TV Shows
+            if (currentResults.shows.length > 0) {
+                elements.showsRow.style.display = 'block';
+                renderResultCards(currentResults.shows, elements.showsList, 'show');
+            } else {
+                elements.showsRow.style.display = 'none';
+            }
 
-        // Display Episodes
-        if (currentResults.episodes.length > 0) {
-            elements.episodesRow.style.display = 'block';
-            renderResultCards(currentResults.episodes, elements.episodesList, 'episode');
-        } else {
-            elements.episodesRow.style.display = 'none';
-        }
+            // Display Episodes
+            if (currentResults.episodes.length > 0) {
+                elements.episodesRow.style.display = 'block';
+                renderResultCards(currentResults.episodes, elements.episodesList, 'episode');
+            } else {
+                elements.episodesRow.style.display = 'none';
+            }
 
-        // Display People
-        if (currentResults.people.length > 0) {
-            elements.castRow.style.display = 'block';
-            renderResultCards(currentResults.people, elements.castList, 'person');
-        } else {
-            elements.castRow.style.display = 'none';
-        }
+            // Display People
+            if (currentResults.people.length > 0) {
+                elements.castRow.style.display = 'block';
+                renderResultCards(currentResults.people, elements.castList, 'person');
+            } else {
+                elements.castRow.style.display = 'none';
+            }
+            
+            // Display Jellyseerr results row if available
+            if (currentResults.jellyseerr && currentResults.jellyseerr.length > 0) {
+                elements.jellyseerrRow.style.display = 'block';
+                renderResultCards(currentResults.jellyseerr, elements.jellyseerrList, 'jellyseerr');
+            } else {
+                elements.jellyseerrRow.style.display = 'none';
+            }
     }
 
     function renderResultCards(items, container, type) {
@@ -390,26 +521,46 @@ var SearchController = (function() {
         const card = document.createElement('div');
         card.className = 'result-card' + (type === 'person' ? ' person' : '') + (type === 'episode' ? ' episode' : '');
         card.tabIndex = 0;
-        card.dataset.itemId = item.Id;
-        card.dataset.type = type;
+        
+        if (type === 'jellyseerr') {
+            card.dataset.tmdbId = item.id;
+            card.dataset.mediaType = item.mediaType;
+            card.dataset.type = item.mediaType === 'movie' ? 'movie' : (item.mediaType === 'tv' ? 'show' : 'person');
+        } else {
+            card.dataset.itemId = item.Id;
+            card.dataset.type = type;
+        }
 
         // Image wrapper
         const imageWrapper = document.createElement('div');
         imageWrapper.className = 'card-image-wrapper';
 
-        const imageTag = item.ImageTags && item.ImageTags.Primary;
-        if (imageTag) {
+        let imageUrl = null;
+        
+        if (type === 'jellyseerr') {
+            // Jellyseerr items
+            if (item.posterPath) {
+                imageUrl = ImageHelper.getTMDBImageUrl(item.posterPath, 'w500');
+            } else if (item.profilePath) {
+                imageUrl = ImageHelper.getTMDBImageUrl(item.profilePath, 'w500');
+            }
+        } else {
+            // Jellyfin items
+            const imageTag = item.ImageTags && item.ImageTags.Primary;
+            if (imageTag) {
+                if (type === 'episode') {
+                    imageUrl = auth.serverAddress + '/Items/' + item.Id + '/Images/Primary?fillWidth=500&quality=90';
+                } else {
+                    imageUrl = auth.serverAddress + '/Items/' + item.Id + '/Images/Primary?fillWidth=300&quality=90';
+                }
+            }
+        }
+
+        if (imageUrl) {
             const img = document.createElement('img');
             img.className = 'card-image';
-            
-            // Use wider images for episodes (16:9 format)
-            if (type === 'episode') {
-                img.src = auth.serverAddress + '/Items/' + item.Id + '/Images/Primary?fillWidth=500&quality=90';
-            } else {
-                img.src = auth.serverAddress + '/Items/' + item.Id + '/Images/Primary?fillWidth=300&quality=90';
-            }
-            
-            img.alt = item.Name;
+            img.src = imageUrl;
+            img.alt = item.Name || item.name || item.title || 'Media';
             imageWrapper.appendChild(img);
         } else {
             const placeholder = document.createElement('div');
@@ -426,19 +577,35 @@ var SearchController = (function() {
 
         const title = document.createElement('div');
         title.className = 'card-title';
-        title.textContent = item.Name;
+        title.textContent = item.Name || item.name || item.title || 'Unknown';
         cardInfo.appendChild(title);
 
         const subtitle = document.createElement('div');
         subtitle.className = 'card-subtitle';
         
-        if (type === 'episode') {
-            subtitle.textContent = (item.SeriesName || '') + (item.ParentIndexNumber ? ' S' + item.ParentIndexNumber : '') + 
-                                  (item.IndexNumber ? 'E' + item.IndexNumber : '');
-        } else if (type === 'person') {
-            subtitle.textContent = item.Role || 'Actor';
+        if (type === 'jellyseerr') {
+            // Jellyseerr items
+            if (item.mediaType === 'person') {
+                subtitle.textContent = item.knownForDepartment || 'Actor';
+            } else {
+                var year = '';
+                if (item.releaseDate) {
+                    year = new Date(item.releaseDate).getFullYear();
+                } else if (item.firstAirDate) {
+                    year = new Date(item.firstAirDate).getFullYear();
+                }
+                subtitle.textContent = year || '';
+            }
         } else {
-            subtitle.textContent = item.ProductionYear || '';
+            // Jellyfin items
+            if (type === 'episode') {
+                subtitle.textContent = (item.SeriesName || '') + (item.ParentIndexNumber ? ' S' + item.ParentIndexNumber : '') + 
+                                      (item.IndexNumber ? 'E' + item.IndexNumber : '');
+            } else if (type === 'person') {
+                subtitle.textContent = item.Role || 'Actor';
+            } else {
+                subtitle.textContent = item.ProductionYear || '';
+            }
         }
         
         cardInfo.appendChild(subtitle);
@@ -459,13 +626,28 @@ var SearchController = (function() {
     }
 
     function navigateToItem(item, type) {
-        if (type === 'person') {
-            // Navigate to person's page (if implemented)
-            JellyfinAPI.Logger.info('Person selected:', item.Name);
+        var isJellyseerrItem = type === 'jellyseerr';
+        var actualType = type === 'jellyseerr' ? (item.mediaType === 'movie' ? 'movie' : (item.mediaType === 'tv' ? 'show' : 'person')) : type;
+        
+        if (actualType === 'person') {
+            // Navigate to person page
+            if (isJellyseerrItem) {
+                // For Jellyseerr, navigate to person details page
+                var personId = item.id;
+                window.location.href = 'person.html?id=' + personId;
+            }
             return;
         }
         
-        window.location.href = 'details.html?id=' + item.Id;
+        if (isJellyseerrItem) {
+            // Jellyseerr - navigate to details page with TMDB ID
+            var tmdbId = item.id;
+            var mediaType = item.mediaType === 'movie' ? 'Movie' : 'Series';
+            window.location.href = 'details.html?id=' + tmdbId + '&type=' + mediaType + '&source=jellyseerr';
+        } else {
+            // Jellyfin
+            window.location.href = 'details.html?id=' + item.Id;
+        }
     }
 
     function getVisibleRows() {
@@ -474,6 +656,7 @@ var SearchController = (function() {
         if (currentResults.shows.length > 0) rows.push('shows');
         if (currentResults.episodes.length > 0) rows.push('episodes');
         if (currentResults.people.length > 0) rows.push('people');
+        if (currentResults.jellyseerr && currentResults.jellyseerr.length > 0) rows.push('jellyseerr');
         return rows;
     }
 
@@ -512,11 +695,18 @@ var SearchController = (function() {
             case 'shows': return elements.showsList;
             case 'episodes': return elements.episodesList;
             case 'people': return elements.castList;
+            case 'jellyseerr': return elements.jellyseerrList;
             default: return null;
         }
     }
 
     function focusFirstResult() {
+        const visibleRows = getVisibleRows();
+        if (visibleRows.length === 0) {
+            // No results to focus
+            return;
+        }
+        
         focusManager.inInput = false;
         focusManager.currentRow = 0;
         focusManager.currentItem = 0;
@@ -525,9 +715,18 @@ var SearchController = (function() {
 
     function focusSearchInput() {
         focusManager.inInput = true;
+        focusManager.inNavBar = false;
         focusManager.currentRow = -1;
         if (elements.searchInput) {
             elements.searchInput.focus();
+            // Re-trigger keyboard on webOS if needed
+            if (typeof webOSTV !== 'undefined') {
+                try {
+                    elements.searchInput.click();
+                } catch (e) {
+                    // Keyboard should open on focus
+                }
+            }
         }
     }
 
@@ -640,7 +839,13 @@ var SearchController = (function() {
             case KeyCodes.DOWN:
                 evt.preventDefault();
                 focusManager.inNavBar = false;
-                focusSearchInput();
+                // Blur keyboard if open
+                if (document.activeElement && document.activeElement.blur) {
+                    document.activeElement.blur();
+                }
+                setTimeout(function() {
+                    focusSearchInput();
+                }, 50);
                 break;
                 
             case KeyCodes.ENTER:

@@ -62,6 +62,11 @@ var PlayerController = (function() {
     const FOCUS_DELAY_MS = 100;
     const CONTROLS_FADE_DELAY_MS = 300;
     const AUTO_HIDE_CONTROLS_MS = 2000;
+    const DIRECT_PLAY_TIMEOUT_MS = 15000;
+    const TRANSCODE_TIMEOUT_MS = 45000;
+    
+    // Jellyfin Ticks Conversion
+    const TICKS_PER_SECOND = 10000000;
 
     /**
      * Attempt fallback to transcoding if direct play fails
@@ -71,12 +76,10 @@ var PlayerController = (function() {
      */
     function attemptTranscodeFallback(mediaSource, reason) {
         if (hasTriedTranscode) {
-            JellyfinAPI.Logger.error('Already attempted transcode fallback, aborting');
             return false;
         }
         
         if (!mediaSource || !mediaSource.SupportsTranscoding) {
-            JellyfinAPI.Logger.error('Transcoding not supported for this media:', {
                 hasMediaSource: !!mediaSource,
                 supportsTranscoding: mediaSource?.SupportsTranscoding,
                 container: mediaSource?.Container
@@ -84,7 +87,6 @@ var PlayerController = (function() {
             return false;
         }
         
-        JellyfinAPI.Logger.warn('Attempting transcode fallback. Reason:', reason);
         hasTriedTranscode = true;
         
         var modifiedSource = Object.assign({}, mediaSource);
@@ -123,11 +125,10 @@ var PlayerController = (function() {
                 break;
         }
         
-        JellyfinAPI.Logger.info('Loading state:', state);
     }
 
     function init() {
-        JellyfinAPI.Logger.info('Initializing player controller...');
+        console.log('[Player] Initializing player controller');
         
         auth = JellyfinAPI.getStoredAuth();
         if (!auth) {
@@ -291,14 +292,14 @@ var PlayerController = (function() {
     async function initializePlayerAdapter() {
         try {
             showLoading();
-            JellyfinAPI.Logger.info('Initializing video player adapter...');
+            console.log('[Player] Initializing video player adapter');
             
             // Create the best available player adapter
             playerAdapter = await VideoPlayerFactory.createPlayer(videoPlayer);
+            console.log('[Player] Using adapter:', playerAdapter.getName());
             
             // Setup adapter event listeners
             playerAdapter.on('error', function(error) {
-                JellyfinAPI.Logger.error('Player adapter error:', error);
                 onError(error);
             });
             
@@ -311,20 +312,16 @@ var PlayerController = (function() {
             });
             
             playerAdapter.on('loaded', function(data) {
-                JellyfinAPI.Logger.info('Media loaded by', playerAdapter.getName());
                 hideLoading();
             });
             
             playerAdapter.on('qualitychange', function(data) {
-                JellyfinAPI.Logger.info('Quality changed:', data);
             });
             
             playerAdapter.on('audiotrackchange', function(data) {
-                JellyfinAPI.Logger.info('Audio track changed:', data);
                 detectCurrentAudioTrack();
             });
             
-            JellyfinAPI.Logger.info('✓ Player adapter initialized:', playerAdapter.getName());
             
             // Now load the item and start playback
             loadItemAndPlay();
@@ -334,7 +331,6 @@ var PlayerController = (function() {
             loadNextEpisode();
             
         } catch (error) {
-            JellyfinAPI.Logger.error('Failed to initialize player adapter:', error);
             alert('Failed to initialize video player: ' + error.message);
             window.history.back();
         }
@@ -481,7 +477,6 @@ var PlayerController = (function() {
     }
 
     function handleModalKeyDown(evt) {
-        JellyfinAPI.Logger.info('[Player] Modal key pressed:', evt.keyCode,
             'currentModalFocusIndex:', currentModalFocusIndex,
             'focusableItems:', modalFocusableItems.length, 'activeModal:', activeModal);
         currentModalFocusIndex = TrackSelector.handleModalKeyDown(
@@ -490,7 +485,6 @@ var PlayerController = (function() {
             currentModalFocusIndex,
             closeModal
         );
-        JellyfinAPI.Logger.info('[Player] New modal focus index:', currentModalFocusIndex);
     }
 
     function loadItemAndPlay() {
@@ -509,7 +503,7 @@ var PlayerController = (function() {
             }
 
             itemData = data;
-            JellyfinAPI.Logger.info('Loaded item:', itemData.Name);
+            console.log('[Player] Loaded item:', itemData.Name, 'Type:', itemData.Type);
 
             // Set media info. Prefering the logo over title text
             var hasLogo = false;
@@ -573,7 +567,6 @@ var PlayerController = (function() {
             data: requestData,
             success: function(response) {
                 playbackInfo = response;
-                JellyfinAPI.Logger.info('Playback info received');
                 
                 // Start playback
                 if (playbackInfo.MediaSources && playbackInfo.MediaSources.length > 0) {
@@ -584,10 +577,6 @@ var PlayerController = (function() {
                 }
             },
             error: function(err) {
-                console.error('[Player] PlaybackInfo request failed:', err);
-                console.error('[Player] Item ID:', itemId);
-                console.error('[Player] Server:', auth.serverAddress);
-                JellyfinAPI.Logger.error('Failed to get playback info:', err);
                 
                 var errorMsg = 'Failed to get playback information';
                 if (err && err.error === 500) {
@@ -651,16 +640,10 @@ var PlayerController = (function() {
         playSessionId = generateUUID();
         currentMediaSource = mediaSource;
         
-        JellyfinAPI.Logger.info('Media source info:', mediaSource);
-        JellyfinAPI.Logger.info('SupportsDirectPlay:', mediaSource.SupportsDirectPlay);
-        JellyfinAPI.Logger.info('SupportsTranscoding:', mediaSource.SupportsTranscoding);
-        JellyfinAPI.Logger.info('Container:', mediaSource.Container);
-        JellyfinAPI.Logger.info('VideoCodec:', mediaSource.MediaStreams?.find(s => s.Type === 'Video')?.Codec);
         
         // Populate audio/subtitle streams early so preferences can be applied
         audioStreams = mediaSource.MediaStreams?.filter(function(s) { return s.Type === 'Audio'; }) || [];
         subtitleStreams = mediaSource.MediaStreams?.filter(function(s) { return s.Type === 'Subtitle'; }) || [];
-        console.log('[Player] Found', audioStreams.length, 'audio streams and', subtitleStreams.length, 'subtitle streams');
         
         var streamUrl;
         var mimeType;
@@ -691,7 +674,6 @@ var PlayerController = (function() {
             mimeType = 'video/' + container;
             useDirectPlay = true;
             isTranscoding = false;
-            JellyfinAPI.Logger.info('Using direct play - codecs are compatible:', videoStream.Codec, audioStream?.Codec);
         } else if (mediaSource.SupportsTranscoding) {
             streamUrl = auth.serverAddress + '/Videos/' + itemId + '/master.m3u8';
             params.append('VideoCodec', 'h264');
@@ -705,29 +687,21 @@ var PlayerController = (function() {
             params.append('BreakOnNonKeyFrames', 'false');
             
             // Check for user-selected track preferences from details page
-            console.log('[Player] Checking localStorage for itemId:', itemId);
             var preferredAudioIndex = localStorage.getItem('preferredAudioTrack_' + itemId);
             var preferredSubtitleIndex = localStorage.getItem('preferredSubtitleTrack_' + itemId);
-            console.log('[Player] preferredAudioIndex:', preferredAudioIndex, 'audioStreams length:', audioStreams.length);
-            console.log('[Player] preferredSubtitleIndex:', preferredSubtitleIndex, 'subtitleStreams length:', subtitleStreams.length);
             
             if (preferredAudioIndex !== null && audioStreams[preferredAudioIndex]) {
                 params.append('AudioStreamIndex', audioStreams[preferredAudioIndex].Index);
-                console.log('[Player] ✓ Applying preferred audio track:', preferredAudioIndex, '(stream index', audioStreams[preferredAudioIndex].Index, ')');
             }
             
             if (preferredSubtitleIndex !== null && preferredSubtitleIndex >= 0 && subtitleStreams[preferredSubtitleIndex]) {
                 params.append('SubtitleStreamIndex', subtitleStreams[preferredSubtitleIndex].Index);
                 params.append('SubtitleMethod', 'Encode');
-                console.log('[Player] ✓ Applying preferred subtitle track:', preferredSubtitleIndex, '(stream index', subtitleStreams[preferredSubtitleIndex].Index, ')');
             }
             
             mimeType = 'application/x-mpegURL';
             isTranscoding = true;
-            JellyfinAPI.Logger.info('Using transcoding (HLS) - optimized for webOS seeking');
-            console.log('[Player] Transcoded streams require video reload for track switching');
         } else {
-            JellyfinAPI.Logger.error('No playback method available for media source:', {
                 container: mediaSource.Container,
                 supportsDirectPlay: mediaSource.SupportsDirectPlay,
                 supportsDirectStream: mediaSource.SupportsDirectStream,
@@ -741,20 +715,19 @@ var PlayerController = (function() {
 
         var videoUrl = streamUrl + '?' + params.toString();
         
-        JellyfinAPI.Logger.info('Playback URL:', videoUrl);
-        JellyfinAPI.Logger.info('MIME type:', mimeType);
-        JellyfinAPI.Logger.info('Using player adapter:', playerAdapter.getName());
-        JellyfinAPI.Logger.info('Direct play:', useDirectPlay);
+        console.log('[Player] Starting playback');
+        console.log('[Player] Method:', useDirectPlay ? 'Direct Play' : 'Transcode');
+        console.log('[Player] Container:', mediaSource.Container);
+        console.log('[Player] URL:', videoUrl.substring(0, 100) + '...');
         
         var startPosition = 0;
         if (itemData.UserData && itemData.UserData.PlaybackPositionTicks > 0) {
-            startPosition = itemData.UserData.PlaybackPositionTicks / 10000000;
+            startPosition = itemData.UserData.PlaybackPositionTicks / TICKS_PER_SECOND;
         }
         
-        var timeoutDuration = useDirectPlay ? 15000 : 45000;
+        var timeoutDuration = useDirectPlay ? DIRECT_PLAY_TIMEOUT_MS : TRANSCODE_TIMEOUT_MS;
         loadingTimeout = setTimeout(function() {
             if (loadingState === LoadingState.LOADING) {
-                JellyfinAPI.Logger.warn('Loading timeout after', timeoutDuration + 'ms');
                 
                 if (useDirectPlay && attemptTranscodeFallback(mediaSource, 'Loading timeout')) {
                     alert('Direct playback timed out. Switching to transcoding...');
@@ -772,10 +745,8 @@ var PlayerController = (function() {
             mimeType: mimeType,
             startPosition: startPosition
         }).then(function() {
-            JellyfinAPI.Logger.info('Media loaded successfully');
             clearLoadingTimeout();
         }).catch(function(error) {
-            JellyfinAPI.Logger.error('Playback error:', error);
             clearLoadingTimeout();
             
             if (useDirectPlay && attemptTranscodeFallback(mediaSource, error.message || 'Load error')) {
@@ -877,10 +848,8 @@ var PlayerController = (function() {
             auth.serverAddress + '/Sessions/Playing',
             buildPlaybackData(),
             function() {
-                JellyfinAPI.Logger.info('Playback start reported');
             },
             function(err) {
-                JellyfinAPI.Logger.error('Failed to report playback start:', err);
             }
         );
     }
@@ -896,7 +865,6 @@ var PlayerController = (function() {
             buildPlaybackData(),
             function() {},
             function(err) {
-                JellyfinAPI.Logger.warn('Failed to report progress:', err);
             }
         );
     }
@@ -911,10 +879,8 @@ var PlayerController = (function() {
             auth.serverAddress + '/Sessions/Playing/Stopped',
             buildPlaybackData(),
             function() {
-                JellyfinAPI.Logger.info('Playback stop reported');
             },
             function(err) {
-                JellyfinAPI.Logger.error('Failed to report playback stop:', err);
             }
         );
     }
@@ -1080,7 +1046,6 @@ var PlayerController = (function() {
                 videoPlayer.currentTime = position;
             }
         } catch (error) {
-            JellyfinAPI.Logger.error('Seek error at position', position + 's:', error);
         }
         
         setTimeout(function() {
@@ -1226,7 +1191,6 @@ var PlayerController = (function() {
      * Handle video play event
      */
     function onPlay() {
-        JellyfinAPI.Logger.info('Video playing');
     }
 
     /**
@@ -1236,7 +1200,6 @@ var PlayerController = (function() {
      * Handle video pause event
      */
     function onPause() {
-        JellyfinAPI.Logger.info('Video paused');
     }
     
     /**
@@ -1246,14 +1209,12 @@ var PlayerController = (function() {
      * Handle video ready to play event
      */
     function onCanPlay() {
-        JellyfinAPI.Logger.info('Video can play - buffered enough');
+        console.log('[Player] Video ready to play');
         clearLoadingTimeout();
         setLoadingState(LoadingState.READY);
         
         if (videoPlayer.paused && videoPlayer.readyState >= 3) {
-            JellyfinAPI.Logger.info('Auto-starting playback');
             videoPlayer.play().catch(function(err) {
-                JellyfinAPI.Logger.error('Failed to auto-start playback:', err);
             });
         }
     }
@@ -1265,7 +1226,6 @@ var PlayerController = (function() {
      * Handle video metadata loaded event
      */
     function onLoadedMetadata() {
-        JellyfinAPI.Logger.info('Video metadata loaded');
         clearLoadingTimeout();
     }
     
@@ -1276,7 +1236,6 @@ var PlayerController = (function() {
      * Handle video buffering event
      */
     function onWaiting() {
-        JellyfinAPI.Logger.info('Video buffering...');
     }
     
     /**
@@ -1286,7 +1245,6 @@ var PlayerController = (function() {
      * Handle video playing event (playback started)
      */
     function onPlaying() {
-        JellyfinAPI.Logger.info('Video started playing');
         clearLoadingTimeout();
         setLoadingState(LoadingState.READY);
         
@@ -1363,7 +1321,7 @@ var PlayerController = (function() {
      * Handle video ended event
      */
     function onEnded() {
-        JellyfinAPI.Logger.info('Playback ended');
+        console.log('[Player] Playback ended');
         reportPlaybackStop();
         stopProgressReporting();
         stopBitrateMonitoring();
@@ -1376,12 +1334,12 @@ var PlayerController = (function() {
      * @param {Event} evt - Error event
      */
     function onError(evt) {
-        JellyfinAPI.Logger.error('Video error:', evt);
+        console.error('[Player] Playback error:', evt);
         
         var errorCode = videoPlayer.error ? videoPlayer.error.code : 'unknown';
         var errorMessage = videoPlayer.error ? videoPlayer.error.message : 'Unknown error';
+        console.error('[Player] Error code:', errorCode, 'Message:', errorMessage);
         
-        JellyfinAPI.Logger.error('Error code:', errorCode, 'Message:', errorMessage);
         
         clearLoadingTimeout();
         setLoadingState(LoadingState.ERROR);
@@ -1405,7 +1363,6 @@ var PlayerController = (function() {
      * Play previous item in queue/playlist
      */
     function playPreviousItem() {
-        JellyfinAPI.Logger.info('Playing previous item');
         
         // Stop current playback
         reportPlaybackStop();
@@ -1421,7 +1378,6 @@ var PlayerController = (function() {
      * Play next item in queue/playlist
      */
     function playNextItem() {
-        JellyfinAPI.Logger.info('Playing next item');
         
         // Stop current playback
         reportPlaybackStop();
@@ -1446,7 +1402,6 @@ var PlayerController = (function() {
         
         if (playerAdapter) {
             playerAdapter.destroy().catch(function(err) {
-                JellyfinAPI.Logger.warn('Error destroying player adapter:', err);
             });
             playerAdapter = null;
         }
@@ -1509,14 +1464,12 @@ var PlayerController = (function() {
                     for (var i = 0; i < audioStreams.length; i++) {
                         if (audioStreams[i].Language === currentVariant.language) {
                             currentAudioIndex = i;
-                            JellyfinAPI.Logger.info('Detected current audio track:', currentAudioIndex, currentVariant.language);
                             break;
                         }
                     }
                 }
             }
         } catch (error) {
-            JellyfinAPI.Logger.warn('Failed to detect current audio track:', error);
         }
     }
 
@@ -1535,10 +1488,8 @@ var PlayerController = (function() {
      * Show audio track selector modal
      */
     function showAudioTrackSelector() {
-        JellyfinAPI.Logger.info('[Player] showAudioTrackSelector called');
         
         if (!itemData || !itemData.MediaSources || !itemData.MediaSources[0].MediaStreams) {
-            JellyfinAPI.Logger.warn('[Player] No media sources or streams available');
             return;
         }
 
@@ -1547,18 +1498,15 @@ var PlayerController = (function() {
         });
 
         if (audioStreams.length === 0) {
-            JellyfinAPI.Logger.warn('[Player] No audio streams found');
             return;
         }
 
-        JellyfinAPI.Logger.info('[Player] Found', audioStreams.length, 'audio tracks, currentAudioIndex:', currentAudioIndex);
 
         // Build language map for Shaka Player
         audioLanguageMap = audioStreams.map(function(s) {
             return s.Language || 'und';
         });
 
-        JellyfinAPI.Logger.info('[Player] Building audio track list with callback: selectAudioTrack');
         modalFocusableItems = TrackSelector.buildAudioTrackList(
             audioStreams,
             currentAudioIndex,
@@ -1566,7 +1514,6 @@ var PlayerController = (function() {
             selectAudioTrack
         );
         
-        JellyfinAPI.Logger.info('[Player] Created', modalFocusableItems.length, 'focusable audio items');
 
         activeModal = 'audio';
         elements.audioModal.style.display = 'flex';
@@ -1583,10 +1530,8 @@ var PlayerController = (function() {
      * Show subtitle track selector modal
      */
     function showSubtitleTrackSelector() {
-        JellyfinAPI.Logger.info('[Player] showSubtitleTrackSelector called');
         
         if (!itemData || !itemData.MediaSources || !itemData.MediaSources[0].MediaStreams) {
-            JellyfinAPI.Logger.warn('[Player] No media sources or streams available');
             return;
         }
 
@@ -1594,9 +1539,7 @@ var PlayerController = (function() {
             return s.Type === 'Subtitle';
         });
 
-        JellyfinAPI.Logger.info('[Player] Found', subtitleStreams.length, 'subtitle tracks, currentSubtitleIndex:', currentSubtitleIndex);
 
-        JellyfinAPI.Logger.info('[Player] Building subtitle track list with callback: selectSubtitleTrack');
         modalFocusableItems = TrackSelector.buildSubtitleTrackList(
             subtitleStreams,
             currentSubtitleIndex,
@@ -1604,7 +1547,6 @@ var PlayerController = (function() {
             selectSubtitleTrack
         );
         
-        JellyfinAPI.Logger.info('[Player] Created', modalFocusableItems.length, 'focusable subtitle items');
 
         activeModal = 'subtitle';
         elements.subtitleModal.style.display = 'flex';
@@ -1623,10 +1565,10 @@ var PlayerController = (function() {
      * @param {number} index - Track index
      */
     function selectAudioTrack(index) {
-        console.log('[Player] selectAudioTrack called with index:', index);
+        console.log('[Player] Selecting audio track:', index);
         
         if (index < 0 || index >= audioStreams.length) {
-            console.warn('[Player] Invalid audio track index:', index, 'audioStreams.length:', audioStreams.length);
+            console.warn('[Player] Invalid audio track index:', index);
             return;
         }
 
@@ -1644,9 +1586,6 @@ var PlayerController = (function() {
         var stream = audioStreams[index];
         var language = stream.Language || 'und';
         
-        console.log('[Player] Selected audio stream:', stream.Index, 'Language:', language);
-        console.log('[Player] playerAdapter type:', playerAdapter ? playerAdapter.constructor.name : 'null');
-        console.log('[Player] isTranscoding:', isTranscoding);
         
         // Skip Shaka adapter for transcoded streams - they only have one baked-in audio track
         // Must reload video with new AudioStreamIndex parameter
@@ -1667,28 +1606,20 @@ var PlayerController = (function() {
                             uniqueLanguages.push(lang);
                         }
                     });
-                    console.log('[Player] Unique languages:', uniqueLanguages);
                     adapterIndex = uniqueLanguages.indexOf(language);
-                    console.log('[Player] Shaka adapter - mapped language', language, 'to index:', adapterIndex);
                 }
                 
-                console.log('[Player] Calling adapter.selectAudioTrack with index:', adapterIndex);
                 var result = playerAdapter.selectAudioTrack(adapterIndex);
-                console.log('[Player] Adapter selectAudioTrack result:', result);
                 
                 if (result) {
                     closeModal();
-                    console.log('[Player] Switched audio track via adapter:', language);
                     return;
                 } else {
-                    console.warn('[Player] Adapter returned false, will try fallback');
                 }
             } catch (error) {
-                console.error('[Player] Failed to switch audio via adapter:', error);
             }
         }
         
-        console.log('[Player] Using fallback video reload for audio track');
         reloadVideoWithTrack('audio', stream);
         closeModal();
     }
@@ -1702,8 +1633,7 @@ var PlayerController = (function() {
      * @param {number} index - Track index (-1 to disable)
      */
     function selectSubtitleTrack(index) {
-        console.log('[Player] selectSubtitleTrack called with index:', index);
-        JellyfinAPI.Logger.info('[Player] selectSubtitleTrack called with index:', index);
+        console.log('[Player] Selecting subtitle track:', index === -1 ? 'None' : index);
         
         // Update the visual selection in modal before processing
         // Account for "None" option at index 0 in the modal
@@ -1718,12 +1648,10 @@ var PlayerController = (function() {
         }
         
         currentSubtitleIndex = index;
-        console.log('[Player] isTranscoding:', isTranscoding);
         
         // Skip Shaka adapter for transcoded streams - they don't include subtitle tracks
         // Must reload video with new SubtitleStreamIndex parameter  
         if (!isTranscoding && playerAdapter && typeof playerAdapter.selectSubtitleTrack === 'function') {
-            console.log('[Player] playerAdapter exists, type:', playerAdapter.constructor.name);
             try {
                 // For subtitles, -1 means disable, otherwise use the array index
                 var adapterIndex = index;
@@ -1731,30 +1659,20 @@ var PlayerController = (function() {
                 // If using Shaka adapter and not disabling, map to unique subtitle tracks
                 if (index >= 0 && playerAdapter.constructor.name === 'ShakaPlayerAdapter') {
                     if (index >= subtitleStreams.length) {
-                        console.warn('[Player] Invalid subtitle track index:', index, 'subtitleStreams.length:', subtitleStreams.length);
-                        JellyfinAPI.Logger.warn('[Player] Invalid subtitle track index:', index);
                         return;
                     }
                     var stream = subtitleStreams[index];
-                    console.log('[Player] Selected subtitle stream:', stream.Index, 'Language:', stream.Language);
-                    JellyfinAPI.Logger.info('[Player] Selected subtitle stream:', stream.Index, 'Language:', stream.Language);
                 }
                 
-                console.log('[Player] Calling adapter.selectSubtitleTrack with index:', adapterIndex);
                 var result = playerAdapter.selectSubtitleTrack(adapterIndex);
-                console.log('[Player] Adapter selectSubtitleTrack returned:', result);
-                JellyfinAPI.Logger.info('[Player] Adapter selectSubtitleTrack result:', result);
                 
                 closeModal();
                 if (index >= 0 && index < subtitleStreams.length) {
                     var stream = subtitleStreams[index];
-                    JellyfinAPI.Logger.info('[Player] Switched subtitle track via adapter:', stream.Language || stream.Index);
                 } else {
-                    JellyfinAPI.Logger.info('[Player] Disabled subtitles via adapter');
                 }
                 return;
             } catch (error) {
-                JellyfinAPI.Logger.warn('[Player] Failed to switch subtitle via adapter, using fallback:', error);
             }
         }
         
@@ -1767,7 +1685,6 @@ var PlayerController = (function() {
             var stream = subtitleStreams[index];
             reloadVideoWithTrack('subtitle', stream);
         } else {
-            JellyfinAPI.Logger.info('Disabled subtitles');
         }
 
         closeModal();
@@ -1779,14 +1696,13 @@ var PlayerController = (function() {
      * @param {Object} stream - The stream object to select
      */
     function reloadVideoWithTrack(trackType, stream) {
-        console.log('[Player] reloadVideoWithTrack - type:', trackType, 'stream:', stream.Index);
+        console.log('[Player] Reloading video with', trackType, 'track:', stream.Index);
         
         var currentTime = videoPlayer.currentTime;
         var wasPaused = videoPlayer.paused;
         
         // Generate a NEW PlaySessionId to force Jellyfin to create a fresh transcode with the selected tracks
         var newPlaySessionId = generateUUID();
-        console.log('[Player] Creating new play session for track change:', newPlaySessionId);
         
         // Build stream URL with track-specific parameters
         var streamUrl = auth.serverAddress + '/Videos/' + itemId + '/master.m3u8';
@@ -1809,26 +1725,20 @@ var PlayerController = (function() {
         // Set the specific track indices - these tell Jellyfin which tracks to transcode
         if (trackType === 'audio') {
             params.set('AudioStreamIndex', stream.Index);
-            console.log('[Player] Setting AudioStreamIndex to:', stream.Index, '(', stream.Language, ')');
             // Preserve subtitle selection
             if (currentSubtitleIndex >= 0 && currentSubtitleIndex < subtitleStreams.length) {
                 params.set('SubtitleStreamIndex', subtitleStreams[currentSubtitleIndex].Index);
-                console.log('[Player] Preserving SubtitleStreamIndex:', subtitleStreams[currentSubtitleIndex].Index);
             }
         } else if (trackType === 'subtitle') {
             params.set('SubtitleStreamIndex', stream.Index);
             params.set('SubtitleMethod', 'Encode');  // Tell Jellyfin to burn in subtitles
-            console.log('[Player] Setting SubtitleStreamIndex to:', stream.Index, '(', stream.Language, ')');
             // Preserve audio selection
             if (currentAudioIndex >= 0 && currentAudioIndex < audioStreams.length) {
                 params.set('AudioStreamIndex', audioStreams[currentAudioIndex].Index);
-                console.log('[Player] Preserving AudioStreamIndex:', audioStreams[currentAudioIndex].Index);
             }
         }
 
         var videoUrl = streamUrl + '?' + params.toString();
-        console.log('[Player] New stream URL with track parameters:', videoUrl);
-        console.log('[Player] Will resume at:', currentTime, 'seconds');
         
         // Update the global play session ID
         playSessionId = newPlaySessionId;
@@ -1839,32 +1749,26 @@ var PlayerController = (function() {
         if (playerAdapter && typeof playerAdapter.load === 'function') {
             playerAdapter.load(videoUrl, { startPosition: currentTime })
                 .then(function() {
-                    console.log('[Player] ✓ Track reload successful, resuming at:', currentTime);
                     if (!wasPaused) {
                         return videoPlayer.play();
                     }
                 })
                 .then(function() {
                     setLoadingState(LoadingState.READY);
-                    console.log('[Player] ✓ Playback resumed with new track');
                 })
                 .catch(function(err) {
-                    console.error('[Player] ✗ Failed to reload video with track:', err);
                     setLoadingState(LoadingState.ERROR);
                     alert('Failed to switch track. The selected track may not be compatible.');
                 });
         } else {
-            console.warn('[Player] Using fallback video reload (adapter does not support load())');
             videoPlayer.src = videoUrl;
             
             var onLoaded = function() {
                 videoPlayer.removeEventListener('loadedmetadata', onLoaded);
                 videoPlayer.currentTime = currentTime;
-                console.log('[Player] Seeking to:', currentTime);
                 
                 if (!wasPaused) {
                     videoPlayer.play().catch(function(err) {
-                        console.error('[Player] Failed to resume playback:', err);
                     });
                 }
                 
@@ -1880,7 +1784,6 @@ var PlayerController = (function() {
      */
     function showVideoInfo() {
         if (!itemData || !playbackInfo) {
-            JellyfinAPI.Logger.warn('No playback info available');
             return;
         }
 
@@ -2005,7 +1908,6 @@ var PlayerController = (function() {
         elements.videoInfoModal.style.display = 'flex';
         activeModal = 'videoInfo';
         
-        JellyfinAPI.Logger.info('Showing video playback info');
     }
 
     /**
@@ -2013,7 +1915,6 @@ var PlayerController = (function() {
      */
     function showChaptersModal() {
         if (!itemData || !itemData.Chapters || itemData.Chapters.length === 0) {
-            JellyfinAPI.Logger.warn('No chapters available for this video');
             // Still show modal but with "No chapters" message
             elements.chaptersContent.innerHTML = '<div class="no-chapters"><p>No chapters available for this video</p></div>';
             elements.chaptersModal.style.display = 'flex';
@@ -2095,12 +1996,10 @@ var PlayerController = (function() {
             item.addEventListener('click', function(evt) {
                 evt.stopPropagation();
                 var startTicks = parseInt(item.getAttribute('data-start-ticks'));
-                JellyfinAPI.Logger.info('[Player] Chapter clicked, seeking to ticks:', startTicks);
                 seekToChapter(startTicks);
             });
         });
         
-        JellyfinAPI.Logger.info('Showing chapters modal with', itemData.Chapters.length, 'chapters');
     }
 
     /**
@@ -2109,7 +2008,6 @@ var PlayerController = (function() {
     function seekToChapter(startTicks) {
         var startSeconds = startTicks / 10000000;
         
-        JellyfinAPI.Logger.info('Seeking to chapter at', startSeconds, 'seconds');
         
         // Seek the video
         if (playerAdapter && typeof playerAdapter.seek === 'function') {
@@ -2127,7 +2025,6 @@ var PlayerController = (function() {
      */
     function showPlaybackSpeedSelector() {
         if (!elements.speedList || !elements.speedModal) {
-            JellyfinAPI.Logger.error('Speed modal elements not found');
             return;
         }
         
@@ -2164,7 +2061,6 @@ var PlayerController = (function() {
             });
         });
         
-        JellyfinAPI.Logger.info('Showing playback speed selector');
     }
     
     /**
@@ -2173,7 +2069,6 @@ var PlayerController = (function() {
      */
     function setPlaybackSpeed(speed) {
         if (speed < 0.25 || speed > 2.0) {
-            JellyfinAPI.Logger.warn('Invalid playback speed:', speed);
             return;
         }
         
@@ -2198,7 +2093,6 @@ var PlayerController = (function() {
         }
         
         closeModal();
-        JellyfinAPI.Logger.info('Playback speed set to:', speed);
     }
     
     // Quality/Bitrate profiles (in Mbps)
@@ -2232,7 +2126,6 @@ var PlayerController = (function() {
      */
     function showQualitySelector() {
         if (!elements.qualityList || !elements.qualityModal) {
-            JellyfinAPI.Logger.error('Quality modal elements not found');
             return;
         }
         
@@ -2276,7 +2169,6 @@ var PlayerController = (function() {
             });
         });
         
-        JellyfinAPI.Logger.info('Showing quality selector');
     }
     
     /**
@@ -2289,7 +2181,6 @@ var PlayerController = (function() {
         var profile = QUALITY_PROFILES.find(function(p) { return p.value === bitrate; });
         var label = profile ? profile.label : bitrate;
         
-        JellyfinAPI.Logger.info('Max bitrate set to:', label);
         
         // Show indicator briefly
         if (elements.bitrateIndicator) {
@@ -2394,14 +2285,11 @@ var PlayerController = (function() {
      * Load media segments (intro/outro markers) from Jellyfin server
      */
     function loadMediaSegments() {
-        console.log('[SKIP] loadMediaSegments called, auth:', !!auth, 'itemId:', itemId);
         if (!auth || !itemId) {
-            console.log('[SKIP] Cannot load media segments: missing auth or itemId');
             return;
         }
         
         var url = auth.serverAddress + '/MediaSegments/' + itemId;
-        console.log('[SKIP] Loading media segments from:', url);
         
         var authHeader = 'MediaBrowser Client="' + JellyfinAPI.appName + '", Device="' + JellyfinAPI.deviceName + 
                          '", DeviceId="' + JellyfinAPI.deviceId + '", Version="' + JellyfinAPI.appVersion + '", Token="' + auth.accessToken + '"';
@@ -2412,15 +2300,11 @@ var PlayerController = (function() {
                 'X-Emby-Authorization': authHeader
             },
             success: function(response) {
-                console.log('[SKIP] Media segments response:', response);
                 try {
                     var data = response;
                     if (data && data.Items && data.Items.length > 0) {
-                        console.log('[SKIP] Raw segments before filtering:', data.Items.length);
-                        console.log('[SKIP] First segment structure:', JSON.stringify(data.Items[0], null, 2));
                         data.Items.forEach(function(seg, idx) {
                             var duration = (seg.EndTicks - seg.StartTicks) / 10000000;
-                            console.log('[SKIP] Segment', idx + ':', seg.Type, 'duration:', duration.toFixed(1), 'seconds', 
                                         'from', (seg.StartTicks / 10000000).toFixed(0), 'to', (seg.EndTicks / 10000000).toFixed(0));
                         });
                         
@@ -2429,21 +2313,16 @@ var PlayerController = (function() {
                             var duration = (segment.EndTicks - segment.StartTicks) / 10000000;
                             return duration >= 1;
                         });
-                        console.log('[SKIP] Loaded media segments:', mediaSegments.length, 'segments');
                         mediaSegments.forEach(function(seg) {
-                            console.log('[SKIP] Segment:', seg.Type, 'at', (seg.StartTicks / 10000000).toFixed(0), '-', (seg.EndTicks / 10000000).toFixed(0), 'seconds');
                         });
                     } else {
-                        console.log('[SKIP] No media segments in response');
                         mediaSegments = [];
                     }
                 } catch (e) {
-                    console.error('[SKIP] Failed to parse media segments:', e);
                     mediaSegments = [];
                 }
             },
             error: function(errorObj) {
-                console.log('[SKIP] No media segments available (status:', errorObj.error, ') - this is normal if intro skipper plugin is not installed');
                 mediaSegments = [];
             }
         });
@@ -2453,13 +2332,10 @@ var PlayerController = (function() {
      * Load next episode data for "Play Next Episode" button
      */
     function loadNextEpisode() {
-        console.log('[SKIP] loadNextEpisode called, auth:', !!auth, 'itemData:', !!itemData);
         if (!auth || !itemData) return;
         
-        console.log('[SKIP] itemData.Type:', itemData.Type, 'SeriesId:', itemData.SeriesId);
         // Only load next episode for TV episodes
         if (itemData.Type !== 'Episode' || !itemData.SeriesId) {
-            console.log('[SKIP] Not a TV episode, skipping next episode load');
             return;
         }
         
@@ -2485,17 +2361,14 @@ var PlayerController = (function() {
                     var data = response;
                     if (data && data.Items && data.Items.length > 1) {
                         nextEpisodeData = data.Items[1]; // Second item is the next episode
-                        JellyfinAPI.Logger.success('Loaded next episode:', nextEpisodeData.Name);
                     } else {
                         nextEpisodeData = null;
                     }
                 } catch (e) {
-                    JellyfinAPI.Logger.error('Failed to parse next episode:', e);
                     nextEpisodeData = null;
                 }
             },
             error: function(status, response) {
-                JellyfinAPI.Logger.warn('Failed to load next episode');
                 nextEpisodeData = null;
             }
         });
@@ -2565,7 +2438,6 @@ var PlayerController = (function() {
         }, 10);
         
         skipOverlayVisible = true;
-        console.log('[SKIP] Showing skip button:', segment.Type);
     }
 
     /**
@@ -2626,7 +2498,6 @@ var PlayerController = (function() {
         if (!currentSkipSegment) return;
         
         var segmentType = currentSkipSegment.Type;
-        console.log('[SKIP] Executing skip for segment type:', segmentType, 'nextEpisodeData:', !!nextEpisodeData);
         
         // For outro/credits with next episode available, check autoPlay setting
         if ((segmentType === 'Outro' || segmentType === 'Credits') && nextEpisodeData) {
@@ -2643,18 +2514,15 @@ var PlayerController = (function() {
             }
             
             if (autoPlayEnabled) {
-                console.log('[SKIP] Playing next episode:', nextEpisodeData.Id);
                 window.location.href = 'player.html?id=' + nextEpisodeData.Id;
                 return;
             } else {
-                console.log('[SKIP] AutoPlay disabled, not playing next episode');
                 // Just skip the credits, don't autoplay
             }
         }
         
         // Otherwise, seek past the segment
         var skipToTime = currentSkipSegment.EndTicks / 10000000;
-        console.log('[SKIP] Seeking to end of segment:', skipToTime);
         videoPlayer.currentTime = skipToTime;
         hideSkipOverlay();
     }

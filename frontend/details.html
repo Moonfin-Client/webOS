@@ -11,6 +11,9 @@
     <script src="js/ajax.js" charset="utf-8"></script>
     <script src="js/keycodes.js" charset="utf-8"></script>
     <script src="js/jellyfin-api.js" charset="utf-8"></script>
+    <script src="js/jellyseerr-models.js" charset="utf-8"></script>
+    <script src="js/jellyseerr-api.js" charset="utf-8"></script>
+    <script src="js/jellyseerr-preferences.js" charset="utf-8"></script>
     <script src="js/track-selector.js" charset="utf-8"></script>
     <script src="js/details.js" charset="utf-8"></script>
 </head>
@@ -68,6 +71,12 @@
                     <div id="criticRating" class="info-badge" style="display: none;">
                         <span id="criticIcon"></span>
                         <span id="criticValue"></span>
+                    </div>
+                    
+                    <!-- Jellyseerr Request Status -->
+                    <div id="requestStatus" class="info-badge info-badge-request" style="display: none;">
+                        <span id="requestStatusIcon">📋</span>
+                        <span id="requestStatusText"></span>
                     </div>
                 </div>
                 
@@ -166,6 +175,18 @@
                 </button>
                 <span class="btn-label">More</span>
             </div>
+            <div class="btn-wrapper" style="display: none;" id="requestBtnWrapper">
+                <button id="requestBtn" class="btn-action btn-request" tabindex="0">
+                    <img src="assets/request_hd.png" alt="Request">
+                </button>
+                <span class="btn-label">Request</span>
+            </div>
+            <div class="btn-wrapper" style="display: none;" id="deleteRequestBtnWrapper">
+                <button id="deleteRequestBtn" class="btn-action btn-secondary" tabindex="0">
+                    <img src="assets/more.png" alt="Cancel Request">
+                </button>
+                <span class="btn-label">Cancel</span>
+            </div>
         </div>
 
         <!-- Additional Information -->
@@ -256,7 +277,39 @@
     <div id="errorDisplay" class="error-display" style="display: none;">
         <h2>Unable to load details</h2>
         <p id="errorText"></p>
-        <button id="backBtn" class="btn-primary" tabindex="0">Go Back</button>
+        <button id="backButton" class="btn-back">Go Back</button>
+    </div>
+
+    <!-- Season Selector Modal -->
+    <div id="seasonSelectorModal" class="modal-overlay" style="display: none;">
+        <div class="modal-content season-selector-modal">
+            <h2>Select Seasons to Request</h2>
+            <p class="modal-description">Choose which seasons you want to request</p>
+            
+            <div class="season-selector-options">
+                <button class="season-option-btn active" id="allSeasonsBtn" data-value="all" tabindex="0">
+                    <span class="option-icon">✓</span>
+                    <span class="option-label">All Seasons</span>
+                </button>
+                <button class="season-option-btn" id="firstSeasonBtn" data-value="first" tabindex="0">
+                    <span class="option-icon"></span>
+                    <span class="option-label">First Season Only</span>
+                </button>
+                <button class="season-option-btn" id="latestSeasonBtn" data-value="latest" tabindex="0">
+                    <span class="option-icon"></span>
+                    <span class="option-label">Latest Season Only</span>
+                </button>
+            </div>
+            
+            <div class="season-list" id="seasonCheckboxList">
+                <!-- Individual season checkboxes will be added here -->
+            </div>
+            
+            <div class="modal-actions">
+                <button class="btn-primary" id="confirmRequestBtn" tabindex="0">Request Selected</button>
+                <button class="btn-secondary" id="cancelRequestBtn" tabindex="0">Cancel</button>
+            </div>
+        </div>
     </div>
 
     <!-- Audio Track Selection Modal -->

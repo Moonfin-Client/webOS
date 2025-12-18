@@ -145,13 +145,11 @@ const LibraryController = {
 
         JellyfinAPI.getUserViews(auth.serverAddress, auth.userId, auth.accessToken, function(err, response) {
             if (err) {
-                JellyfinAPI.Logger.error('Failed to load library details:', err);
                 self.showError('Failed to load library details');
                 return;
             }
             
             if (!response || !response.Items) {
-                JellyfinAPI.Logger.error('No library data returned for library:', self.libraryId);
                 self.showError('Failed to load library details');
                 return;
             }
@@ -213,13 +211,11 @@ const LibraryController = {
             const endpoint = '/Users/' + auth.userId + '/Items';
             JellyfinAPI.getItems(auth.serverAddress, auth.accessToken, endpoint, params, function(err, data) {
                 if (err) {
-                    JellyfinAPI.Logger.error('Failed to load library items:', err);
                     self.showError('Failed to load library');
                     return;
                 }
 
                 if (!data || !data.Items) {
-                    JellyfinAPI.Logger.error('No library items returned. Filters:', {
                         sortBy: self.currentSort,
                         sortOrder: self.currentSortOrder,
                         filter: self.currentFilter
@@ -500,7 +496,6 @@ const LibraryController = {
      * @private
      */
     showSortMenu() {
-        console.log('Sort button activated');
         
         // Different sort options based on library type
         let sortOptions;
@@ -560,7 +555,6 @@ const LibraryController = {
      * @private
      */
     showFilterMenu() {
-        console.log('Filter button activated');
         
         // Different filter options based on library type
         let filterStates;
@@ -654,7 +648,6 @@ const LibraryController = {
      * @private
      */
     showError(message) {
-        JellyfinAPI.Logger.error(message);
         if (this.elements.loading) this.elements.loading.style.display = 'none';
         if (this.elements.itemGrid) this.elements.itemGrid.style.display = 'none';
         if (this.elements.errorDisplay) {

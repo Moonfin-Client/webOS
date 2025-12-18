@@ -145,6 +145,24 @@ var ImageHelper = (function() {
         }
     }
 
+    /**
+     * Get TMDB image URL
+     * @param {string} path - TMDB image path (with leading slash)
+     * @param {string} size - Image size (w185, w500, w780, original, etc.)
+     * @returns {string|null} Full TMDB image URL or null if no path
+     */
+    function getTMDBImageUrl(path, size) {
+        if (!path) return null;
+        
+        // Remove leading slash if present
+        var cleanPath = path.startsWith('/') ? path : '/' + path;
+        
+        // Default size if not specified
+        var imageSize = size || 'w500';
+        
+        return 'https://image.tmdb.org/t/p/' + imageSize + cleanPath;
+    }
+
     return {
         setImageType: setImageType,
         setPosterSize: setPosterSize,
@@ -152,6 +170,7 @@ var ImageHelper = (function() {
         getImageType: getImageType,
         getImageUrl: getImageUrl,
         getPlaceholderUrl: getPlaceholderUrl,
-        getAspectRatio: getAspectRatio
+        getAspectRatio: getAspectRatio,
+        getTMDBImageUrl: getTMDBImageUrl
     };
 })();

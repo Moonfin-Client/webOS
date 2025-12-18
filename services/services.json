@@ -1,9 +1,10 @@
 {
   "id": "org.moonfin.webos.service",
-  "description": "Moonfin Discovery Service",
+  "description": "Moonfin Services",
   "services": [
     {
-      "name": "org.moonfin.webos.service"
+      "name": "org.moonfin.webos.service",
+      "description": "Moonfin backend services for discovery and Jellyseerr proxy"
     }
   ]
 }

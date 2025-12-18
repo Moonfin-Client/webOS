@@ -895,3 +895,196 @@ body {
 *:focus {
     outline: none;
 }
+
+/* Jellyseerr Request Status Badge */
+.info-badge-request {
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.info-badge-request.status-pending {
+    background: rgba(255, 193, 7, 0.2);
+    border: 2px solid #ffc107;
+    color: #ffc107;
+}
+
+.info-badge-request.status-available {
+    background: rgba(76, 175, 80, 0.2);
+    border: 2px solid #4caf50;
+    color: #4caf50;
+}
+
+.info-badge-request.status-partial {
+    background: rgba(33, 150, 243, 0.2);
+    border: 2px solid #2196f3;
+    color: #2196f3;
+}
+
+.info-badge-request.status-unavailable {
+    background: rgba(244, 67, 54, 0.2);
+    border: 2px solid #f44336;
+    color: #f44336;
+}
+
+.info-badge-request.status-processing {
+    background: rgba(156, 39, 176, 0.2);
+    border: 2px solid #9c27b0;
+    color: #9c27b0;
+}
+
+/* Request Button Styles */
+.btn-request {
+    background: linear-gradient(135deg, #00a4dc 0%, #0077b6 100%);
+    border: none;
+}
+
+.btn-request:hover,
+.btn-request:focus {
+    background: linear-gradient(135deg, #00b8f5 0%, #0088cc 100%);
+}
+
+/* Season Selector Modal */
+.season-selector-modal {
+    max-width: 800px;
+    padding: 40px;
+}
+
+.modal-description {
+    font-size: 22px;
+    color: rgba(255, 255, 255, 0.7);
+    margin: 10px 0 30px 0;
+    text-align: center;
+}
+
+.season-selector-options {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 15px;
+    margin-bottom: 30px;
+    align-items: stretch;
+}
+
+.season-option-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 15px 25px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    color: #ffffff;
+    font-size: 22px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    outline: none;
+    width: 100%;
+}
+
+.season-option-btn:hover,
+.season-option-btn:focus {
+    background: rgba(0, 164, 220, 0.3);
+    border-color: #00a4dc;
+    transform: translateY(-2px);
+}
+
+.season-option-btn.active {
+    background: linear-gradient(135deg, #00a4dc 0%, #0077b6 100%);
+    border-color: #00a4dc;
+}
+
+.season-option-btn .option-icon {
+    font-size: 24px;
+    width: 24px;
+    text-align: center;
+}
+
+.season-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 30px;
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 10px;
+}
+
+.season-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 15px 20px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.season-checkbox:hover {
+    background: rgba(0, 164, 220, 0.2);
+    border-color: #00a4dc;
+}
+
+.season-checkbox input[type="checkbox"] {
+    width: 24px;
+    height: 24px;
+    cursor: pointer;
+}
+
+.checkbox-label {
+    font-size: 20px;
+    color: #ffffff;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+}
+
+.modal-actions button {
+    padding: 15px 35px;
+    font-size: 24px;
+    font-weight: 600;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    outline: none;
+}
+
+.modal-actions .btn-primary {
+    background: linear-gradient(135deg, #00a4dc 0%, #0077b6 100%);
+}
+
+.modal-actions .btn-primary:disabled {
+    background: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.4);
+    cursor: not-allowed;
+    opacity: 0.6;
+    color: #ffffff;
+}
+
+.modal-actions .btn-primary:hover,
+.modal-actions .btn-primary:focus {
+    background: linear-gradient(135deg, #00b8f5 0%, #0088cc 100%);
+    transform: scale(1.05);
+}
+
+.modal-actions .btn-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.modal-actions .btn-secondary:hover,
+.modal-actions .btn-secondary:focus {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.5);
+}

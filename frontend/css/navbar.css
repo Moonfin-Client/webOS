@@ -150,6 +150,12 @@
     opacity: 0.7;
 }
 
+/* Jellyseerr icons are already light-colored, don't filter them */
+.nav-icon-img.jellyseerr-icon {
+    filter: none;
+    opacity: 0.9;
+}
+
 .nav-btn:focus .nav-icon-img,
 .nav-btn.active .nav-icon-img {
     opacity: 1;

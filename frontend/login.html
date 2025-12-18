@@ -59,6 +59,7 @@
                 </div>
                 <div class="button-group" style="justify-content: center; margin-top: 20px;">
                     <button id="addAccountBtn" class="btn btn-primary" tabindex="0">Add Account</button>
+                    <button id="manualLoginBtn" class="btn btn-secondary" tabindex="0">Manual Login</button>
                     <button id="backToServerBtn" class="btn btn-secondary" tabindex="0">Back to Server Selection</button>
                 </div>
             </div>
@@ -109,6 +110,35 @@
                     <div class="button-group">
                         <button id="cancelManualQuickConnectBtn" class="btn btn-secondary" tabindex="0">Back</button>
                     </div>
+                </div>
+            </div>
+
+            <!-- Manual Login Form (for hidden users) -->
+            <div class="section" id="manualLoginForm" style="display: none;">
+                <h2>Manual Login</h2>
+                <div class="form-group">
+                    <label for="manualUsername">Username</label>
+                    <input 
+                        type="text" 
+                        id="manualUsername" 
+                        placeholder="Enter your username"
+                        tabindex="0"
+                        class="input-field"
+                    >
+                </div>
+                <div class="form-group">
+                    <label for="manualPassword">Password</label>
+                    <input 
+                        type="password" 
+                        id="manualPassword" 
+                        placeholder="Enter your password (or leave blank if none)"
+                        tabindex="0"
+                        class="input-field"
+                    >
+                </div>
+                <div class="button-group">
+                    <button id="manualLoginSubmitBtn" class="btn btn-primary" tabindex="0">Login</button>
+                    <button id="cancelManualLoginBtn" class="btn btn-secondary" tabindex="0">Back</button>
                 </div>
             </div>
 
@@ -212,23 +242,28 @@
                 }
             }
             
-            // Handle Add Account and Back to Server button navigation (horizontal)
-            if (activeElement && (activeElement.id === 'addAccountBtn' || activeElement.id === 'backToServerBtn')) {
+            // Handle bottom buttons navigation (Add Account, Manual Login, and Back to Server)
+            var bottomButtons = [
+                document.getElementById('addAccountBtn'),
+                document.getElementById('manualLoginBtn'),
+                document.getElementById('backToServerBtn')
+            ].filter(function(btn) { return btn && btn.offsetParent !== null; });
+            
+            var bottomButtonIndex = bottomButtons.indexOf(activeElement);
+            if (bottomButtonIndex !== -1) {
                 if (evt.keyCode === 37) { // Left arrow
                     evt.preventDefault();
-                    var addAccountBtn = document.getElementById('addAccountBtn');
-                    if (activeElement.id === 'backToServerBtn' && addAccountBtn && addAccountBtn.offsetParent !== null) {
-                        addAccountBtn.focus();
+                    if (bottomButtonIndex > 0) {
+                        bottomButtons[bottomButtonIndex - 1].focus();
                     }
                     return;
                 } else if (evt.keyCode === 39) { // Right arrow
                     evt.preventDefault();
-                    var backBtn = document.getElementById('backToServerBtn');
-                    if (activeElement.id === 'addAccountBtn' && backBtn && backBtn.offsetParent !== null) {
-                        backBtn.focus();
+                    if (bottomButtonIndex < bottomButtons.length - 1) {
+                        bottomButtons[bottomButtonIndex + 1].focus();
                     }
                     return;
-                } else if (evt.keyCode === 38) { // Up arrow - go to user row if exists
+                } else if (evt.keyCode === 38) { // Up arrow - go to user row
                     evt.preventDefault();
                     var userCards = document.querySelectorAll('.user-card');
                     if (userCards.length > 0) {
@@ -390,18 +425,24 @@
                 document.getElementById('discoverBtn')
             ].filter(function(btn) { return btn && btn.offsetParent !== null; });
             
-            var serverButtonIndex = serverButtons.indexOf(activeElement);
-            if (serverButtonIndex !== -1) {
+            // Handle password form buttons (horizontal)
+            var passwordButtons = [
+                document.getElementById('loginBtn'),
+                document.getElementById('cancelLoginBtn')
+            ].filter(function(btn) { return btn && btn.offsetParent !== null; });
+            
+            var passwordButtonIndex = passwordButtons.indexOf(activeElement);
+            if (passwordButtonIndex !== -1) {
                 if (evt.keyCode === 37) { // Left arrow
                     evt.preventDefault();
-                    if (serverButtonIndex > 0) {
-                        serverButtons[serverButtonIndex - 1].focus();
+                    if (passwordButtonIndex > 0) {
+                        passwordButtons[passwordButtonIndex - 1].focus();
                     }
                     return;
                 } else if (evt.keyCode === 39) { // Right arrow
                     evt.preventDefault();
-                    if (serverButtonIndex < serverButtons.length - 1) {
-                        serverButtons[serverButtonIndex + 1].focus();
+                    if (passwordButtonIndex < passwordButtons.length - 1) {
+                        passwordButtons[passwordButtonIndex + 1].focus();
                     }
                     return;
                 }
@@ -429,12 +470,30 @@
                 }
             }
             
-            // Handle password form buttons (horizontal)
-            var passwordButtons = [
-                document.getElementById('loginBtn'),
-                document.getElementById('cancelLoginBtn')
+            // Handle manual login form buttons (horizontal)
+            var manualLoginButtons = [
+                document.getElementById('manualLoginSubmitBtn'),
+                document.getElementById('cancelManualLoginBtn')
             ].filter(function(btn) { return btn && btn.offsetParent !== null; });
             
+            var manualLoginButtonIndex = manualLoginButtons.indexOf(activeElement);
+            if (manualLoginButtonIndex !== -1) {
+                if (evt.keyCode === 37) { // Left arrow
+                    evt.preventDefault();
+                    if (manualLoginButtonIndex > 0) {
+                        manualLoginButtons[manualLoginButtonIndex - 1].focus();
+                    }
+                    return;
+                } else if (evt.keyCode === 39) { // Right arrow
+                    evt.preventDefault();
+                    if (manualLoginButtonIndex < manualLoginButtons.length - 1) {
+                        manualLoginButtons[manualLoginButtonIndex + 1].focus();
+                    }
+                    return;
+                }
+            }
+            
+            // Handle password button navigation for vertical movement
             var passwordButtonIndex = passwordButtons.indexOf(activeElement);
             if (passwordButtonIndex !== -1) {
                 if (evt.keyCode === 37) { // Left arrow

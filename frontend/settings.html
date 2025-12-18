@@ -6,12 +6,15 @@
     <title>Settings - Jellyfin</title>
     <link rel="stylesheet" href="css/navbar.css">
     <link rel="stylesheet" href="css/settings.css">
-    <script src="js/webOSTV.js"></script>
+    <script src="webOSTVjs-1.2.11/webOSTV.js"></script>
     <script src="js/keycodes.js"></script>
     <script src="js/storage.js"></script>
     <script src="js/ajax.js"></script>
     <script src="js/image-helper.js"></script>
     <script src="js/jellyfin-api.js"></script>
+    <script src="js/jellyseerr-models.js"></script>
+    <script src="js/jellyseerr-api.js"></script>
+    <script src="js/jellyseerr-preferences.js"></script>
     <script src="js/navbar.js"></script>
 </head>
 <body>
@@ -27,7 +30,7 @@
                 <div class="category-label">General</div>
             </div>
             <div class="settings-category" data-category="playback">
-                <div class="category-icon">▶</div>
+                <div class="category-icon"><img src="assets/play.png" alt="Playback" style="width: 1em; height: 1em;"></div>
                 <div class="category-label">Playback</div>
             </div>
             <div class="settings-category" data-category="display">
@@ -37,6 +40,10 @@
             <div class="settings-category" data-category="moonfin">
                 <div class="category-icon"><img src="assets/icon-transparent130.png" alt="Moonfin" style="width: 1em; height: 1em;"></div>
                 <div class="category-label">Moonfin</div>
+            </div>
+            <div class="settings-category" data-category="jellyseerr">
+                <div class="category-icon"><img src="assets/jellyseer_jellyfish.png" alt="Jellyseerr" style="width: 1em; height: 1em;"></div>
+                <div class="category-label">Jellyseerr</div>
             </div>
             <div class="settings-category" data-category="account">
                 <div class="category-icon">👤</div>
@@ -258,6 +265,87 @@
                 </div>
             </div>
 
+            <!-- Jellyseerr Settings -->
+            <div class="settings-panel" id="jellyseerrPanel">
+                <h1>Jellyseerr Settings</h1>
+                
+                <div class="settings-group">
+                    <h2>Connection</h2>
+                    
+                    <div class="setting-item" data-setting="jellyseerrEnabled" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Enable Jellyseerr</div>
+                            <div class="setting-description">Connect to Jellyseerr for content requests</div>
+                        </div>
+                        <div class="setting-value" id="jellyseerrEnabledValue">Off</div>
+                    </div>
+                    
+                    <div class="setting-item" data-setting="jellyseerrUrl" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Jellyseerr URL</div>
+                            <div class="setting-description">Your Jellyseerr server address</div>
+                        </div>
+                        <div class="setting-value" id="jellyseerrUrlValue">Not Set</div>
+                    </div>
+                    
+                    <div class="setting-item" data-setting="jellyseerrAuthJellyfin" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Login with Jellyfin Account</div>
+                            <div class="setting-description">Sign in using your Jellyfin credentials</div>
+                        </div>
+                        <div class="setting-value">Connect</div>
+                    </div>
+                    
+                    <div class="setting-item" data-setting="jellyseerrAuthLocal" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Login with Local Account</div>
+                            <div class="setting-description">Sign in with Jellyseerr email/password</div>
+                        </div>
+                        <div class="setting-value">Login</div>
+                    </div>
+                    
+                    <div class="setting-item action-item" data-setting="testJellyseerrConnection" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Test Connection</div>
+                            <div class="setting-description">Verify connection to Jellyseerr server</div>
+                        </div>
+                        <div class="setting-value">Test</div>
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <h2>Display</h2>
+                    
+                    <div class="setting-item" data-setting="jellyseerrFilterNSFW" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Filter NSFW Content</div>
+                            <div class="setting-description">Hide adult content in Discover</div>
+                        </div>
+                        <div class="setting-value" id="jellyseerrFilterNSFWValue">On</div>
+                    </div>
+                </div>
+
+                <div class="settings-group">
+                    <h2>Actions</h2>
+                    
+                    <div class="setting-item action-item" data-setting="clearJellyseerrCache" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Clear Cache</div>
+                            <div class="setting-description">Clear stored Jellyseerr data</div>
+                        </div>
+                        <div class="setting-value">Clear</div>
+                    </div>
+                    
+                    <div class="setting-item action-item" data-setting="disconnectJellyseerr" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Disconnect</div>
+                            <div class="setting-description">Sign out of Jellyseerr</div>
+                        </div>
+                        <div class="setting-value">Disconnect</div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Account Settings -->
             <div class="settings-panel" id="accountPanel">
                 <h1>Account Settings</h1>
@@ -348,6 +436,78 @@
                 <button class="btn-secondary" id="resetRowsBtn" tabindex="0">Reset to Default</button>
                 <button class="btn-primary" id="saveRowsBtn" tabindex="0">Save Changes</button>
                 <button class="btn-secondary" id="cancelRowsBtn" tabindex="0">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Jellyseerr URL Input Modal -->
+    <div id="jellyseerrUrlModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h2>Jellyseerr Server URL</h2>
+            <p class="modal-description">Enter your Jellyseerr server address (e.g., http://192.168.1.100:5055)</p>
+            
+            <input type="text" id="jellyseerrUrlInput" class="url-input" placeholder="http://" tabindex="0">
+            
+            <div class="modal-actions">
+                <button class="btn-primary" id="saveJellyseerrUrlBtn" tabindex="0">Save</button>
+                <button class="btn-secondary" id="cancelJellyseerrUrlBtn" tabindex="0">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Jellyseerr Jellyfin Authentication Modal -->
+    <div id="jellyseerrJellyfinAuthModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h2>Jellyfin Authentication</h2>
+            <p class="modal-description">Enter your Jellyfin password to authenticate with Jellyseerr</p>
+            
+            <input type="password" id="jellyseerrJellyfinAuthPasswordInput" class="url-input" placeholder="Password" tabindex="0">
+            
+            <div class="modal-actions">
+                <button class="btn-primary" id="saveJellyseerrJellyfinAuthBtn" tabindex="0">Authenticate</button>
+                <button class="btn-secondary" id="cancelJellyseerrJellyfinAuthBtn" tabindex="0">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Jellyseerr Local Login Modal -->
+    <div id="jellyseerrLocalModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h2>Jellyseerr Local Account</h2>
+            <p class="modal-description">Sign in with your Jellyseerr account credentials</p>
+            
+            <input type="email" id="jellyseerrEmailInput" class="url-input" placeholder="Email" tabindex="0">
+            <input type="password" id="jellyseerrLocalPasswordInput" class="url-input" placeholder="Password" tabindex="0" style="margin-top: 10px;">
+            
+            <div class="modal-actions">
+                <button class="btn-primary" id="saveJellyseerrLocalBtn" tabindex="0">Login</button>
+                <button class="btn-secondary" id="cancelJellyseerrLocalBtn" tabindex="0">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Alert Modal -->
+    <!-- Confirmation Modal -->
+    <div id="confirmModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h2 id="confirmTitle">Confirm Action</h2>
+            <p id="confirmMessage" class="modal-description"></p>
+            
+            <div class="modal-actions">
+                <button class="btn-secondary" id="confirmCancelBtn" tabindex="0">Cancel</button>
+                <button class="btn-primary" id="confirmOkBtn" tabindex="0">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert Modal -->
+    <div id="customAlertModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h2 id="alertTitle">Alert</h2>
+            <p id="alertMessage" class="modal-description"></p>
+            
+            <div class="modal-actions">
+                <button class="btn-primary" id="alertOkBtn" tabindex="0">OK</button>
             </div>
         </div>
     </div>

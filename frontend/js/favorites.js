@@ -10,16 +10,13 @@
     };
     
     function init() {
-        JellyfinAPI.Logger.info('Initializing favorites page...');
         
         auth = JellyfinAPI.getStoredAuth();
         if (!auth) {
-            JellyfinAPI.Logger.error('No authentication found, redirecting to login');
             window.location.href = 'login.html';
             return;
         }
         
-        JellyfinAPI.Logger.success('Authenticated as:', auth.username);
         storage.applyBackdropBlur(document.getElementById('globalBackdropImage'), 'backdropBlurHome', 20);
         loadFavorites();
     }
@@ -84,7 +81,6 @@
         JellyfinAPI.getItems(auth.serverAddress, auth.accessToken, '/Users/' + auth.userId + '/Items', moviesParams, function(err, data) {
             if (!err && data && data.Items) {
                 favoritesData.movies = data.Items;
-                JellyfinAPI.Logger.success('Loaded favorite movies:', data.Items.length);
             }
             checkComplete();
         });
@@ -104,7 +100,6 @@
         JellyfinAPI.getItems(auth.serverAddress, auth.accessToken, '/Users/' + auth.userId + '/Items', seriesParams, function(err, data) {
             if (!err && data && data.Items) {
                 favoritesData.series = data.Items;
-                JellyfinAPI.Logger.success('Loaded favorite TV shows:', data.Items.length);
             }
             checkComplete();
         });
@@ -124,7 +119,6 @@
         JellyfinAPI.getItems(auth.serverAddress, auth.accessToken, '/Users/' + auth.userId + '/Items', episodesParams, function(err, data) {
             if (!err && data && data.Items) {
                 favoritesData.episodes = data.Items;
-                JellyfinAPI.Logger.success('Loaded favorite episodes:', data.Items.length);
             }
             checkComplete();
         });
@@ -143,7 +137,6 @@
         JellyfinAPI.getItems(auth.serverAddress, auth.accessToken, '/Persons', peopleParams, function(err, data) {
             if (!err && data && data.Items) {
                 favoritesData.people = data.Items;
-                JellyfinAPI.Logger.success('Loaded favorite actors:', data.Items.length);
             }
             checkComplete();
         });

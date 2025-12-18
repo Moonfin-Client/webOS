@@ -23,6 +23,11 @@ var SettingsController = (function() {
     
     // Timing Constants
     const FOCUS_DELAY_MS = 100;
+    
+    // Carousel Speed Options (in milliseconds)
+    const CAROUSEL_SPEEDS = [5000, 8000, 10000, 15000, 20000];
+    const DEFAULT_CAROUSEL_SPEED_MS = 8000;
+    const CAROUSEL_SPEED_TO_SECONDS = 1000;
 
     var settings = {
         autoLogin: false,
@@ -30,7 +35,7 @@ var SettingsController = (function() {
         skipIntro: true,
         autoPlay: true,
         theme: 'dark',
-        carouselSpeed: 8000,
+        carouselSpeed: DEFAULT_CAROUSEL_SPEED_MS,
         homeRows: null, // Will be initialized with defaults
         showShuffleButton: true,
         showGenresButton: true,
@@ -45,7 +50,11 @@ var SettingsController = (function() {
         mergeContinueWatchingNextUp: false,
         // Backdrop blur settings
         backdropBlurHome: 3,
-        backdropBlurDetail: 3
+        backdropBlurDetail: 3,
+        // Jellyseerr settings
+        jellyseerrEnabled: false,
+        jellyseerrUrl: '',
+        jellyseerrFilterNSFW: true
     };
 
     // Default home rows configuration
@@ -165,7 +174,7 @@ var SettingsController = (function() {
             skipIntro: true,
             autoPlay: true,
             theme: 'dark',
-            carouselSpeed: 8000,
+            carouselSpeed: DEFAULT_CAROUSEL_SPEED_MS,
             showShuffleButton: true,
             showGenresButton: true,
             showFavoritesButton: true,
@@ -204,7 +213,6 @@ var SettingsController = (function() {
                     saveSettings();
                 }
             } catch (e) {
-                JellyfinAPI.Logger.error('Failed to parse settings:', e);
                 settings.homeRows = JSON.parse(JSON.stringify(defaultHomeRows));
             }
         } else {
@@ -273,7 +281,7 @@ var SettingsController = (function() {
         
         var carouselSpeedValue = document.getElementById('carouselSpeedValue');
         if (carouselSpeedValue) {
-            carouselSpeedValue.textContent = (settings.carouselSpeed / 1000) + ' seconds';
+            carouselSpeedValue.textContent = (settings.carouselSpeed / CAROUSEL_SPEED_TO_SECONDS) + ' seconds';
         }
         
         // Image Helper settings
@@ -330,6 +338,40 @@ var SettingsController = (function() {
         if (backdropBlurDetailValue) {
             backdropBlurDetailValue.textContent = settings.backdropBlurDetail !== undefined ? settings.backdropBlurDetail : 3;
         }
+        
+        // Jellyseerr settings
+        updateJellyseerrSettingValues();
+    }
+    
+    /**
+     * Update Jellyseerr-specific setting values
+     * @private
+     */
+    function updateJellyseerrSettingValues() {
+        var jellyseerrEnabledValue = document.getElementById('jellyseerrEnabledValue');
+        if (jellyseerrEnabledValue) {
+            jellyseerrEnabledValue.textContent = settings.jellyseerrEnabled ? 'On' : 'Off';
+        }
+        
+        var jellyseerrUrlValue = document.getElementById('jellyseerrUrlValue');
+        if (jellyseerrUrlValue) {
+            jellyseerrUrlValue.textContent = settings.jellyseerrUrl || 'Not Set';
+        }
+        
+        var jellyseerrAutoRequestValue = document.getElementById('jellyseerrAutoRequestValue');
+        if (jellyseerrAutoRequestValue) {
+            jellyseerrAutoRequestValue.textContent = settings.jellyseerrAutoRequest ? 'On' : 'Off';
+        }
+        
+        var jellyseerrNotificationsValue = document.getElementById('jellyseerrNotificationsValue');
+        if (jellyseerrNotificationsValue) {
+            jellyseerrNotificationsValue.textContent = settings.jellyseerrNotifications ? 'On' : 'Off';
+        }
+        
+        var jellyseerrFilterNSFWValue = document.getElementById('jellyseerrFilterNSFWValue');
+        if (jellyseerrFilterNSFWValue) {
+            jellyseerrFilterNSFWValue.textContent = settings.jellyseerrFilterNSFW ? 'On' : 'Off';
+        }
     }
 
     function attachEventListeners() {
@@ -354,10 +396,227 @@ var SettingsController = (function() {
                 handleSettingActivation(item);
             });
         });
+        
+        // Alert modal OK button
+        var alertOkBtn = document.getElementById('alertOkBtn');
+        if (alertOkBtn) {
+            alertOkBtn.addEventListener('click', closeAlert);
+        }
+    }
+
+    /**
+     * ModalManager - Handles modal display, event management, and cleanup
+     * @class
+     */
+    var ModalManager = {
+        /**
+         * Show a modal with inputs and buttons
+         * @param {Object} config - Modal configuration
+         * @param {string} config.modalId - Modal element ID
+         * @param {string[]} config.inputIds - Input element IDs
+         * @param {string[]} config.buttonIds - Button element IDs (save, cancel)
+         * @param {Function} config.onSave - Save handler function
+         * @param {Function} config.onCancel - Cancel handler function
+         * @param {string} [config.focusTarget] - ID of element to focus (defaults to first input)
+         * @param {string} [config.focusReturn] - Selector for element to focus when closing
+         * @param {boolean} [config.clearInputs] - Whether to clear input values (default: true)
+         */
+        show: function(config) {
+            var modal = document.getElementById(config.modalId);
+            if (!modal) return;
+            
+            // Get all elements
+            var inputs = config.inputIds.map(function(id) {
+                return document.getElementById(id);
+            }).filter(function(el) { return el !== null; });
+            
+            var buttons = config.buttonIds.map(function(id) {
+                return document.getElementById(id);
+            }).filter(function(el) { return el !== null; });
+            
+            // Clear input values only if requested (default true for backward compatibility)
+            if (config.clearInputs !== false) {
+                inputs.forEach(function(input) {
+                    input.value = '';
+                });
+            }
+            
+            // Show modal
+            modal.style.display = 'flex';
+            
+            // Create handlers
+            var saveHandler = function() {
+                config.onSave(inputs);
+            };
+            
+            var cancelHandler = function() {
+                config.onCancel();
+            };
+            
+            var enterHandler = function(e) {
+                if (e.keyCode === KeyCodes.ENTER) {
+                    saveHandler();
+                }
+            };
+            
+            // Add event listeners
+            if (buttons[0]) buttons[0].addEventListener('click', saveHandler);
+            if (buttons[1]) buttons[1].addEventListener('click', cancelHandler);
+            inputs.forEach(function(input) {
+                input.addEventListener('keydown', enterHandler);
+            });
+            
+            // Store handlers for cleanup
+            modal._saveHandler = saveHandler;
+            modal._cancelHandler = cancelHandler;
+            modal._enterHandler = enterHandler;
+            modal._config = config;
+            
+            // Focus
+            setTimeout(function() {
+                var focusElement = config.focusTarget ? 
+                    document.getElementById(config.focusTarget) : inputs[0];
+                if (focusElement) focusElement.focus();
+            }, 100);
+        },
+        
+        /**
+         * Close a modal and cleanup event listeners
+         * @param {string} modalId - Modal element ID
+         */
+        close: function(modalId) {
+            var modal = document.getElementById(modalId);
+            if (!modal) return;
+            
+            var config = modal._config;
+            if (!config) {
+                modal.style.display = 'none';
+                return;
+            }
+            
+            // Get elements
+            var inputs = config.inputIds.map(function(id) {
+                return document.getElementById(id);
+            }).filter(function(el) { return el !== null; });
+            
+            var buttons = config.buttonIds.map(function(id) {
+                return document.getElementById(id);
+            }).filter(function(el) { return el !== null; });
+            
+            // Remove event listeners
+            if (modal._saveHandler && buttons[0]) {
+                buttons[0].removeEventListener('click', modal._saveHandler);
+            }
+            if (modal._cancelHandler && buttons[1]) {
+                buttons[1].removeEventListener('click', modal._cancelHandler);
+            }
+            if (modal._enterHandler) {
+                inputs.forEach(function(input) {
+                    input.removeEventListener('keydown', modal._enterHandler);
+                });
+            }
+            
+            // Cleanup
+            delete modal._saveHandler;
+            delete modal._cancelHandler;
+            delete modal._enterHandler;
+            delete modal._config;
+            
+            // Hide modal
+            modal.style.display = 'none';
+            
+            // Return focus
+            if (config.focusReturn) {
+                var returnElement = document.querySelector(config.focusReturn);
+                if (returnElement) {
+                    setTimeout(function() {
+                        returnElement.focus();
+                    }, 100);
+                }
+            }
+        }
+    };
+
+    // Modal configuration registry
+    var modalConfigs = {
+        alert: {
+            modalId: 'customAlertModal',
+            closeHandler: closeAlert,
+            fieldIds: ['alertOkBtn'],
+            simpleMode: true // Only BACK/ENTER to close
+        },
+        jellyseerrUrl: {
+            modalId: 'jellyseerrUrlModal',
+            closeHandler: closeJellyseerrUrlModal,
+            fieldIds: ['jellyseerrUrlInput', 'saveJellyseerrUrlBtn', 'cancelJellyseerrUrlBtn']
+        },
+        jellyseerrJellyfinAuth: {
+            modalId: 'jellyseerrJellyfinAuthModal',
+            closeHandler: closeJellyseerrJellyfinAuthModal,
+            fieldIds: ['jellyseerrJellyfinAuthPasswordInput', 'saveJellyseerrJellyfinAuthBtn', 'cancelJellyseerrJellyfinAuthBtn']
+        },
+        jellyseerrLocal: {
+            modalId: 'jellyseerrLocalModal',
+            closeHandler: closeJellyseerrLocalModal,
+            fieldIds: ['jellyseerrEmailInput', 'jellyseerrLocalPasswordInput', 
+                       'saveJellyseerrLocalBtn', 'cancelJellyseerrLocalBtn']
+        }
+    };
+
+    /**
+     * Generic modal keyboard handler
+     * @param {KeyboardEvent} evt - Keyboard event
+     * @param {Object} config - Modal configuration
+     * @returns {boolean} True if modal was handled
+     * @private
+     */
+    function handleGenericModal(evt, config) {
+        var modal = document.getElementById(config.modalId);
+        if (!modal || modal.style.display !== 'flex') {
+            return false; // Modal not open
+        }
+        
+        // Handle BACK key
+        if (evt.keyCode === KeyCodes.BACK) {
+            evt.preventDefault();
+            config.closeHandler();
+            return true;
+        }
+        
+        // For simple modals (like alert), also close on ENTER
+        if (config.simpleMode && evt.keyCode === KeyCodes.ENTER) {
+            evt.preventDefault();
+            config.closeHandler();
+            return true;
+        }
+        
+        // Handle ENTER on buttons
+        if (evt.keyCode === KeyCodes.ENTER) {
+            var activeElement = document.activeElement;
+            if (activeElement && activeElement.tagName === 'BUTTON') {
+                evt.preventDefault();
+                activeElement.click();
+                return true;
+            }
+        }
+        
+        // Get modal fields and handle navigation
+        var fields = config.fieldIds.map(function(id) {
+            return document.getElementById(id);
+        }).filter(function(el) { return el !== null; });
+        
+        return handleModalFieldNavigation(evt, fields);
     }
 
     function handleKeyDown(evt) {
         evt = evt || window.event;
+        
+        // Check all generic modals
+        for (var key in modalConfigs) {
+            if (handleGenericModal(evt, modalConfigs[key])) {
+                return;
+            }
+        }
         
         // Check if modal is open
         if (homeRowsModal.isOpen) {
@@ -743,6 +1002,42 @@ var SettingsController = (function() {
                 updateSettingValues();
                 break;
                 
+            case 'jellyseerrEnabled':
+                settings.jellyseerrEnabled = !settings.jellyseerrEnabled;
+                saveSettings();
+                updateSettingValues();
+                if (settings.jellyseerrEnabled && settings.jellyseerrUrl) {
+                    initializeJellyseerr();
+                }
+                // Update navbar to show/hide Jellyseerr buttons
+                applyToolbarSettingsLive();
+                if (typeof NavbarController !== 'undefined' && NavbarController.checkJellyseerrAvailability) {
+                    NavbarController.checkJellyseerrAvailability();
+                }
+                break;
+                
+            case 'jellyseerrUrl':
+                promptJellyseerrUrl();
+                break;
+                
+            case 'jellyseerrAuthJellyfin':
+                handleJellyseerrAuthJellyfin();
+                break;
+                
+            case 'jellyseerrAuthLocal':
+                handleJellyseerrAuthLocal();
+                break;
+                
+            case 'testJellyseerrConnection':
+                testJellyseerrConnection();
+                break;
+                
+            case 'jellyseerrAutoRequest':
+                settings.jellyseerrAutoRequest = !settings.jellyseerrAutoRequest;
+                saveSettings();
+                updateSettingValues();
+                break;
+                
             case 'imageType':
                 // Cycle through: Primary -> Thumb -> Banner -> Primary
                 if (settings.imageType === 'Primary') {
@@ -772,8 +1067,35 @@ var SettingsController = (function() {
                 updateSettingValues();
                 break;
                 
+            case 'jellyseerrQuality':
+                settings.jellyseerrQuality = settings.jellyseerrQuality === 'standard' ? '4k' : 'standard';
+                saveSettings();
+                updateSettingValues();
+                break;
+                
+            case 'jellyseerrNotifications':
+                settings.jellyseerrNotifications = !settings.jellyseerrNotifications;
+                saveSettings();
+                updateSettingValues();
+                
+                // Sync notification preferences with Jellyseerr server
+                syncNotificationPreferences();
+                break;
+                
+            case 'jellyseerrShowDiscover':
+                settings.jellyseerrShowDiscover = !settings.jellyseerrShowDiscover;
+                saveSettings();
+                updateSettingValues();
+                break;
+                
             case 'show-featured-banner':
                 settings.showFeaturedBanner = !settings.showFeaturedBanner;
+                saveSettings();
+                updateSettingValues();
+                break;
+                
+            case 'jellyseerrFilterNSFW':
+                settings.jellyseerrFilterNSFW = !settings.jellyseerrFilterNSFW;
                 saveSettings();
                 updateSettingValues();
                 break;
@@ -786,12 +1108,19 @@ var SettingsController = (function() {
                 enterSliderMode('backdrop-blur-detail', settings.backdropBlurDetail);
                 break;
                 
+            case 'clearJellyseerrCache':
+                clearJellyseerrCache();
+                break;
+                
+            case 'disconnectJellyseerr':
+                disconnectJellyseerr();
+                break;
+                
             case 'logout':
                 handleLogout();
                 break;
                 
             default:
-                JellyfinAPI.Logger.warn('Setting not implemented:', settingName);
         }
     }
 
@@ -980,7 +1309,6 @@ var SettingsController = (function() {
         saveSettings();
         closeHomeRowsModal();
         
-        JellyfinAPI.Logger.success('Home rows configuration saved');
     }
 
     /**
@@ -1085,8 +1413,19 @@ var SettingsController = (function() {
     }
 
     function handleLogout() {
-        JellyfinAPI.logout();
-        window.location.href = 'login.html';
+        var returnFocus = document.querySelector('[data-setting="logout"]');
+        
+        showConfirm(
+            'Are you sure you want to sign out? You will be redirected to the login page.',
+            'Sign Out',
+            function() {
+                JellyfinAPI.logout();
+                window.location.href = 'login.html';
+            },
+            function() {
+                if (returnFocus) returnFocus.focus();
+            }
+        );
     }
 
     /**
@@ -1097,6 +1436,8 @@ var SettingsController = (function() {
         var shuffleBtn = document.getElementById('shuffleBtn');
         var genresBtn = document.getElementById('genresBtn');
         var favoritesBtn = document.getElementById('favoritesBtn');
+        var discoverBtn = document.getElementById('discoverBtn');
+        var requestsBtn = document.getElementById('requestsBtn');
         var libraryButtons = document.querySelectorAll('.nav-btn[data-library-id]');
         
         if (shuffleBtn) {
@@ -1116,6 +1457,16 @@ var SettingsController = (function() {
             libraryButtons.forEach(function(btn) {
                 btn.style.display = settings.showLibrariesInToolbar ? '' : 'none';
             });
+        }
+        
+        // Hide Jellyseerr buttons if Jellyseerr is disabled
+        if (!settings.jellyseerrEnabled) {
+            if (discoverBtn) {
+                discoverBtn.style.display = 'none';
+            }
+            if (requestsBtn) {
+                requestsBtn.style.display = 'none';
+            }
         }
     }
     
@@ -1144,7 +1495,7 @@ var SettingsController = (function() {
                     return parsedSettings.homeRows;
                 }
             } catch (e) {
-                JellyfinAPI.Logger.error('Failed to parse settings:', e);
+                // Settings parsing failed, return defaults
             }
         }
         return JSON.parse(JSON.stringify(defaultHomeRows));
@@ -1274,6 +1625,278 @@ var SettingsController = (function() {
         }
     }
 
+    // ==================== Jellyseerr Functions ====================
+
+    /**
+     * Initialize Jellyseerr connection
+     * @private
+     */
+    /**
+     * Initialize Jellyseerr integration
+     * @private
+     */
+    function initializeJellyseerr() {
+        // In settings context, use the in-memory settings object if available
+        if (!settings.jellyseerrEnabled || !settings.jellyseerrUrl) {
+            return Promise.resolve(false);
+        }
+        
+        return JellyseerrAPI.initializeFromPreferences();
+    }
+
+    /**
+     * Prompt for Jellyseerr URL using modal
+     * @private
+     */
+    function promptJellyseerrUrl() {
+        var input = document.getElementById('jellyseerrUrlInput');
+        if (input) {
+            input.value = settings.jellyseerrUrl || '';
+        }
+        
+        ModalManager.show({
+            modalId: 'jellyseerrUrlModal',
+            inputIds: ['jellyseerrUrlInput'],
+            buttonIds: ['saveJellyseerrUrlBtn', 'cancelJellyseerrUrlBtn'],
+            focusReturn: '[data-setting="jellyseerrUrl"]',
+            clearInputs: false, // Preserve current URL value for editing
+            onSave: function(inputs) {
+                var newUrl = inputs[0].value.trim();
+                
+                if (newUrl !== '') {
+                    // Basic URL validation
+                    if (!newUrl.startsWith('http://') && !newUrl.startsWith('https://')) {
+                        showAlert('Invalid URL. Please include http:// or https://', 'Invalid URL');
+                        return;
+                    }
+                    
+                    settings.jellyseerrUrl = newUrl;
+                    saveSettings();
+                    updateSettingValues();
+                    
+                    if (settings.jellyseerrEnabled) {
+                        initializeJellyseerr();
+                    }
+                }
+                
+                closeJellyseerrUrlModal();
+            },
+            onCancel: closeJellyseerrUrlModal
+        });
+    }
+    
+    /**
+     * Close Jellyseerr URL modal
+     * @private
+     */
+    function closeJellyseerrUrlModal() {
+        ModalManager.close('jellyseerrUrlModal');
+    }
+
+    /**
+     * Handle Jellyseerr Jellyfin authentication
+     * @private
+     */
+    function handleJellyseerrAuthJellyfin() {
+        if (!settings.jellyseerrEnabled) {
+            showAlert('Please enable Jellyseerr first', 'Error');
+            return;
+        }
+        
+        if (!settings.jellyseerrUrl) {
+            showAlert('Please set Jellyseerr URL first', 'Error');
+            return;
+        }
+        
+        // Get Jellyfin auth info
+        if (!auth || !auth.username || !auth.serverAddress) {
+            showAlert('Jellyfin authentication not found', 'Error');
+            return;
+        }
+        
+        var username = auth.username;
+        var jellyfinUrl = auth.serverAddress;
+        var userId = auth.userId;
+        
+        // Initialize Jellyseerr first with direct initialize() call (not initializeFromPreferences which requires auth)
+        console.log('[Settings] Initializing Jellyseerr with URL:', settings.jellyseerrUrl);
+        JellyseerrAPI.initialize(settings.jellyseerrUrl, null, userId).then(function() {
+            console.log('[Settings] Jellyseerr initialized successfully');
+            // Show Jellyfin authentication modal
+            showJellyseerrJellyfinAuthModal(username, jellyfinUrl);
+        }).catch(function(error) {
+            console.error('[Settings] Failed to initialize Jellyseerr:', error);
+            showAlert('Failed to initialize Jellyseerr. Please check your server URL.', 'Initialization Error');
+        });
+    }
+
+    /**
+     * Handle Jellyseerr local account authentication
+     * @private
+     */
+    function handleJellyseerrAuthLocal() {
+        if (!settings.jellyseerrEnabled) {
+            showAlert('Please enable Jellyseerr first', 'Error');
+            return;
+        }
+        
+        if (!settings.jellyseerrUrl) {
+            showAlert('Please set Jellyseerr URL first', 'Error');
+            return;
+        }
+        
+        // Get current user ID for cookie storage
+        var userId = auth && auth.userId ? auth.userId : null;
+        
+        // Initialize Jellyseerr first with direct initialize() call (not initializeFromPreferences which requires auth)
+        console.log('[Settings] Initializing Jellyseerr with URL:', settings.jellyseerrUrl);
+        JellyseerrAPI.initialize(settings.jellyseerrUrl, null, userId).then(function() {
+            console.log('[Settings] Jellyseerr initialized successfully');
+            // Show local login modal
+            showJellyseerrLocalModal();
+        }).catch(function(error) {
+            console.error('[Settings] Failed to initialize Jellyseerr:', error);
+            showAlert('Failed to initialize Jellyseerr. Please check your server URL.', 'Initialization Error');
+        });
+    }
+
+    /**
+     * Show Jellyseerr Jellyfin authentication modal
+     * @private
+     */
+    function showJellyseerrJellyfinAuthModal(username, jellyfinUrl) {
+        console.log('[Settings] Showing Jellyfin auth modal for user:', username, 'jellyfin URL:', jellyfinUrl);
+        
+        ModalManager.show({
+            modalId: 'jellyseerrJellyfinAuthModal',
+            inputIds: ['jellyseerrJellyfinAuthPasswordInput'],
+            buttonIds: ['saveJellyseerrJellyfinAuthBtn', 'cancelJellyseerrJellyfinAuthBtn'],
+            focusReturn: '[data-setting="jellyseerrAuthJellyfin"]',
+            clearInputs: true, // Clear password for security
+            onSave: function(inputs) {
+                var password = inputs[0].value;
+                
+                console.log('[Settings] Auth modal onSave called, password length:', password ? password.length : 0);
+                console.log('[Settings] Calling JellyseerrAPI.loginWithJellyfin with username:', username);
+                
+                if (!password) {
+                    showAlert('Password is required', 'Error');
+                    return;
+                }
+                
+                // Login with Jellyfin SSO
+                JellyseerrAPI.loginWithJellyfin(username, password, jellyfinUrl)
+                    .then(function(response) {
+                        console.log('[Settings] Login successful:', response);
+                        var user = response.user;
+                        var apiKey = response.apiKey;
+                        
+                        // Save credentials for auto-login
+                        JellyseerrAPI.saveCredentials(username, password, jellyfinUrl);
+                        
+                        if (apiKey) {
+                            // API key was in the login response - save it
+                            JellyseerrAPI.setApiKey(apiKey);
+                            storage.setJellyseerrSetting('apiKey', apiKey);
+                        }
+                        
+                        // Clear local auth credentials
+                        storage.removeJellyseerrUserSetting(auth.userId, 'localEmail');
+                        storage.removeJellyseerrUserSetting(auth.userId, 'localPassword');
+                        
+                        // Reinitialize API to ensure session is active
+                        initializeJellyseerr().then(function() {
+                            showAlert('Successfully authenticated with Jellyseerr as ' + (user.displayName || user.username) + '!', 'Success');
+                            updateSettingValues();
+                            closeJellyseerrJellyfinAuthModal();
+                        }).catch(function(error) {
+                            showAlert('Authentication succeeded but failed to initialize session. Please try again.', 'Warning');
+                            closeJellyseerrJellyfinAuthModal();
+                        });
+                    })
+                    .catch(function(error) {
+                        console.error('[Settings] Login failed:', error);
+                        showAlert('Failed to authenticate with Jellyseerr. Please check your password and try again.', 'Authentication Failed');
+                        inputs[0].value = '';
+                        inputs[0].focus();
+                    });
+            },
+            onCancel: closeJellyseerrJellyfinAuthModal
+        });
+    }
+    
+    /**
+     * Close Jellyseerr Jellyfin authentication modal
+     * @private
+     */
+    function closeJellyseerrJellyfinAuthModal() {
+        ModalManager.close('jellyseerrJellyfinAuthModal');
+    }
+
+    /**
+     * Show Jellyseerr local account modal
+     * @private
+     */
+    function showJellyseerrLocalModal() {
+        console.log('[Settings] Showing local auth modal');
+        
+        ModalManager.show({
+            modalId: 'jellyseerrLocalModal',
+            inputIds: ['jellyseerrEmailInput', 'jellyseerrLocalPasswordInput'],
+            buttonIds: ['saveJellyseerrLocalBtn', 'cancelJellyseerrLocalBtn'],
+            focusReturn: '[data-setting="jellyseerrAuthLocal"]',
+            clearInputs: true, // Clear credentials for security
+            onSave: function(inputs) {
+                var email = inputs[0].value.trim();
+                var password = inputs[1].value;
+                
+                console.log('[Settings] Local auth onSave called, email:', email, 'password length:', password ? password.length : 0);
+                
+                if (!email || !password) {
+                    showAlert('Email and password are required', 'Error');
+                    return;
+                }
+                
+                console.log('[Settings] Calling JellyseerrAPI.loginLocal');
+                
+                JellyseerrAPI.loginLocal(email, password)
+                    .then(function(response) {
+                        console.log('[Settings] Local login successful:', response);
+                        var user = response.data || response;
+                        
+                        // Clear Jellyfin auth credentials (keep URL)
+                        storage.removeJellyseerrUserSetting(auth.userId, 'jellyfinUsername');
+                        storage.removeJellyseerrUserSetting(auth.userId, 'jellyfinPassword');
+                        
+                        // Reinitialize API to ensure session is active
+                        initializeJellyseerr().then(function() {
+                            showAlert('Successfully logged in to Jellyseerr as ' + user.displayName, 'Success');
+                            updateSettingValues();
+                            closeJellyseerrLocalModal();
+                        }).catch(function(error) {
+                            showAlert('Login succeeded but failed to initialize session. Please try again.', 'Warning');
+                            closeJellyseerrLocalModal();
+                        });
+                    })
+                    .catch(function(error) {
+                        console.error('[Settings] Local login failed:', error);
+                        showAlert('Failed to login. Please check your credentials and try again.', 'Login Failed');
+                        inputs[1].value = '';
+                        inputs[1].focus();
+                    });
+            },
+            onCancel: closeJellyseerrLocalModal
+        });
+    }
+    
+    /**
+     * Close Jellyseerr local account modal
+     * @private
+     */
+    function closeJellyseerrLocalModal() {
+        ModalManager.close('jellyseerrLocalModal');
+    }
+
     /**
      * Update the slider display as user adjusts value
      * @param {string} settingName - The setting name
@@ -1320,6 +1943,258 @@ var SettingsController = (function() {
         if (sliderValueDisplay) {
             sliderValueDisplay.textContent = newValue;
         }
+    }
+
+    /**
+     * Test connection to Jellyseerr server
+     * @private
+     */
+    function testJellyseerrConnection() {
+        if (!settings.jellyseerrUrl) {
+            showAlert('Please set Jellyseerr URL first', 'Error');
+            return;
+        }
+        
+        // Initialize with the URL
+        var auth = JellyfinAPI.getStoredAuth();
+        var userId = auth && auth.userId ? auth.userId : null;
+        
+        JellyseerrAPI.initialize(settings.jellyseerrUrl, null, userId)
+            .then(function() {
+                return JellyseerrAPI.getStatus();
+            })
+            .then(function(status) {
+                var message = 'Connection successful!\n\n' +
+                    'Version: ' + (status.version || 'Unknown') + '\n' +
+                    'Status: ' + (status.status || 'Online');
+                showAlert(message, 'Connection Test');
+            })
+            .catch(function(error) {
+                showAlert('Connection failed. Please check the URL and ensure Jellyseerr is running.\n\nError: ' + (error.message || error), 'Connection Failed');
+            });
+    }
+
+    /**
+     * Clear Jellyseerr cache and stored data
+     * @private
+     */
+    function clearJellyseerrCache() {
+        var returnFocus = document.querySelector('[data-setting="clearJellyseerrCache"]');
+        
+        showConfirm(
+            'Clear all Jellyseerr cached data? This will not affect your server settings.',
+            'Clear Cache',
+            function() {
+                try {
+                    JellyseerrPreferences.clearCache();
+                    showAlert('Jellyseerr cache cleared successfully', 'Success');
+                    if (returnFocus) returnFocus.focus();
+                } catch (error) {
+                    showAlert('Failed to clear cache', 'Error');
+                    if (returnFocus) returnFocus.focus();
+                }
+            },
+            function() {
+                if (returnFocus) returnFocus.focus();
+            }
+        );
+    }
+
+    /**
+     * Disconnect current user from Jellyseerr
+     * Logs out the current user without affecting other users or global settings
+     * @private
+     */
+    function disconnectJellyseerr() {
+        var returnFocus = document.querySelector('[data-setting="disconnectJellyseerr"]');
+        
+        showConfirm(
+            'Disconnect from Jellyseerr? You will need to re-authenticate to use Jellyseerr features.',
+            'Disconnect',
+            function() {
+                try {
+                    JellyseerrAPI.logout();
+                    showAlert('Successfully disconnected from Jellyseerr', 'Success');
+                    if (returnFocus) returnFocus.focus();
+                } catch (error) {
+                    showAlert('Disconnected from Jellyseerr (with errors)', 'Warning');
+                    if (returnFocus) returnFocus.focus();
+                }
+            },
+            function() {
+                if (returnFocus) returnFocus.focus();
+            }
+        );
+    }
+
+    /**
+     * Show custom alert modal with D-pad support
+     * @param {string} message - Alert message to display
+     * @param {string} [title='Alert'] - Alert title
+     * @private
+     */
+    function showAlert(message, title) {
+        var modal = document.getElementById('customAlertModal');
+        var titleElement = document.getElementById('alertTitle');
+        var messageElement = document.getElementById('alertMessage');
+        var okBtn = document.getElementById('alertOkBtn');
+        
+        if (!modal || !titleElement || !messageElement || !okBtn) return;
+        
+        titleElement.textContent = title || 'Alert';
+        messageElement.textContent = message;
+        modal.style.display = 'flex';
+        
+        setTimeout(function() {
+            okBtn.focus();
+        }, 100);
+    }
+
+    /**
+     * Close custom alert modal
+     * @private
+     */
+    function closeAlert() {
+        var modal = document.getElementById('customAlertModal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+
+    /**
+     * Show custom confirmation modal with D-pad support and remote navigation
+     * Handles LEFT/RIGHT navigation between buttons and BACK key to cancel
+     * @param {string} message - Confirmation message to display
+     * @param {string} [title='Confirm Action'] - Confirmation title
+     * @param {Function} onConfirm - Callback when confirmed
+     * @param {Function} onCancel - Callback when cancelled
+     * @private
+     */
+    function showConfirm(message, title, onConfirm, onCancel) {
+        var modal = document.getElementById('confirmModal');
+        var titleElement = document.getElementById('confirmTitle');
+        var messageElement = document.getElementById('confirmMessage');
+        var okBtn = document.getElementById('confirmOkBtn');
+        var cancelBtn = document.getElementById('confirmCancelBtn');
+        
+        if (!modal || !titleElement || !messageElement || !okBtn || !cancelBtn) return;
+        
+        titleElement.textContent = title || 'Confirm Action';
+        messageElement.textContent = message;
+        modal.style.display = 'flex';
+        
+        // Remove any existing listeners
+        var newOkBtn = okBtn.cloneNode(true);
+        var newCancelBtn = cancelBtn.cloneNode(true);
+        okBtn.parentNode.replaceChild(newOkBtn, okBtn);
+        cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+        
+        // Add new listeners
+        newOkBtn.addEventListener('click', function() {
+            closeConfirm();
+            if (onConfirm) onConfirm();
+        });
+        
+        newCancelBtn.addEventListener('click', function() {
+            closeConfirm();
+            if (onCancel) onCancel();
+        });
+        
+        // Handle keyboard navigation within modal
+        var modalKeyHandler = function(evt) {
+            if (evt.keyCode === KeyCodes.BACK) {
+                evt.preventDefault();
+                closeConfirm();
+                if (onCancel) onCancel();
+                modal.removeEventListener('keydown', modalKeyHandler);
+            } else if (evt.keyCode === KeyCodes.LEFT || evt.keyCode === KeyCodes.RIGHT) {
+                evt.preventDefault();
+                if (document.activeElement === newOkBtn) {
+                    newCancelBtn.focus();
+                } else {
+                    newOkBtn.focus();
+                }
+            }
+        };
+        
+        modal.addEventListener('keydown', modalKeyHandler);
+        
+        setTimeout(function() {
+            newCancelBtn.focus();
+        }, 100);
+    }
+
+    /**
+     * Close custom confirmation modal
+     * @private
+     */
+    function closeConfirm() {
+        var modal = document.getElementById('confirmModal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+
+    /**
+     * Helper function to handle modal field navigation with UP/DOWN keys
+     * @param {KeyboardEvent} evt - Keyboard event
+     * @param {HTMLElement[]} fields - Array of focusable fields in order
+     * @returns {boolean} True if navigation was handled
+     * @private
+     */
+    function handleModalFieldNavigation(evt, fields) {
+        if (evt.keyCode !== KeyCodes.UP && evt.keyCode !== KeyCodes.DOWN && 
+            evt.keyCode !== KeyCodes.LEFT && evt.keyCode !== KeyCodes.RIGHT) {
+            return false;
+        }
+        
+        var activeElement = document.activeElement;
+        var currentIndex = fields.indexOf(activeElement);
+        
+        if (currentIndex === -1) return false;
+        
+        // Handle UP/DOWN for all fields
+        if (evt.keyCode === KeyCodes.UP || evt.keyCode === KeyCodes.DOWN) {
+            evt.preventDefault();
+            var newIndex = evt.keyCode === KeyCodes.UP ? currentIndex - 1 : currentIndex + 1;
+            if (newIndex >= 0 && newIndex < fields.length) {
+                fields[newIndex].focus();
+            }
+            return true;
+        }
+        
+        // Handle LEFT/RIGHT only for buttons in modal-actions
+        var currentField = fields[currentIndex];
+        if (currentField.classList.contains('modal-btn') || 
+            (currentField.parentElement && currentField.parentElement.classList.contains('modal-actions'))) {
+            
+            if (evt.keyCode === KeyCodes.LEFT || evt.keyCode === KeyCodes.RIGHT) {
+                evt.preventDefault();
+                
+                // Find buttons in modal-actions
+                var buttons = [];
+                for (var i = 0; i < fields.length; i++) {
+                    if (fields[i].classList.contains('modal-btn') || 
+                        (fields[i].parentElement && fields[i].parentElement.classList.contains('modal-actions'))) {
+                        buttons.push(fields[i]);
+                    }
+                }
+                
+                if (buttons.length > 1) {
+                    var buttonIndex = buttons.indexOf(currentField);
+                    var newButtonIndex = evt.keyCode === KeyCodes.LEFT ? buttonIndex - 1 : buttonIndex + 1;
+                    
+                    // Wrap around
+                    if (newButtonIndex < 0) newButtonIndex = buttons.length - 1;
+                    if (newButtonIndex >= buttons.length) newButtonIndex = 0;
+                    
+                    buttons[newButtonIndex].focus();
+                }
+                return true;
+            }
+        }
+        
+        return false;
     }
 
     return {

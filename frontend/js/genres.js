@@ -5,16 +5,13 @@
     var genresData = {};
     
     function init() {
-        JellyfinAPI.Logger.info('Initializing genres page...');
         
         auth = JellyfinAPI.getStoredAuth();
         if (!auth) {
-            JellyfinAPI.Logger.error('No authentication found, redirecting to login');
             window.location.href = 'login.html';
             return;
         }
         
-        JellyfinAPI.Logger.success('Authenticated as:', auth.username);
         storage.applyBackdropBlur(document.getElementById('globalBackdropImage'), 'backdropBlurHome', 20);
         loadGenres();
     }
@@ -39,14 +36,12 @@
         
         JellyfinAPI.getItems(auth.serverAddress, auth.accessToken, '/Users/' + auth.userId + '/Items', params, function(err, data) {
             if (err || !data || !data.Items) {
-                JellyfinAPI.Logger.error('Failed to load items:', err);
                 loadingContainer.style.display = 'none';
                 errorMessage.textContent = 'Failed to load content';
                 errorMessage.style.display = 'block';
                 return;
             }
             
-            JellyfinAPI.Logger.success('Loaded items:', data.Items.length);
             
             // Group items by genre
             data.Items.forEach(function(item) {
@@ -70,7 +65,6 @@
                 return;
             }
             
-            JellyfinAPI.Logger.success('Found genres:', sortedGenres.length);
             
             // Render each genre as a row
             sortedGenres.forEach(function(genre) {

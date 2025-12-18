@@ -67,7 +67,8 @@ AJAX.prototype.request = function(url, settings) {
 			if (xhr.status == 200) {
                 if (settings.success) {
 					try {
-                    	settings.success(JSON.parse(xhr.responseText));
+                    	var jsonData = JSON.parse(xhr.responseText);
+						settings.success(jsonData);
 					} catch (error) {
 						if (typeof JellyfinAPI !== 'undefined') {
 							JellyfinAPI.Logger.error(error);
@@ -76,8 +77,11 @@ AJAX.prototype.request = function(url, settings) {
 							if (settings.error) {
 								settings.error({error: "The server did not return valid JSON data."});
 							}
-						} else if (settings.error) {
-							settings.error({error: 0});
+						} else {
+							// Don't call error callback if success was already called
+							if (typeof JellyfinAPI !== 'undefined') {
+								JellyfinAPI.Logger.error('Unexpected error after successful request:', error);
+							}
 						}
 					}
                 }

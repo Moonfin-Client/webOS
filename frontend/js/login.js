@@ -17,7 +17,6 @@ var LoginController = (function() {
     const LOGIN_SUCCESS_DELAY_MS = 1000;
 
     function init() {
-        JellyfinAPI.Logger.info('Initializing login controller...');
         JellyfinAPI.init();
         cacheElements();
         setupEventListeners();
@@ -60,6 +59,13 @@ var LoginController = (function() {
             quickConnectCode: document.getElementById('quickConnectCode'),
             quickConnectStatus: document.getElementById('quickConnectStatus'),
             cancelQuickConnectBtn: document.getElementById('cancelQuickConnectBtn'),
+            
+            manualLoginBtn: document.getElementById('manualLoginBtn'),
+            manualLoginForm: document.getElementById('manualLoginForm'),
+            manualUsername: document.getElementById('manualUsername'),
+            manualPassword: document.getElementById('manualPassword'),
+            manualLoginSubmitBtn: document.getElementById('manualLoginSubmitBtn'),
+            cancelManualLoginBtn: document.getElementById('cancelManualLoginBtn'),
             
             backToServerBtn: document.getElementById('backToServerBtn'),
             addAccountBtn: document.getElementById('addAccountBtn'),
@@ -138,6 +144,28 @@ var LoginController = (function() {
         if (elements.cancelQuickConnectBtn) {
             elements.cancelQuickConnectBtn.addEventListener('click', backToUserSelection);
         }
+        if (elements.manualLoginBtn) {
+            elements.manualLoginBtn.addEventListener('click', showManualLoginForm);
+        }
+        if (elements.manualLoginSubmitBtn) {
+            elements.manualLoginSubmitBtn.addEventListener('click', handleManualLogin);
+        }
+        if (elements.cancelManualLoginBtn) {
+            elements.cancelManualLoginBtn.addEventListener('click', backToUserSelection);
+        }
+        if (elements.manualUsername) {
+            elements.manualUsername.addEventListener('keydown', function(e) {
+                if (e.keyCode === KeyCodes.ENTER) {
+                    e.preventDefault();
+                    elements.manualPassword.focus();
+                }
+            });
+        }
+        if (elements.manualPassword) {
+            elements.manualPassword.addEventListener('keydown', function(e) {
+                if (e.keyCode === KeyCodes.ENTER) handleManualLogin();
+            });
+        }
         if (elements.backToServerBtn) {
             elements.backToServerBtn.addEventListener('click', backToServerSelection);
         }
@@ -163,7 +191,6 @@ var LoginController = (function() {
         if (settings && settings.autoLogin) {
             var lastLogin = storage.get('last_login');
             if (lastLogin && lastLogin.serverAddress && lastLogin.username) {
-                JellyfinAPI.Logger.info('Auto-login enabled, attempting to login as:', lastLogin.username);
                 attemptAutoLogin(lastLogin);
                 return true;
             }
@@ -178,7 +205,6 @@ var LoginController = (function() {
         // Connect to server first
         JellyfinAPI.getPublicSystemInfo(lastLogin.serverAddress, function(err, systemInfo) {
             if (err) {
-                JellyfinAPI.Logger.error('Auto-login failed: cannot connect to server');
                 showError('Auto-login failed: cannot connect to server');
                 clearAutoLoginData();
                 setTimeout(function() {
@@ -196,7 +222,6 @@ var LoginController = (function() {
             // Get public users to find the user
             JellyfinAPI.getPublicUsers(lastLogin.serverAddress, function(err, users) {
                 if (err || !users || users.length === 0) {
-                    JellyfinAPI.Logger.error('Auto-login failed: cannot get users');
                     showError('Auto-login failed: cannot get users');
                     clearAutoLoginData();
                     setTimeout(function() {
@@ -211,7 +236,6 @@ var LoginController = (function() {
                 });
                 
                 if (!user) {
-                    JellyfinAPI.Logger.error('Auto-login failed: user not found');
                     showError('Auto-login failed: user not found');
                     clearAutoLoginData();
                     setTimeout(function() {
@@ -228,7 +252,6 @@ var LoginController = (function() {
                 JellyfinAPI.authenticateByName(lastLogin.serverAddress, user.Name, '', function(err, authData) {
                     if (err || !authData || !authData.AccessToken) {
                         // Auto-login failed, show normal login
-                        JellyfinAPI.Logger.warn('Auto-login failed: requires password or invalid credentials');
                         showError('Auto-login failed: password required. Please login manually.');
                         clearAutoLoginData();
                         setTimeout(function() {
@@ -245,7 +268,6 @@ var LoginController = (function() {
                     }
                     
                     showStatus('Auto-login successful! Welcome, ' + authData.User.Name + '!', 'success');
-                    JellyfinAPI.Logger.success('Auto-login successful');
                     
                     setTimeout(function() {
                         window.location.href = 'browse.html';
@@ -265,7 +287,6 @@ var LoginController = (function() {
         var lastServer = storage.get('last_server', true);
         
         if (lastServer && lastServer.address) {
-            JellyfinAPI.Logger.info('Reconnecting to last server:', lastServer.name);
             
             // Set the server URL
             if (elements.serverUrlInput) {
@@ -379,7 +400,6 @@ var LoginController = (function() {
         }
         
         showStatus('Selected: ' + server.name, 'success');
-        JellyfinAPI.Logger.info('Server selected:', server);
         
         handleConnect();
     }
@@ -411,10 +431,8 @@ var LoginController = (function() {
             
             if (err) {
                 showError('Unable to connect to server. Check the address and try again.');
-                JellyfinAPI.Logger.error('Connection test failed', err);
             } else {
                 showStatus('Connected to ' + serverInfo.name + '! Loading users...', 'success');
-                JellyfinAPI.Logger.success('Server connection verified', serverInfo);
                 
                 connectedServer = serverInfo;
                 
@@ -434,13 +452,11 @@ var LoginController = (function() {
     function loadPublicUsers(serverAddress) {
         JellyfinAPI.getPublicUsers(serverAddress, function(err, users) {
             if (err) {
-                JellyfinAPI.Logger.error('Failed to load public users:', err);
                 showError('Connected to server but failed to load users');
                 return;
             }
             
             if (!users || users.length === 0) {
-                JellyfinAPI.Logger.warn('No public users found on server');
                 publicUsers = [];
                 // Show toaster message
                 showStatus('No public users found. Use "Add Account" to login manually.', 'info');
@@ -548,7 +564,6 @@ var LoginController = (function() {
             }
         });
         
-        JellyfinAPI.Logger.info('User selected:', selectedUser.Name);
         
         // Show login options
         showLoginOptions();
@@ -725,7 +740,6 @@ var LoginController = (function() {
         // First check the status
         JellyfinAPI.checkQuickConnectStatus(connectedServer.address, quickConnectSecret, function(err, statusData) {
             if (err) {
-                console.error('Quick Connect status check failed:', err);
                 return; // Keep polling
             }
             
@@ -871,13 +885,11 @@ var LoginController = (function() {
             password,
             function(err, authData) {
                 if (err || !authData) {
-                    JellyfinAPI.Logger.error('Manual login failed:', err);
                     showError('Login failed! Check your username and password.');
                     return;
                 }
                 
                 if (!authData.accessToken || !authData.userId) {
-                    JellyfinAPI.Logger.error('Manual login failed: Invalid response');
                     showError('Login failed! Invalid response from server.');
                     return;
                 }
@@ -953,6 +965,9 @@ var LoginController = (function() {
         if (elements.quickConnectForm) {
             elements.quickConnectForm.style.display = 'none';
         }
+        if (elements.manualLoginForm) {
+            elements.manualLoginForm.style.display = 'none';
+        }
     }
 
     function updateSelectedUserInfo(avatarElement, nameElement) {
@@ -981,14 +996,16 @@ var LoginController = (function() {
         if (elements.loginForm) {
             elements.loginForm.style.display = 'none';
         }
+        if (elements.manualLoginForm) {
+            elements.manualLoginForm.style.display = 'none';
+        }
         if (elements.userSelection) {
             elements.userSelection.style.display = 'block';
         }
         
         selectedUser = null;
-        clearError();
     }
-
+    
     function backToServerSelection() {
         // Clear all connection state
         connectedServer = null;
@@ -1003,6 +1020,9 @@ var LoginController = (function() {
         }
         if (elements.loginForm) {
             elements.loginForm.style.display = 'none';
+        }
+        if (elements.manualLoginForm) {
+            elements.manualLoginForm.style.display = 'none';
         }
         
         // Show manual server section
@@ -1046,22 +1066,20 @@ var LoginController = (function() {
             }
             
             if (err) {
-                JellyfinAPI.Logger.error('Authentication failed:', err);
                 showError('Login failed! Check your password.');
                 return;
             }
             
             if (!authData || !authData.accessToken) {
-                JellyfinAPI.Logger.error('No access token received. Auth data:', {
                     hasAuthData: !!authData,
-                    hasAccessToken: !!(authData?.accessToken)
+                    hasUsername: !!(authData && authData.username),
+                    hasAccessToken: !!(authData && authData.accessToken)
                 });
                 showError('Login failed! Invalid response from server.');
                 return;
             }
             
             showStatus('Login successful! Welcome, ' + authData.username + '!', 'success');
-            JellyfinAPI.Logger.success('Login successful');
             
             // Save login info for auto-login (only for passwordless users)
             if (!password || password === '') {
@@ -1070,7 +1088,6 @@ var LoginController = (function() {
                     serverName: connectedServer.name,
                     username: selectedUser.Name
                 });
-                JellyfinAPI.Logger.info('Saved login info for auto-login');
             }
             
             elements.passwordInput.value = '';
@@ -1105,6 +1122,109 @@ var LoginController = (function() {
 
     function stopQuickConnect() {
         stopQuickConnectPolling();
+    }
+
+    function showManualLoginForm() {
+        
+        if (!connectedServer) {
+            showError('No server connected');
+            return;
+        }
+        
+        // Hide user selection
+        if (elements.userSelection) {
+            elements.userSelection.style.display = 'none';
+        }
+        
+        // Show manual login form
+        if (elements.manualLoginForm) {
+            elements.manualLoginForm.style.display = 'block';
+        }
+        
+        // Clear previous inputs
+        if (elements.manualUsername) {
+            elements.manualUsername.value = '';
+        }
+        if (elements.manualPassword) {
+            elements.manualPassword.value = '';
+        }
+        
+        clearError();
+        
+        // Focus username field
+        setTimeout(function() {
+            if (elements.manualUsername) {
+                elements.manualUsername.focus();
+            }
+        }, FOCUS_DELAY_MS);
+    }
+
+    function handleManualLogin() {
+        var username = elements.manualUsername ? elements.manualUsername.value.trim() : '';
+        var password = elements.manualPassword ? elements.manualPassword.value : '';
+        
+        if (!username) {
+            showError('Please enter a username');
+            if (elements.manualUsername) {
+                elements.manualUsername.focus();
+            }
+            return;
+        }
+        
+        if (!connectedServer) {
+            showError('No server connected');
+            return;
+        }
+        
+        showStatus('Logging in as ' + username + '...', 'info');
+        clearError();
+        
+        // Disable submit button
+        if (elements.manualLoginSubmitBtn) {
+            elements.manualLoginSubmitBtn.disabled = true;
+            elements.manualLoginSubmitBtn.textContent = 'Logging in...';
+        }
+        
+        JellyfinAPI.authenticateByName(
+            connectedServer.address,
+            username,
+            password,
+            function(err, authData) {
+                // Re-enable button
+                if (elements.manualLoginSubmitBtn) {
+                    elements.manualLoginSubmitBtn.disabled = false;
+                    elements.manualLoginSubmitBtn.textContent = 'Login';
+                }
+                
+                if (err) {
+                    
+                    if (err.error === 401) {
+                        showError('Invalid username or password');
+                    } else if (err.error === 'timeout') {
+                        showError('Connection timeout. Please try again.');
+                    } else {
+                        showError('Login failed. Please try again.');
+                    }
+                    
+                    if (elements.manualPassword) {
+                        elements.manualPassword.value = '';
+                        elements.manualPassword.focus();
+                    }
+                    return;
+                }
+                
+                if (!authData || !authData.accessToken) {
+                    showError('Login failed - no access token received');
+                    return;
+                }
+                
+                showStatus('Login successful! Welcome, ' + authData.username + '!', 'success');
+                
+                setTimeout(function() {
+                    window.location.href = 'browse.html';
+                }, LOGIN_SUCCESS_DELAY_MS);
+            }
+        );
     }
 
     function showError(message) {

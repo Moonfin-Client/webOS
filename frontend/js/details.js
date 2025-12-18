@@ -22,12 +22,23 @@ var DetailsController = (function() {
      * Authenticates, loads item details, and sets up navigation
      */
     function init() {
-        JellyfinAPI.Logger.info('Initializing details controller...');
         
         auth = JellyfinAPI.getStoredAuth();
         if (!auth) {
-            JellyfinAPI.Logger.error('No authentication found, redirecting to login');
             window.location.href = 'login.html';
+            return;
+        }
+
+        // Check if this is a Jellyseerr item
+        var params = new URLSearchParams(window.location.search);
+        var source = params.get('source');
+        var type = params.get('type');
+        var id = params.get('id');
+        
+        if (source === 'jellyseerr' && id && type) {
+            // Redirect to Jellyseerr details page
+            var mediaType = type.toLowerCase() === 'movie' ? 'movie' : 'tv';
+            window.location.href = 'jellyseerr-details.html?type=' + mediaType + '&id=' + id;
             return;
         }
 
@@ -37,7 +48,6 @@ var DetailsController = (function() {
             return;
         }
 
-        JellyfinAPI.Logger.info('Loading details for item:', itemId);
         
         cacheElements();
         storage.applyBackdropBlur(document.querySelector('.backdrop-image'), 'backdropBlurDetail', 15);
@@ -136,7 +146,22 @@ var DetailsController = (function() {
             audioTrackList: document.getElementById('audioTrackList'),
             subtitleModal: document.getElementById('subtitleModal'),
             subtitleTrackList: document.getElementById('subtitleTrackList'),
-            detailsContainer: document.querySelector('.details-container')
+            detailsContainer: document.querySelector('.details-container'),
+            // Jellyseerr elements
+            requestStatus: document.getElementById('requestStatus'),
+            requestStatusIcon: document.getElementById('requestStatusIcon'),
+            requestStatusText: document.getElementById('requestStatusText'),
+            requestBtn: document.getElementById('requestBtn'),
+            requestBtnWrapper: document.getElementById('requestBtnWrapper'),
+            deleteRequestBtn: document.getElementById('deleteRequestBtn'),
+            deleteRequestBtnWrapper: document.getElementById('deleteRequestBtnWrapper'),
+            seasonSelectorModal: document.getElementById('seasonSelectorModal'),
+            allSeasonsBtn: document.getElementById('allSeasonsBtn'),
+            firstSeasonBtn: document.getElementById('firstSeasonBtn'),
+            latestSeasonBtn: document.getElementById('latestSeasonBtn'),
+            seasonCheckboxList: document.getElementById('seasonCheckboxList'),
+            confirmRequestBtn: document.getElementById('confirmRequestBtn'),
+            cancelRequestBtn: document.getElementById('cancelRequestBtn')
         };
     }
 
@@ -238,14 +263,12 @@ var DetailsController = (function() {
     }
 
     function handleModalKeyDown(evt) {
-        JellyfinAPI.Logger.info('[Details] Modal key pressed:', evt.keyCode, 'currentModalFocusIndex:', currentModalFocusIndex, 'focusableItems:', modalFocusableItems.length);
         currentModalFocusIndex = TrackSelector.handleModalKeyDown(
             evt,
             modalFocusableItems,
             currentModalFocusIndex,
             closeModal
         );
-        JellyfinAPI.Logger.info('[Details] New modal focus index:', currentModalFocusIndex);
     }
 
     function getCurrentSectionItems() {
@@ -342,25 +365,25 @@ var DetailsController = (function() {
             hideLoading();
             
             if (err) {
-                JellyfinAPI.Logger.error('Failed to load item details:', err);
                 showError('Failed to load item details');
                 return;
             }
             
             if (!data) {
-                JellyfinAPI.Logger.error('No item data returned for:', itemId);
                 showError('Failed to load item details');
                 return;
             }
             
             itemData = data;
-            JellyfinAPI.Logger.success('Item details loaded:', itemData.Name);
             
             try {
                 displayItemDetails();
                 loadAdditionalContent();
+                
+                // Load Jellyseerr data if enabled
+                initializeJellyseerr();
+                loadJellyseerrData();
             } catch (displayError) {
-                JellyfinAPI.Logger.error('Error displaying item details:', displayError);
                 showError('Failed to display item details');
             }
         });
@@ -388,11 +411,9 @@ var DetailsController = (function() {
         
         // Ensure critical elements exist
         if (!elements.itemTitle || !elements.itemOverview) {
-            JellyfinAPI.Logger.error('Critical elements not found, recaching...');
             cacheElements();
             // If still null after recaching, abort
             if (!elements.itemTitle) {
-                JellyfinAPI.Logger.error('Failed to find itemTitle element');
                 return;
             }
         }
@@ -1135,7 +1156,6 @@ var DetailsController = (function() {
 
     function loadRemainingEpisodes() {
         if (!itemData.SeasonId || !itemData.SeriesId) {
-            JellyfinAPI.Logger.info('Episode missing SeasonId or SeriesId, cannot load remaining episodes');
             return;
         }
         
@@ -1151,7 +1171,6 @@ var DetailsController = (function() {
         
         JellyfinAPI.getItems(auth.serverAddress, auth.accessToken, endpoint, params, function(err, data) {
             if (err || !data || !data.Items || data.Items.length === 0) {
-                JellyfinAPI.Logger.info('No episodes found for season');
                 return;
             }
             
@@ -1165,7 +1184,6 @@ var DetailsController = (function() {
             if (remainingEpisodes.length > 0) {
                 displayRemainingEpisodes(remainingEpisodes);
             } else {
-                JellyfinAPI.Logger.info('No remaining unwatched episodes in season');
             }
         });
     }
@@ -1277,7 +1295,6 @@ var DetailsController = (function() {
      * @private
      */
     function handlePlay() {
-        JellyfinAPI.Logger.info('Play clicked for item:', itemData.Id, 'Type:', itemData.Type);
         
         // For Series, find and play the next episode to watch
         if (itemData.Type === 'Series') {
@@ -1296,11 +1313,9 @@ var DetailsController = (function() {
                 if (!err && data && data.Items && data.Items.length > 0) {
                     // Play the next episode
                     var nextEpisode = data.Items[0];
-                    JellyfinAPI.Logger.success('Playing next episode:', nextEpisode.Id);
                     window.location.href = 'player.html?id=' + nextEpisode.Id;
                 } else {
                     // No next up episode, just navigate to the series (might be fully watched)
-                    JellyfinAPI.Logger.info('No next episode found for series');
                     alert('No episodes available to play');
                 }
             });
@@ -1312,12 +1327,10 @@ var DetailsController = (function() {
     }
 
     function handleResume() {
-        JellyfinAPI.Logger.info('Resume clicked for item:', itemData.Id);
         window.location.href = 'player.html?id=' + itemData.Id;
     }
 
     function handleTrailer() {
-        JellyfinAPI.Logger.info('Trailer clicked for item:', itemData.Id);
         
         // First, try to play local trailer file
         var endpoint = '/Users/' + auth.userId + '/Items/' + itemData.Id + '/LocalTrailers';
@@ -1325,7 +1338,6 @@ var DetailsController = (function() {
         JellyfinAPI.getItems(auth.serverAddress, auth.accessToken, endpoint, {}, function(err, localTrailers) {
             if (!err && localTrailers && localTrailers.length > 0) {
                 // Local trailer found, play it
-                JellyfinAPI.Logger.success('Local trailer found, playing:', localTrailers[0].Id);
                 alert('Local trailer playback not yet implemented. Trailer ID: ' + localTrailers[0].Id);
                 return;
             }
@@ -1333,7 +1345,6 @@ var DetailsController = (function() {
             // No local trailer, check for remote trailers (YouTube URLs)
             if (itemData.RemoteTrailers && itemData.RemoteTrailers.length > 0) {
                 var trailerUrl = itemData.RemoteTrailers[0].Url;
-                JellyfinAPI.Logger.info('No local trailer, using remote trailer:', trailerUrl);
                 
                 // Extract YouTube video ID from URL
                 var videoId = extractYouTubeVideoId(trailerUrl);
@@ -1343,7 +1354,6 @@ var DetailsController = (function() {
                     alert('Invalid YouTube trailer URL');
                 }
             } else {
-                JellyfinAPI.Logger.warn('No trailers available');
                 alert('No trailers available for this item');
             }
         });
@@ -1371,7 +1381,6 @@ var DetailsController = (function() {
     }
     
     function openYouTubeApp(videoId) {
-        JellyfinAPI.Logger.info('Opening YouTube app with video ID:', videoId);
         
         try {
             webOS.service.request('luna://com.webos.applicationManager', {
@@ -1383,15 +1392,12 @@ var DetailsController = (function() {
                     }
                 },
                 onSuccess: function(response) {
-                    JellyfinAPI.Logger.success('YouTube app launched successfully');
                 },
                 onFailure: function(error) {
-                    JellyfinAPI.Logger.error('Failed to launch YouTube app:', error);
                     alert('Failed to open YouTube app. Error: ' + (error.errorText || 'Unknown error'));
                 }
             });
         } catch (e) {
-            JellyfinAPI.Logger.error('Exception launching YouTube:', e);
             alert('Failed to open YouTube app: ' + e.message);
         }
     }
@@ -1413,7 +1419,6 @@ var DetailsController = (function() {
                 } else {
                     elements.favoriteIcon.classList.remove('favorited');
                 }
-                JellyfinAPI.Logger.success('Favorite toggled:', newState);
             }
         });
     }
@@ -1426,18 +1431,15 @@ var DetailsController = (function() {
             if (!err) {
                 itemData.UserData.Played = newState;
                 elements.playedText.textContent = newState ? 'Mark Unplayed' : 'Mark Played';
-                JellyfinAPI.Logger.success('Played status toggled:', newState);
             }
         });
     }
 
     function handleShuffle() {
-        JellyfinAPI.Logger.info('Shuffle clicked for item:', itemData.Id);
         alert('Shuffle playback not yet implemented');
     }
 
     function handleAudio() {
-        JellyfinAPI.Logger.info('Audio track selector clicked');
         
         if (!itemData.MediaSources || itemData.MediaSources.length === 0) {
             alert('No media sources available');
@@ -1460,7 +1462,6 @@ var DetailsController = (function() {
     }
 
     function handleSubtitles() {
-        JellyfinAPI.Logger.info('Subtitle track selector clicked');
         
         if (!itemData.MediaSources || itemData.MediaSources.length === 0) {
             alert('No media sources available');
@@ -1479,7 +1480,6 @@ var DetailsController = (function() {
     }
 
     function handleMore() {
-        JellyfinAPI.Logger.info('More options clicked');
         alert('More options menu not yet implemented');
     }
 
@@ -1524,26 +1524,22 @@ var DetailsController = (function() {
     }
 
     function showAudioTrackSelector(audioStreams) {
-        JellyfinAPI.Logger.info('[Details] showAudioTrackSelector called with', audioStreams.length, 'tracks');
         
         // Find currently selected track (default track)
         var currentIndex = -1;
         for (var i = 0; i < audioStreams.length; i++) {
             if (audioStreams[i].IsDefault) {
                 currentIndex = i;
-                JellyfinAPI.Logger.info('[Details] Found default audio track at index:', i);
                 break;
             }
         }
 
         // Use TrackSelector module to build track list with click handlers
-        JellyfinAPI.Logger.info('[Details] Building audio track list, currentIndex:', currentIndex);
         modalFocusableItems = TrackSelector.buildAudioTrackList(
             audioStreams,
             currentIndex,
             elements.audioTrackList,
             function(selectedIndex) {
-                JellyfinAPI.Logger.info('[Details] Audio track selected:', selectedIndex, '- saving preference for itemId:', itemId);
                 
                 // Update visual selection in modal
                 modalFocusableItems.forEach(function(item) {
@@ -1563,7 +1559,6 @@ var DetailsController = (function() {
             }
         );
         
-        JellyfinAPI.Logger.info('[Details] Created', modalFocusableItems.length, 'focusable audio items');
         
         activeModal = 'audio';
         elements.audioModal.style.display = 'flex';
@@ -1574,26 +1569,22 @@ var DetailsController = (function() {
     }
 
     function showSubtitleTrackSelector(subtitleStreams) {
-        JellyfinAPI.Logger.info('[Details] showSubtitleTrackSelector called with', subtitleStreams.length, 'tracks');
         
         // Find currently selected track (default track)
         var currentIndex = -1;
         for (var i = 0; i < subtitleStreams.length; i++) {
             if (subtitleStreams[i].IsDefault) {
                 currentIndex = i;
-                JellyfinAPI.Logger.info('[Details] Found default subtitle track at index:', i);
                 break;
             }
         }
 
         // Use TrackSelector module to build track list with click handlers
-        JellyfinAPI.Logger.info('[Details] Building subtitle track list, currentIndex:', currentIndex);
         modalFocusableItems = TrackSelector.buildSubtitleTrackList(
             subtitleStreams,
             currentIndex,
             elements.subtitleTrackList,
             function(selectedIndex) {
-                JellyfinAPI.Logger.info('[Details] Subtitle track selected:', selectedIndex, '- saving preference for itemId:', itemId);
                 
                 // Update visual selection in modal
                 // Account for "None" option at index 0
@@ -1615,7 +1606,6 @@ var DetailsController = (function() {
             }
         );
         
-        JellyfinAPI.Logger.info('[Details] Created', modalFocusableItems.length, 'focusable subtitle items');
         
         activeModal = 'subtitle';
         elements.subtitleModal.style.display = 'flex';
@@ -1626,15 +1616,432 @@ var DetailsController = (function() {
     }
 
     function closeModal() {
-        JellyfinAPI.Logger.info('[Details] closeModal called, activeModal:', activeModal);
         if (elements.audioModal) {
             elements.audioModal.style.display = 'none';
         }
         if (elements.subtitleModal) {
             elements.subtitleModal.style.display = 'none';
         }
+        if (elements.seasonSelectorModal) {
+            elements.seasonSelectorModal.style.display = 'none';
+        }
         activeModal = null;
         modalFocusableItems = [];
+    }
+
+    // ==================== Jellyseerr Integration ====================
+
+    let jellyseerrEnabled = false;
+    let jellyseerrData = null;
+    let tmdbId = null;
+    let mediaType = null;
+    let selectedSeasons = 'all';
+
+    /**
+     * Initialize Jellyseerr integration
+     */
+    /**
+     * Initialize Jellyseerr integration
+     * @private
+     */
+    function initializeJellyseerr() {
+        return JellyseerrAPI.initializeFromPreferences()
+            .then(function(success) {
+                jellyseerrEnabled = success;
+                return success;
+            });
+    }
+
+    /**
+     * Load Jellyseerr data for the current item
+     */
+    function loadJellyseerrData() {
+        if (!jellyseerrEnabled || !itemData) return;
+        
+        // Extract TMDB ID and media type from item
+        tmdbId = getTmdbId(itemData);
+        mediaType = getMediaType(itemData);
+        
+        if (!tmdbId || !mediaType) {
+            return;
+        }
+        
+        
+        // Get media details including request status
+        var apiCall = mediaType === 'movie' ? 
+            JellyseerrAPI.getMovieDetails(tmdbId) : 
+            JellyseerrAPI.getTvDetails(tmdbId);
+        
+        apiCall
+            .then(function(data) {
+                jellyseerrData = data;
+                updateRequestUI();
+            })
+            .catch(function(error) {
+            });
+    }
+
+    /**
+     * Auto-request a movie
+     */
+    function autoRequestMovie() {
+        if (!tmdbId) return;
+        
+        JellyseerrAPI.requestMovie(tmdbId)
+            .then(function(result) {
+                
+                // Reload Jellyseerr data to update UI
+                setTimeout(function() {
+                    loadJellyseerrData();
+                }, 500);
+            })
+            .catch(function(error) {
+            });
+    }
+
+    /**
+     * Auto-request a TV show (request first season by default)
+     */
+    function autoRequestTvShow() {
+        if (!tmdbId) return;
+        
+        // Request first season by default for auto-request
+        JellyseerrAPI.requestTvShow(tmdbId, [1])
+            .then(function(result) {
+                
+                // Reload Jellyseerr data to update UI
+                setTimeout(function() {
+                    loadJellyseerrData();
+                }, 500);
+            })
+            .catch(function(error) {
+            });
+    }
+
+    /**
+     * Extract TMDB ID from Jellyfin item
+     */
+    function getTmdbId(item) {
+        if (!item || !item.ProviderIds) return null;
+        return item.ProviderIds.Tmdb || null;
+    }
+
+    /**
+     * Determine media type from Jellyfin item
+     */
+    function getMediaType(item) {
+        if (!item) return null;
+        
+        if (item.Type === 'Movie') {
+            return 'movie';
+        } else if (item.Type === 'Series') {
+            return 'tv';
+        }
+        
+        return null;
+    }
+
+    /**
+     * Update request UI elements based on Jellyseerr data
+     */
+    function updateRequestUI() {
+        if (!jellyseerrData) return;
+        
+        var mediaInfo = jellyseerrData.mediaInfo;
+        
+        // Update request status badge
+        if (mediaInfo && mediaInfo.status) {
+            elements.requestStatus.style.display = 'inline-flex';
+            
+            var statusInfo = getRequestStatusInfo(mediaInfo.status);
+            elements.requestStatusIcon.textContent = statusInfo.icon;
+            elements.requestStatusText.textContent = statusInfo.text;
+            elements.requestStatus.className = 'info-badge info-badge-request status-' + statusInfo.class;
+        } else {
+            elements.requestStatus.style.display = 'none';
+        }
+        
+        // Show appropriate action button
+        if (mediaInfo && (mediaInfo.status === 2 || mediaInfo.status === 3 || mediaInfo.status === 5)) {
+            // Available, partially available, or processing
+            elements.requestBtnWrapper.style.display = 'none';
+            elements.deleteRequestBtnWrapper.style.display = 'none';
+        } else if (mediaInfo && mediaInfo.status === 1) {
+            // Pending/Requested - show delete button
+            elements.requestBtnWrapper.style.display = 'none';
+            elements.deleteRequestBtnWrapper.style.display = 'flex';
+            
+            if (elements.deleteRequestBtn) {
+                elements.deleteRequestBtn.addEventListener('click', handleDeleteRequest);
+            }
+        } else {
+            // Not requested - show request button
+            elements.requestBtnWrapper.style.display = 'flex';
+            elements.deleteRequestBtnWrapper.style.display = 'none';
+            
+            if (elements.requestBtn) {
+                elements.requestBtn.addEventListener('click', handleRequestMedia);
+            }
+        }
+    }
+
+    /**
+     * Get request status display info
+     */
+    function getRequestStatusInfo(status) {
+        var statusMap = {
+            1: { icon: '⏳', text: 'Requested', class: 'pending' },
+            2: { icon: '✓', text: 'Available', class: 'available' },
+            3: { icon: '📥', text: 'Partially Available', class: 'partial' },
+            4: { icon: '❌', text: 'Unavailable', class: 'unavailable' },
+            5: { icon: '⚙', text: 'Processing', class: 'processing' }
+        };
+        
+        return statusMap[status] || { icon: '❓', text: 'Unknown', class: 'unknown' };
+    }
+
+    /**
+     * Handle media request
+     */
+    function handleRequestMedia() {
+        if (!tmdbId || !mediaType) return;
+        
+        
+        if (mediaType === 'tv') {
+            // Show season selector for TV shows
+            showSeasonSelector();
+        } else {
+            // Request movie directly
+            requestMovie();
+        }
+    }
+
+    /**
+     * Show season selector modal for TV shows
+     */
+    function showSeasonSelector() {
+        if (!jellyseerrData || !elements.seasonSelectorModal) return;
+        
+        // Populate season checkboxes
+        var seasons = jellyseerrData.seasons || [];
+        elements.seasonCheckboxList.innerHTML = '';
+        
+        seasons.forEach(function(season, index) {
+            if (season.seasonNumber === 0) return; // Skip specials
+            
+            var checkbox = document.createElement('label');
+            checkbox.className = 'season-checkbox';
+            checkbox.innerHTML = 
+                '<input type="checkbox" class="season-check" data-season="' + season.seasonNumber + '" tabindex="0">' +
+                '<span class="checkbox-label">Season ' + season.seasonNumber + '</span>';
+            
+            // Add event listener to checkbox to switch to custom mode
+            var checkboxInput = checkbox.querySelector('.season-check');
+            checkboxInput.addEventListener('change', function() {
+                // When user manually checks/unchecks, switch to custom mode
+                selectedSeasons = 'custom';
+                elements.allSeasonsBtn.classList.remove('active');
+                elements.firstSeasonBtn.classList.remove('active');
+                elements.latestSeasonBtn.classList.remove('active');
+            });
+            
+            elements.seasonCheckboxList.appendChild(checkbox);
+        });
+        
+        // Reset selection
+        selectedSeasons = 'all';
+        elements.allSeasonsBtn.classList.add('active');
+        elements.firstSeasonBtn.classList.remove('active');
+        elements.latestSeasonBtn.classList.remove('active');
+        
+        // Setup event listeners
+        if (elements.allSeasonsBtn) {
+            elements.allSeasonsBtn.onclick = function() {
+                selectSeasonOption('all');
+            };
+        }
+        if (elements.firstSeasonBtn) {
+            elements.firstSeasonBtn.onclick = function() {
+                selectSeasonOption('first');
+            };
+        }
+        if (elements.latestSeasonBtn) {
+            elements.latestSeasonBtn.onclick = function() {
+                selectSeasonOption('latest');
+            };
+        }
+        if (elements.confirmRequestBtn) {
+            elements.confirmRequestBtn.onclick = requestTvShow;
+        }
+        if (elements.cancelRequestBtn) {
+            elements.cancelRequestBtn.onclick = closeModal;
+        }
+        
+        activeModal = 'seasonSelector';
+        elements.seasonSelectorModal.style.display = 'flex';
+        elements.allSeasonsBtn.focus();
+    }
+
+    /**
+     * Select season option
+     */
+    function selectSeasonOption(option) {
+        selectedSeasons = option;
+        
+        elements.allSeasonsBtn.classList.remove('active');
+        elements.firstSeasonBtn.classList.remove('active');
+        elements.latestSeasonBtn.classList.remove('active');
+        
+        // Update active button
+        if (option === 'all') {
+            elements.allSeasonsBtn.classList.add('active');
+        } else if (option === 'first') {
+            elements.firstSeasonBtn.classList.add('active');
+        } else if (option === 'latest') {
+            elements.latestSeasonBtn.classList.add('active');
+        }
+        
+        // Update checkboxes
+        var checkboxes = elements.seasonCheckboxList.querySelectorAll('.season-check');
+        checkboxes.forEach(function(cb) {
+            cb.checked = option === 'all';
+        });
+    }
+
+    /**
+     * Request a movie
+     */
+    function requestMovie() {
+        if (!tmdbId) return;
+        
+        
+        JellyseerrAPI.requestMovie(tmdbId)
+            .then(function(result) {
+                alert('Movie request submitted successfully!');
+                
+                // Reload Jellyseerr data to update UI
+                setTimeout(function() {
+                    loadJellyseerrData();
+                }, 500);
+            })
+            .catch(function(error) {
+                alert('Failed to submit request. Please try again.');
+            });
+    }
+
+    /**
+     * Request a TV show with selected seasons
+     */
+    function requestTvShow() {
+        if (!tmdbId) return;
+        
+        var seasons;
+        var seasonText = '';
+        
+        if (selectedSeasons === 'all') {
+            seasons = 'all';
+            seasonText = 'all seasons';
+        } else if (selectedSeasons === 'first') {
+            seasons = [1];
+            seasonText = 'Season 1';
+        } else if (selectedSeasons === 'latest') {
+            var allSeasons = jellyseerrData.seasons || [];
+            var maxSeason = Math.max.apply(Math, allSeasons.map(function(s) { return s.seasonNumber; }));
+            seasons = [maxSeason];
+            seasonText = 'Season ' + maxSeason;
+        } else {
+            // Get selected checkboxes
+            var checkboxes = elements.seasonCheckboxList.querySelectorAll('.season-check:checked');
+            seasons = Array.from(checkboxes).map(function(cb) {
+                return parseInt(cb.dataset.season);
+            });
+            
+            if (seasons.length === 0) {
+                alert('Please select at least one season');
+                return;
+            }
+            
+            if (seasons.length === 1) {
+                seasonText = 'Season ' + seasons[0];
+            } else {
+                seasonText = seasons.length + ' seasons';
+            }
+        }
+        
+        // Show confirmation dialog
+        var itemTitle = jellyseerrData && jellyseerrData.name ? jellyseerrData.name : 'this show';
+        if (!confirm('Request ' + seasonText + ' of ' + itemTitle + '?')) {
+            return;
+        }
+        
+        // Disable the button to prevent double-submission
+        if (elements.confirmRequestBtn) {
+            elements.confirmRequestBtn.disabled = true;
+            elements.confirmRequestBtn.textContent = 'Requesting...';
+        }
+        
+        JellyseerrAPI.requestTvShow(tmdbId, seasons)
+            .then(function(result) {
+                alert('TV show request submitted successfully!');
+                
+                closeModal();
+                
+                // Re-enable button when modal closes
+                if (elements.confirmRequestBtn) {
+                    elements.confirmRequestBtn.disabled = false;
+                    elements.confirmRequestBtn.textContent = 'Request Selected';
+                }
+                
+                // Reload Jellyseerr data to update UI
+                setTimeout(function() {
+                    loadJellyseerrData();
+                }, 500);
+            })
+            .catch(function(error) {
+                var errorMsg = 'Failed to submit request';
+                if (error && error.message) {
+                    errorMsg += ': ' + error.message;
+                }
+                alert(errorMsg);
+                
+                // Re-enable button on error
+                if (elements.confirmRequestBtn) {
+                    elements.confirmRequestBtn.disabled = false;
+                    elements.confirmRequestBtn.textContent = 'Request Selected';
+                }
+            });
+    }
+
+    /**
+     * Handle delete request
+     */
+    function handleDeleteRequest() {
+        if (!jellyseerrData || !jellyseerrData.mediaInfo || !jellyseerrData.mediaInfo.requests) {
+            return;
+        }
+        
+        var requests = jellyseerrData.mediaInfo.requests;
+        if (requests.length === 0) return;
+        
+        var requestId = requests[0].id;
+        
+        if (!confirm('Cancel this request?')) {
+            return;
+        }
+        
+        
+        JellyseerrAPI.deleteRequest(requestId)
+            .then(function() {
+                alert('Request cancelled successfully');
+                
+                // Reload Jellyseerr data to update UI
+                setTimeout(function() {
+                    loadJellyseerrData();
+                }, 500);
+            })
+            .catch(function(error) {
+                alert('Failed to cancel request. Please try again.');
+            });
     }
 
     return {

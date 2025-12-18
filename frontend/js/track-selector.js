@@ -15,7 +15,7 @@ var TrackSelector = (function() {
      * @returns {Array} Array of focusable track items
      */
     function buildAudioTrackList(audioStreams, currentIndex, container, onSelect) {
-        console.log('[TrackSelector] buildAudioTrackList called, streams:', audioStreams.length, 'currentIndex:', currentIndex, 'onSelect type:', typeof onSelect);
+        console.log('[TrackSelector] Building audio track list:', audioStreams.length, 'tracks, current:', currentIndex);
         container.innerHTML = '';
         const focusableItems = [];
 
@@ -36,10 +36,8 @@ var TrackSelector = (function() {
                 trackItem.classList.add('selected');
             }
             
-            console.log('[TrackSelector] Adding click listener to audio track', index, lang);
             trackItem.addEventListener('click', function(evt) {
                 evt.stopPropagation();
-                console.log('[TrackSelector] Audio track clicked:', index, 'calling onSelect');
                 onSelect(index);
             });
             
@@ -59,7 +57,7 @@ var TrackSelector = (function() {
      * @returns {Array} Array of focusable track items
      */
     function buildSubtitleTrackList(subtitleStreams, currentIndex, container, onSelect) {
-        console.log('[TrackSelector] buildSubtitleTrackList called, streams:', subtitleStreams.length, 'currentIndex:', currentIndex, 'onSelect type:', typeof onSelect);
+        console.log('[TrackSelector] Building subtitle track list:', subtitleStreams.length, 'tracks, current:', currentIndex);
         container.innerHTML = '';
         const focusableItems = [];
 
@@ -72,10 +70,8 @@ var TrackSelector = (function() {
             noneItem.classList.add('selected');
         }
         
-        console.log('[TrackSelector] Adding click listener to subtitle "None" option');
         noneItem.addEventListener('click', function(evt) {
             evt.stopPropagation();
-            console.log('[TrackSelector] Subtitle "None" clicked, calling onSelect(-1)');
             onSelect(-1);
         });
         
@@ -99,10 +95,8 @@ var TrackSelector = (function() {
                 trackItem.classList.add('selected');
             }
             
-            console.log('[TrackSelector] Adding click listener to subtitle track', index, lang);
             trackItem.addEventListener('click', function(evt) {
                 evt.stopPropagation();
-                console.log('[TrackSelector] Subtitle track clicked:', index, 'calling onSelect');
                 onSelect(index);
             });
             
@@ -122,47 +116,39 @@ var TrackSelector = (function() {
      * @returns {number} New focus index
      */
     function handleModalKeyDown(evt, focusableItems, currentFocusIndex, onClose) {
-        console.log('[TrackSelector] handleModalKeyDown - keyCode:', evt.keyCode, 'focusIndex:', currentFocusIndex, 'items:', focusableItems.length);
         
         switch (evt.keyCode) {
             case KeyCodes.UP:
-                console.log('[TrackSelector] UP key pressed');
                 evt.preventDefault();
                 if (currentFocusIndex > 0) {
                     currentFocusIndex--;
                     focusableItems[currentFocusIndex].focus();
-                    console.log('[TrackSelector] Moved focus to index:', currentFocusIndex);
                 }
                 break;
 
             case KeyCodes.DOWN:
-                console.log('[TrackSelector] DOWN key pressed');
                 evt.preventDefault();
                 if (currentFocusIndex < focusableItems.length - 1) {
                     currentFocusIndex++;
                     focusableItems[currentFocusIndex].focus();
-                    console.log('[TrackSelector] Moved focus to index:', currentFocusIndex);
                 }
                 break;
 
             case KeyCodes.ENTER:
-                console.log('[TrackSelector] ENTER key pressed on item:', currentFocusIndex);
+                console.log('[TrackSelector] Track selected at index:', currentFocusIndex);
                 evt.preventDefault();
                 if (focusableItems[currentFocusIndex]) {
-                    console.log('[TrackSelector] Triggering click on item:', currentFocusIndex);
                     focusableItems[currentFocusIndex].click();
                 }
                 break;
 
             case KeyCodes.BACK:
             case KeyCodes.ESC:
-                console.log('[TrackSelector] BACK/ESC key pressed, calling onClose');
                 evt.preventDefault();
                 onClose();
                 break;
             
             default:
-                console.log('[TrackSelector] Unhandled key code:', evt.keyCode);
         }
 
         return currentFocusIndex;

@@ -1,5 +1,6 @@
 {
-  "name": "org.jellyfin.webos.service",
-  "description": "Jellyfin Discovery Service",
+  "name": "org.moonfin.webos.service",
+  "version": "1.0.0",
+  "description": "Moonfin Services",
   "main": "service.js"
 }

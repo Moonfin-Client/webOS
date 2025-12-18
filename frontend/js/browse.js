@@ -6,6 +6,7 @@ var BrowseController = (function() {
     let userLibraries = [];
     let featuredBannerEnabled = true;
     let hasImageHelper = false;
+    let currentView = 'home'; // Track current view type
     
     const focusManager = {
         currentRow: 0,
@@ -385,8 +386,8 @@ var BrowseController = (function() {
                 }
                 navButtons[focusManager.navBarIndex].classList.add('focused');
                 navButtons[focusManager.navBarIndex].focus();
-                if (NavbarComponent.scrollNavButtonIntoView) {
-                    NavbarComponent.scrollNavButtonIntoView(navButtons[focusManager.navBarIndex]);
+                if (NavbarController.scrollNavButtonIntoView) {
+                    NavbarController.scrollNavButtonIntoView(navButtons[focusManager.navBarIndex]);
                 }
                 break;
                 
@@ -397,8 +398,8 @@ var BrowseController = (function() {
                 }
                 navButtons[focusManager.navBarIndex].classList.add('focused');
                 navButtons[focusManager.navBarIndex].focus();
-                if (NavbarComponent.scrollNavButtonIntoView) {
-                    NavbarComponent.scrollNavButtonIntoView(navButtons[focusManager.navBarIndex]);
+                if (NavbarController.scrollNavButtonIntoView) {
+                    NavbarController.scrollNavButtonIntoView(navButtons[focusManager.navBarIndex]);
                 }
                 break;
                 
@@ -442,8 +443,8 @@ var BrowseController = (function() {
             });
             navButtons[focusManager.navBarIndex].classList.add('focused');
             navButtons[focusManager.navBarIndex].focus();
-            if (NavbarComponent.scrollNavButtonIntoView) {
-                NavbarComponent.scrollNavButtonIntoView(navButtons[focusManager.navBarIndex]);
+            if (NavbarController.scrollNavButtonIntoView) {
+                NavbarController.scrollNavButtonIntoView(navButtons[focusManager.navBarIndex]);
             }
         }
         
@@ -909,6 +910,8 @@ var BrowseController = (function() {
      * @private
      */
     function loadHomeContent() {
+        console.log('[browse] ===== loadHomeContent() called =====');
+        console.trace('[browse] Stack trace');
         showLoading();
         
         JellyfinAPI.getUserViews(auth.serverAddress, auth.userId, auth.accessToken, function(err, views) {
@@ -938,6 +941,7 @@ var BrowseController = (function() {
                     var parsedSettings = JSON.parse(storedSettings);
                     showFeaturedBanner = parsedSettings.showFeaturedBanner !== false;
                 } catch (e) {
+                    // Parse error, use default
                 }
             }
             
@@ -991,6 +995,7 @@ var BrowseController = (function() {
                     var parsedSettings = JSON.parse(storedSettings);
                     mergeContinueWatching = parsedSettings.mergeContinueWatchingNextUp || false;
                 } catch (e) {
+                    // Settings parsing failed, use separate rows
                 }
             }
             
@@ -1522,6 +1527,10 @@ var BrowseController = (function() {
     }
 
     function loadFeaturedItem() {
+        if (!auth || !elements.featuredBanner || !elements.featuredBackdrop || !elements.featuredTitle) {
+            return;
+        }
+        
         var params = {
             userId: auth.userId,
             limit: 10,
@@ -2002,6 +2011,7 @@ var BrowseController = (function() {
         try {
             localStorage.setItem('browsePosition', JSON.stringify(position));
         } catch (e) {
+            // localStorage write failed, position will not be saved
         }
     }
 
@@ -2170,6 +2180,7 @@ var BrowseController = (function() {
                     return parsedSettings.homeRows;
                 }
             } catch (e) {
+                // Settings parsing failed, return defaults
             }
         }
         

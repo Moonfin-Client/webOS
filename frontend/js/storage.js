@@ -344,5 +344,356 @@ STORAGE.prototype.applyBackdropBlur = function(element, settingKey, maxBlur) {
 	}
 };
 
+// ==================== Jellyseerr-Specific Storage Extensions ====================
+
+/**
+ * Get Jellyseerr storage key for a given user
+ * @param {string} key - Base key name
+ * @param {string} userId - Jellyfin user ID (optional)
+ * @private
+ */
+STORAGE.prototype._getJellyseerrKey = function(key, userId) {
+	if (userId) {
+		return 'jellyseerr_' + userId + '_' + key;
+	}
+	return 'jellyseerr_' + key;
+};
+
+/**
+ * Get Jellyseerr setting (global, not user-specific)
+ * @param {string} key - Setting key
+ * @param {*} defaultValue - Default value if not found
+ * @returns {*} Setting value
+ */
+STORAGE.prototype.getJellyseerrSetting = function(key, defaultValue) {
+	var storageKey = 'jellyseerr_' + key;
+	var value = this.get(storageKey, true);
+	
+	if (value === null || value === undefined) {
+		return defaultValue;
+	}
+	
+	// Try to parse as JSON for objects/arrays
+	if (typeof value === 'string' && (value.startsWith('{') || value.startsWith('['))) {
+		try {
+			return JSON.parse(value);
+		} catch (e) {
+			return value;
+		}
+	}
+	
+	return value;
+};
+
+/**
+ * Set Jellyseerr setting (global, not user-specific)
+ * @param {string} key - Setting key
+ * @param {*} value - Setting value
+ */
+STORAGE.prototype.setJellyseerrSetting = function(key, value) {
+	var storageKey = 'jellyseerr_' + key;
+	var storageValue = value;
+	
+	// Stringify objects/arrays
+	if (typeof value === 'object' && value !== null) {
+		storageValue = JSON.stringify(value);
+	}
+	
+	this.set(storageKey, storageValue, true);
+	
+	if (typeof JellyseerrAPI !== 'undefined') {
+		JellyseerrAPI.Logger.debug('[STORAGE] Saved Jellyseerr setting: ' + key);
+	}
+};
+
+/**
+ * Get per-user Jellyseerr setting
+ * @param {string} userId - Jellyfin user ID
+ * @param {string} key - Setting key
+ * @param {*} defaultValue - Default value if not found
+ * @returns {*} Setting value
+ */
+STORAGE.prototype.getJellyseerrUserSetting = function(userId, key, defaultValue) {
+	if (!userId) {
+		if (typeof JellyseerrAPI !== 'undefined') {
+			JellyseerrAPI.Logger.warn('[STORAGE] User ID required for user-specific setting');
+		}
+		return defaultValue;
+	}
+	
+	var storageKey = this._getJellyseerrKey(key, userId);
+	var value = this.get(storageKey, true);
+	
+	if (value === null || value === undefined) {
+		return defaultValue;
+	}
+	
+	// Try to parse as JSON for objects/arrays
+	if (typeof value === 'string' && (value.startsWith('{') || value.startsWith('['))) {
+		try {
+			return JSON.parse(value);
+		} catch (e) {
+			return value;
+		}
+	}
+	
+	return value;
+};
+
+/**
+ * Set per-user Jellyseerr setting
+ * @param {string} userId - Jellyfin user ID
+ * @param {string} key - Setting key
+ * @param {*} value - Setting value
+ */
+STORAGE.prototype.setJellyseerrUserSetting = function(userId, key, value) {
+	if (!userId) {
+		if (typeof JellyseerrAPI !== 'undefined') {
+			JellyseerrAPI.Logger.warn('[STORAGE] User ID required for user-specific setting');
+		}
+		return;
+	}
+	
+	var storageKey = this._getJellyseerrKey(key, userId);
+	var storageValue = value;
+	
+	// Stringify objects/arrays
+	if (typeof value === 'object' && value !== null) {
+		storageValue = JSON.stringify(value);
+	}
+	
+	this.set(storageKey, storageValue, true);
+	
+	if (typeof JellyseerrAPI !== 'undefined') {
+		JellyseerrAPI.Logger.debug('[STORAGE] Saved user Jellyseerr setting: ' + userId + '/' + key);
+	}
+};
+
+/**
+ * Remove Jellyseerr setting
+ * @param {string} key - Setting key
+ */
+STORAGE.prototype.removeJellyseerrSetting = function(key) {
+	var storageKey = 'jellyseerr_' + key;
+	this.remove(storageKey, true);
+};
+
+/**
+ * Remove per-user Jellyseerr setting
+ * @param {string} userId - Jellyfin user ID
+ * @param {string} key - Setting key
+ */
+STORAGE.prototype.removeJellyseerrUserSetting = function(userId, key) {
+	if (!userId) return;
+	var storageKey = this._getJellyseerrKey(key, userId);
+	this.remove(storageKey, true);
+};
+
+/**
+ * Get all Jellyseerr settings for a user
+ * @param {string} userId - Jellyfin user ID
+ * @returns {Object} All user settings as key-value pairs
+ */
+STORAGE.prototype.getAllJellyseerrUserSettings = function(userId) {
+	if (!userId) return {};
+	
+	var prefix = 'jellyseerr_' + userId + '_';
+	var settings = {};
+	
+	// Check cache first (for webOS)
+	if (this.useWebOSStorage && this.cache) {
+		for (var key in this.cache) {
+			if (this.cache.hasOwnProperty(key) && key.startsWith(prefix)) {
+				var settingKey = key.substring(prefix.length);
+				var value = this.cache[key];
+				
+				// Try to parse JSON
+				if (typeof value === 'string' && (value.startsWith('{') || value.startsWith('['))) {
+					try {
+						settings[settingKey] = JSON.parse(value);
+					} catch (e) {
+						settings[settingKey] = value;
+					}
+				} else {
+					settings[settingKey] = value;
+				}
+			}
+		}
+	}
+	
+	// Also check localStorage
+	if (localStorage) {
+		try {
+			for (var i = 0; i < localStorage.length; i++) {
+				var storageKey = localStorage.key(i);
+				if (storageKey && storageKey.startsWith(prefix)) {
+					var settingKey = storageKey.substring(prefix.length);
+					if (!settings.hasOwnProperty(settingKey)) {
+						var value = localStorage.getItem(storageKey);
+						
+						// Try to parse JSON
+						if (typeof value === 'string' && (value.startsWith('{') || value.startsWith('['))) {
+							try {
+								settings[settingKey] = JSON.parse(value);
+							} catch (e) {
+								settings[settingKey] = value;
+							}
+						} else {
+							settings[settingKey] = value;
+						}
+					}
+				}
+			}
+		} catch (e) {
+			if (typeof JellyseerrAPI !== 'undefined') {
+				JellyseerrAPI.Logger.error('[STORAGE] Error reading user settings:', e);
+			}
+		}
+	}
+	
+	return settings;
+};
+
+/**
+ * Clear all Jellyseerr data for a user
+ * @param {string} userId - Jellyfin user ID
+ */
+STORAGE.prototype.clearJellyseerrUserData = function(userId) {
+	if (!userId) return;
+	
+	var prefix = 'jellyseerr_' + userId + '_';
+	var keysToRemove = [];
+	
+	// Collect keys to remove from cache
+	if (this.useWebOSStorage && this.cache) {
+		for (var key in this.cache) {
+			if (this.cache.hasOwnProperty(key) && key.startsWith(prefix)) {
+				keysToRemove.push(key);
+			}
+		}
+	}
+	
+	// Collect keys from localStorage
+	if (localStorage) {
+		try {
+			for (var i = 0; i < localStorage.length; i++) {
+				var key = localStorage.key(i);
+				if (key && key.startsWith(prefix)) {
+					keysToRemove.push(key);
+				}
+			}
+		} catch (e) {
+			if (typeof JellyseerrAPI !== 'undefined') {
+				JellyseerrAPI.Logger.error('[STORAGE] Error clearing user data:', e);
+			}
+		}
+	}
+	
+	// Remove all collected keys
+	keysToRemove.forEach(function(key) {
+		this.remove(key, true);
+	}.bind(this));
+	
+	if (typeof JellyseerrAPI !== 'undefined') {
+		JellyseerrAPI.Logger.info('[STORAGE] Cleared Jellyseerr data for user: ' + userId);
+	}
+};
+
+/**
+ * Clear all Jellyseerr global settings
+ */
+STORAGE.prototype.clearJellyseerrSettings = function() {
+	var prefix = 'jellyseerr_';
+	var keysToRemove = [];
+	
+	// Collect keys to remove from cache
+	if (this.useWebOSStorage && this.cache) {
+		for (var key in this.cache) {
+			if (this.cache.hasOwnProperty(key) && key.startsWith(prefix)) {
+				// Skip user-specific keys (they have userId in them)
+				if (key.match(/jellyseerr_[a-f0-9]{32}_/)) continue;
+				keysToRemove.push(key);
+			}
+		}
+	}
+	
+	// Collect keys from localStorage
+	if (localStorage) {
+		try {
+			for (var i = 0; i < localStorage.length; i++) {
+				var key = localStorage.key(i);
+				if (key && key.startsWith(prefix)) {
+					// Skip user-specific keys
+					if (key.match(/jellyseerr_[a-f0-9]{32}_/)) continue;
+					keysToRemove.push(key);
+				}
+			}
+		} catch (e) {
+			if (typeof JellyseerrAPI !== 'undefined') {
+				JellyseerrAPI.Logger.error('[STORAGE] Error clearing global settings:', e);
+			}
+		}
+	}
+	
+	// Remove all collected keys
+	keysToRemove.forEach(function(key) {
+		this.remove(key, true);
+	}.bind(this));
+	
+	if (typeof JellyseerrAPI !== 'undefined') {
+		JellyseerrAPI.Logger.info('[STORAGE] Cleared Jellyseerr global settings');
+	}
+};
+
+/**
+ * Migrate Jellyseerr storage data (for future version updates)
+ * @param {number} fromVersion - Source version
+ * @param {number} toVersion - Target version
+ */
+STORAGE.prototype.migrateJellyseerrData = function(fromVersion, toVersion) {
+	if (typeof JellyseerrAPI !== 'undefined') {
+		JellyseerrAPI.Logger.info('[STORAGE] Migrating Jellyseerr data from v' + fromVersion + ' to v' + toVersion);
+	}
+	
+	// Migration logic will be added here as needed for future versions
+	// Example migrations:
+	
+	// if (fromVersion < 2 && toVersion >= 2) {
+	//     // Migrate v1 to v2 data structure
+	// }
+	
+	// Store current version
+	this.setJellyseerrSetting('storage_version', toVersion);
+	
+	if (typeof JellyseerrAPI !== 'undefined') {
+		JellyseerrAPI.Logger.success('[STORAGE] Jellyseerr data migration complete');
+	}
+};
+
+/**
+ * Get Jellyseerr storage version
+ * @returns {number} Current storage version
+ */
+STORAGE.prototype.getJellyseerrStorageVersion = function() {
+	return parseInt(this.getJellyseerrSetting('storage_version', 1), 10);
+};
+
+/**
+ * Initialize Jellyseerr storage system
+ * Performs any necessary migrations
+ */
+STORAGE.prototype.initializeJellyseerrStorage = function() {
+	var currentVersion = this.getJellyseerrStorageVersion();
+	var targetVersion = 1; // Current version
+	
+	if (currentVersion < targetVersion) {
+		this.migrateJellyseerrData(currentVersion, targetVersion);
+	}
+	
+	if (typeof JellyseerrAPI !== 'undefined') {
+		JellyseerrAPI.Logger.info('[STORAGE] Jellyseerr storage initialized (version ' + targetVersion + ')');
+	}
+};
+
 // Initialize global storage instance after all prototypes are defined
 var storage = new STORAGE();

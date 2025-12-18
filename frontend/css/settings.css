@@ -433,3 +433,25 @@ body {
     background: rgba(255, 255, 255, 0.3);
 }
 
+/* URL Input */
+.url-input {
+    width: 100%;
+    padding: 15px 20px;
+    font-size: 20px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    color: #fff;
+    margin: 20px 0;
+    transition: all 0.2s ease;
+}
+
+.url-input:focus {
+    outline: none;
+    border-color: #00a4dc;
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.url-input::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+}

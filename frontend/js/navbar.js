@@ -1,6 +1,9 @@
 (function() {
     'use strict';
     
+    // Constants
+    const CLOCK_UPDATE_INTERVAL_MS = 60000; // Update clock every minute
+    
     function loadNavbar(callback) {
         var xhr = new XMLHttpRequest();
         xhr.open('GET', 'components/navbar.html', true);
@@ -13,7 +16,6 @@
                     if (callback) callback();
                 } else {
                     if (typeof JellyfinAPI !== 'undefined') {
-                        JellyfinAPI.Logger.error('Failed to load navbar:', xhr.status);
                     }
                 }
             }
@@ -54,11 +56,11 @@
         // Load user libraries and add to navbar
         loadUserLibraries();
         
-        // Apply Moonfin toolbar customization settings
+        // Apply Moonfin toolbar customization settings (includes Jellyseerr button handling)
         applyToolbarSettings();
         
         updateClock();
-        setInterval(updateClock, 60000);
+        setInterval(updateClock, CLOCK_UPDATE_INTERVAL_MS);
         
         setupNavbarHandlers();
     }
@@ -73,6 +75,7 @@
             var shuffleBtn = document.getElementById('shuffleBtn');
             var genresBtn = document.getElementById('genresBtn');
             var favoritesBtn = document.getElementById('favoritesBtn');
+            var discoverBtn = document.getElementById('discoverBtn');
             
             if (shuffleBtn) {
                 shuffleBtn.style.display = (settings.showShuffleButton === false) ? 'none' : '';
@@ -86,21 +89,42 @@
                 favoritesBtn.style.display = (settings.showFavoritesButton === false) ? 'none' : '';
             }
             
+            // Discover button is controlled by Jellyseerr settings
+            var jellyseerrEnabled = settings.jellyseerrEnabled;
+            var jellyseerrShowDiscover = settings.jellyseerrShowDiscover !== false;
+            
+            if (discoverBtn) {
+                if (!jellyseerrEnabled || !jellyseerrShowDiscover) {
+                    // Remove from DOM completely
+                    discoverBtn.remove();
+                } else {
+                    discoverBtn.style.display = '';
+                }
+            }
+            
             // Hide/show library buttons
             var libraryButtons = document.querySelectorAll('.nav-btn[data-library-id]');
             libraryButtons.forEach(function(btn) {
                 btn.style.display = (settings.showLibrariesInToolbar === false) ? 'none' : '';
             });
         } catch (e) {
-            if (typeof JellyfinAPI !== 'undefined') {
-                JellyfinAPI.Logger.error('Failed to parse settings:', e);
-            }
+            // Settings parsing failed, continue with defaults
         }
     }
     
     function loadUserLibraries() {
         var auth = JellyfinAPI.getStoredAuth();
         if (!auth) return;
+        
+        // Check if libraries are already loaded to prevent duplicates
+        var navPill = document.querySelector('.nav-pill');
+        if (!navPill) return;
+        
+        var existingLibraryButtons = navPill.querySelectorAll('.nav-btn[data-library-id]');
+        if (existingLibraryButtons.length > 0) {
+            // Libraries already loaded, skip
+            return;
+        }
         
         JellyfinAPI.getUserViews(auth.serverAddress, auth.userId, auth.accessToken, function(err, response) {
             if (err || !response || !response.Items) {
@@ -114,7 +138,6 @@
                        item.CollectionType === 'boxsets';
             });
             
-            var navPill = document.querySelector('.nav-pill');
             var settingsBtn = document.getElementById('settingsBtn');
             
             if (navPill && libraries.length > 0) {
@@ -172,11 +195,9 @@
     }
     
     function handleShuffleClick() {
-        JellyfinAPI.Logger.info('Shuffle button clicked');
         
         var auth = JellyfinAPI.getStoredAuth();
         if (!auth) {
-            JellyfinAPI.Logger.error('No authentication found');
             return;
         }
         
@@ -194,12 +215,10 @@
         
         JellyfinAPI.getItems(auth.serverAddress, auth.accessToken, '/Users/' + auth.userId + '/Items', params, function(err, data) {
             if (err || !data || !data.Items || data.Items.length === 0) {
-                JellyfinAPI.Logger.error('Failed to get random item:', err);
                 return;
             }
             
             var randomItem = data.Items[0];
-            JellyfinAPI.Logger.success('Random item selected:', randomItem.Name, randomItem.Type);
             window.location.href = 'details.html?id=' + randomItem.Id;
         });
     }
@@ -210,12 +229,12 @@
         var shuffleBtn = document.getElementById('shuffleBtn');
         var genresBtn = document.getElementById('genresBtn');
         var favoritesBtn = document.getElementById('favoritesBtn');
+        var discoverBtn = document.getElementById('discoverBtn');
         var settingsBtn = document.getElementById('settingsBtn');
         var userBtn = document.getElementById('userBtn');
         
         function handleUserLogout() {
             if (typeof JellyfinAPI !== 'undefined') {
-                JellyfinAPI.Logger.info('Logging out user...');
                 
                 // Get the current server info before logging out
                 var auth = JellyfinAPI.getStoredAuth();
@@ -290,6 +309,18 @@
             });
         }
         
+        if (discoverBtn) {
+            discoverBtn.addEventListener('click', function() {
+                window.location.href = 'discover.html';
+            });
+            discoverBtn.addEventListener('keydown', function(e) {
+                if (e.keyCode === KeyCodes.ENTER) {
+                    e.preventDefault();
+                    window.location.href = 'discover.html';
+                }
+            });
+        }
+        
         if (settingsBtn) {
             settingsBtn.addEventListener('click', function() {
                 window.location.href = 'settings.html';
@@ -321,7 +352,10 @@
         
         navButtons.forEach(function(button, index) {
             button.addEventListener('keydown', function(e) {
-                var allButtons = Array.from(document.querySelectorAll('.nav-btn'));
+                // Only get visible buttons for navigation
+                var allButtons = Array.from(document.querySelectorAll('.nav-btn')).filter(function(btn) {
+                    return btn.offsetParent !== null; // Check if button is visible
+                });
                 var currentIndex = allButtons.indexOf(button);
                 
                 if (e.keyCode === KeyCodes.LEFT) {
@@ -347,9 +381,18 @@
         loadNavbar(initNavbar);
     }
     
-    window.NavbarComponent = {
+    window.NavbarController = {
         load: loadNavbar,
-        init: initNavbar,
+        init: function(activePage) {
+            initNavbar();
+            setActivePage(activePage);
+        },
+        focusNavbar: function() {
+            var homeBtn = document.getElementById('homeBtn');
+            if (homeBtn) {
+                homeBtn.focus();
+            }
+        },
         scrollNavButtonIntoView: scrollNavButtonIntoView,
         updateClock: updateClock
     };

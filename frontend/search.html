@@ -13,6 +13,9 @@
     <script src="js/keycodes.js" charset="utf-8"></script>
     <script src="js/image-helper.js" charset="utf-8"></script>
     <script src="js/jellyfin-api.js" charset="utf-8"></script>
+    <script src="js/jellyseerr-models.js" charset="utf-8"></script>
+    <script src="js/jellyseerr-api.js" charset="utf-8"></script>
+    <script src="js/jellyseerr-preferences.js" charset="utf-8"></script>
     <script src="js/navbar.js" charset="utf-8"></script>
     <script src="js/search.js" charset="utf-8"></script>
 </head>
@@ -81,6 +84,14 @@
                     <h2 class="row-title">People</h2>
                     <div class="row-scroller">
                         <div id="castList" class="result-items"></div>
+                    </div>
+                </div>
+
+                <!-- Jellyseerr Search Results Row -->
+                <div id="jellyseerrRow" class="result-row" style="display: none;">
+                    <h2 class="row-title">Jellyseerr</h2>
+                    <div class="row-scroller">
+                        <div id="jellyseerrList" class="result-items"></div>
                     </div>
                 </div>
             </div>

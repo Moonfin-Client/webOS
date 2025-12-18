@@ -21,22 +21,18 @@ var JellyfinAPI = (function() {
         },
         info: function(message, data) {
             if (currentLogLevel >= LOG_LEVELS.INFO) {
-                console.log('[Jellyfin INFO]', message, data || '');
             }
         },
         success: function(message, data) {
             if (currentLogLevel >= LOG_LEVELS.SUCCESS) {
-                console.log('[Jellyfin SUCCESS]', message, data || '');
             }
         },
         error: function(message, data) {
             if (currentLogLevel >= LOG_LEVELS.ERROR) {
-                console.error('[Jellyfin ERROR]', message, data || '');
             }
         },
         warn: function(message, data) {
             if (currentLogLevel >= LOG_LEVELS.WARN) {
-                console.warn('[Jellyfin WARN]', message, data || '');
             }
         }
     };

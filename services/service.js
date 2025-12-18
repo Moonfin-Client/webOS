@@ -110,15 +110,15 @@ function checkIP(ip) {
 	}
 	scannedIPs.add(ip);
 	
-	var http = require('http');
 	var ports = [8096, 8920]; // Common Jellyfin ports
 	var schemes = ['http', 'https'];
 	
 	ports.forEach(function(port) {
 		schemes.forEach(function(scheme) {
 			var url = scheme + '://' + ip + ':' + port + '/System/Info/Public';
+			var httpModule = scheme === 'https' ? https : http;
 			
-			var req = http.get(url, { timeout: 2000 }, function(res) {
+			var req = httpModule.get(url, { timeout: 2000 }, function(res) {
 				var data = '';
 				
 				res.on('data', function(chunk) {
@@ -249,3 +249,263 @@ discover.on("cancel", function (message) {
 		interval = undefined;
 	}
 });
+
+// ==================== Jellyseerr Proxy ====================
+
+var http = require('http');
+var https = require('https');
+var url = require('url');
+
+// Cookie storage per user
+var cookieJars = {};
+
+/**
+ * Parse Set-Cookie headers and store cookies
+ */
+function storeCookies(userId, headers, requestUrl) {
+	if (!headers || !headers['set-cookie']) {
+		return;
+	}
+	
+	if (!cookieJars[userId]) {
+		cookieJars[userId] = [];
+	}
+	
+	var setCookieHeaders = Array.isArray(headers['set-cookie']) 
+		? headers['set-cookie'] 
+		: [headers['set-cookie']];
+	
+	var domain = url.parse(requestUrl).hostname;
+	
+	setCookieHeaders.forEach(function(cookieStr) {
+		var cookie = parseCookie(cookieStr);
+		if (cookie) {
+			cookie.domain = domain;
+			// Remove existing cookie with same name
+			cookieJars[userId] = cookieJars[userId].filter(function(c) {
+				return c.name !== cookie.name || c.domain !== cookie.domain;
+			});
+			// Add new cookie
+			cookieJars[userId].push(cookie);
+		}
+	});
+	
+	console.log('[JellyseerrProxy] Stored ' + setCookieHeaders.length + ' cookies for user: ' + userId);
+	console.log('[JellyseerrProxy] Total cookies in jar: ' + cookieJars[userId].length);
+	if (cookieJars[userId].length > 0) {
+		console.log('[JellyseerrProxy] Cookie names: ' + cookieJars[userId].map(function(c) { return c.name; }).join(', '));
+	}
+}
+
+/**
+ * Parse a single cookie string
+ */
+function parseCookie(cookieStr) {
+	var parts = cookieStr.split(';');
+	if (parts.length === 0) return null;
+	
+	var nameValue = parts[0].trim().split('=');
+	if (nameValue.length < 2) return null;
+	
+	var cookie = {
+		name: nameValue[0],
+		value: nameValue.slice(1).join('='),
+		expires: null,
+		path: '/',
+		httpOnly: false,
+		secure: false
+	};
+	
+	for (var i = 1; i < parts.length; i++) {
+		var part = parts[i].trim().toLowerCase();
+		if (part === 'httponly') {
+			cookie.httpOnly = true;
+		} else if (part === 'secure') {
+			cookie.secure = true;
+		} else if (part.startsWith('path=')) {
+			cookie.path = part.substring(5);
+		} else if (part.startsWith('expires=')) {
+			cookie.expires = new Date(part.substring(8));
+		} else if (part.startsWith('max-age=')) {
+			var maxAge = parseInt(part.substring(8));
+			cookie.expires = new Date(Date.now() + maxAge * 1000);
+		}
+	}
+	
+	return cookie;
+}
+
+/**
+ * Get cookies for a request
+ */
+function getCookies(userId, requestUrl) {
+	if (!cookieJars[userId] || cookieJars[userId].length === 0) {
+		return '';
+	}
+	
+	var domain = url.parse(requestUrl).hostname;
+	var now = new Date();
+	
+	// Filter expired cookies
+	cookieJars[userId] = cookieJars[userId].filter(function(cookie) {
+		return !cookie.expires || cookie.expires > now;
+	});
+	
+	// Get matching cookies
+	var cookies = cookieJars[userId]
+		.filter(function(cookie) {
+			return cookie.domain === domain;
+		})
+		.map(function(cookie) {
+			return cookie.name + '=' + cookie.value;
+		});
+	
+	return cookies.join('; ');
+}
+
+/**
+ * Jellyseerr HTTP proxy request with cookie support
+ */
+service.register('jellyseerrRequest', function(message) {
+	console.log('[JellyseerrProxy] Request received');
+	
+	var userId = message.payload.userId;
+	var requestUrl = message.payload.url;
+	var method = message.payload.method || 'GET';
+	var headers = message.payload.headers || {};
+	var body = message.payload.body;
+	var timeout = message.payload.timeout || 30000;
+	
+	if (!userId || !requestUrl) {
+		message.respond({
+			success: false,
+			error: 'Missing userId or url'
+		});
+		return;
+	}
+	
+	console.log('[JellyseerrProxy] ' + method + ' ' + requestUrl + ' (user: ' + userId + ')');
+	
+	// Add cookies to request
+	var cookieHeader = getCookies(userId, requestUrl);
+	if (cookieHeader) {
+		headers['Cookie'] = cookieHeader;
+		console.log('[JellyseerrProxy] Added cookies: ' + cookieHeader.substring(0, 100));
+	} else {
+		console.log('[JellyseerrProxy] No cookies found for user: ' + userId + ', URL: ' + requestUrl);
+		console.log('[JellyseerrProxy] Cookie jar has ' + (cookieJars[userId] ? cookieJars[userId].length : 0) + ' cookies');
+	}
+	
+	// Parse URL
+	var parsedUrl = url.parse(requestUrl);
+	var isHttps = parsedUrl.protocol === 'https:';
+	var httpModule = isHttps ? https : http;
+	
+	// Request options
+	var options = {
+		hostname: parsedUrl.hostname,
+		port: parsedUrl.port || (isHttps ? 443 : 80),
+		path: parsedUrl.path,
+		method: method,
+		headers: headers,
+		timeout: timeout
+	};
+	
+	// Make request
+	var req = httpModule.request(options, function(res) {
+		var responseBody = '';
+		
+		// Store cookies from response
+		storeCookies(userId, res.headers, requestUrl);
+		
+		res.on('data', function(chunk) {
+			responseBody += chunk;
+		});
+		
+		res.on('end', function() {
+			console.log('[JellyseerrProxy] Response: ' + res.statusCode + ' (' + responseBody.length + ' bytes)');
+			
+			message.respond({
+				success: true,
+				status: res.statusCode,
+				headers: res.headers,
+				body: responseBody
+			});
+		});
+	});
+	
+	req.on('error', function(err) {
+		console.error('[JellyseerrProxy] Request failed:', err.message);
+		message.respond({
+			success: false,
+			error: err.message
+		});
+	});
+	
+	req.on('timeout', function() {
+		console.error('[JellyseerrProxy] Request timeout');
+		req.abort();
+		message.respond({
+			success: false,
+			error: 'Request timeout'
+		});
+	});
+	
+	// Send request body
+	if (body) {
+		req.write(body);
+	}
+	
+	req.end();
+});
+
+/**
+ * Clear cookies for a user
+ */
+service.register('jellyseerrClearCookies', function(message) {
+	var userId = message.payload.userId;
+	var domain = message.payload.domain;
+	
+	if (!userId) {
+		message.respond({
+			success: false,
+			error: 'Missing userId'
+		});
+		return;
+	}
+	
+	if (domain) {
+		// Clear cookies for specific domain
+		if (cookieJars[userId]) {
+			cookieJars[userId] = cookieJars[userId].filter(function(cookie) {
+				return cookie.domain !== domain;
+			});
+			console.log('[JellyseerrProxy] Cleared cookies for domain: ' + domain + ' (user: ' + userId + ')');
+		}
+	} else {
+		// Clear all cookies
+		delete cookieJars[userId];
+		console.log('[JellyseerrProxy] Cleared all cookies for user: ' + userId);
+	}
+	
+	message.respond({
+		success: true
+	});
+});
+
+/**
+ * Status check for Jellyseerr proxy
+ */
+service.register('jellyseerrStatus', function(message) {
+	var userId = message.payload.userId;
+	var cookieCount = (cookieJars[userId] || []).length;
+	
+	message.respond({
+		success: true,
+		running: true,
+		userId: userId,
+		cookieCount: cookieCount
+	});
+});
+
+console.log('[Service] Jellyseerr proxy methods registered');

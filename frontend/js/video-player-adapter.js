@@ -182,7 +182,6 @@ class ShakaPlayerAdapter extends VideoPlayerAdapter {
         try {
             // Check if Shaka Player is supported
             if (!shaka.Player.isBrowserSupported()) {
-                console.log('Shaka Player not supported in this browser');
                 return false;
             }
 
@@ -238,7 +237,6 @@ class ShakaPlayerAdapter extends VideoPlayerAdapter {
 
             // Setup error handling
             this.player.addEventListener('error', (event) => {
-                console.error('Shaka Player error:', event.detail);
                 this.emit('error', event.detail);
             });
 
@@ -269,10 +267,8 @@ class ShakaPlayerAdapter extends VideoPlayerAdapter {
             });
 
             this.initialized = true;
-            console.log('Shaka Player initialized successfully');
             return true;
         } catch (error) {
-            console.error('Failed to initialize Shaka Player:', error);
             return false;
         }
     }
@@ -283,20 +279,19 @@ class ShakaPlayerAdapter extends VideoPlayerAdapter {
         }
 
         try {
-            console.log('[ShakaAdapter] Loading:', url);
+            console.log('[ShakaAdapter] Loading:', url.substring(0, 80) + '...');
             if (options.startPosition) {
-                console.log('[ShakaAdapter] Will seek to:', options.startPosition, 'after load');
+                console.log('[ShakaAdapter] Start position:', options.startPosition, 'seconds');
             }
             
             // Load the manifest
             await this.player.load(url);
+            console.log('[ShakaAdapter] Manifest loaded successfully');
             
-            console.log('[ShakaAdapter] Shaka Player loaded:', url);
             this.emit('loaded', { url });
 
             // Set start position AFTER loading (when metadata is available)
             if (options.startPosition && options.startPosition > 0) {
-                console.log('[ShakaAdapter] Seeking to start position:', options.startPosition);
                 this.videoElement.currentTime = options.startPosition;
             }
 
@@ -309,7 +304,6 @@ class ShakaPlayerAdapter extends VideoPlayerAdapter {
             }
 
         } catch (error) {
-            console.error('Shaka Player load error:', error);
             this.emit('error', error);
             throw error;
         }
@@ -317,14 +311,13 @@ class ShakaPlayerAdapter extends VideoPlayerAdapter {
 
     selectAudioTrack(trackId) {
         if (!this.player || !this.initialized) {
-            console.warn('Shaka Player not ready for audio track selection');
+            console.warn('[ShakaAdapter] Player not ready for audio track selection');
             return false;
         }
 
         try {
             const allTracks = this.player.getVariantTracks();
-            console.log('[ShakaAdapter] selectAudioTrack called with trackId:', trackId);
-            console.log('[ShakaAdapter] All variant tracks:', allTracks.length);
+            console.log('[ShakaAdapter] Selecting audio track:', trackId, 'from', allTracks.length, 'variants');
             
             // Get unique audio languages
             const audioLanguages = [];
@@ -336,61 +329,52 @@ class ShakaPlayerAdapter extends VideoPlayerAdapter {
                 }
             });
             
-            console.log('[ShakaAdapter] Unique audio languages from Shaka:', audioLanguages);
-            console.log('[ShakaAdapter] trackId:', trackId, 'audioLanguages.length:', audioLanguages.length);
             
             if (trackId >= 0 && trackId < audioLanguages.length) {
                 const targetLanguage = audioLanguages[trackId];
-                console.log('[ShakaAdapter] Target language:', targetLanguage);
                 
                 // Select all variant tracks with this language
                 const tracksToSelect = allTracks.filter(t => t.language === targetLanguage);
                 if (tracksToSelect.length > 0) {
                     // Select the first track with this language (Shaka will handle quality variants)
                     this.player.selectAudioLanguage(targetLanguage);
-                    console.log('✓ Audio language selected:', targetLanguage);
+                    console.log('[ShakaAdapter] Audio language selected:', targetLanguage);
                     return true;
                 }
             }
             
-            console.warn('[ShakaAdapter] Invalid audio track ID:', trackId, 'valid range: 0 -', audioLanguages.length - 1);
             return false;
         } catch (error) {
-            console.error('Error selecting audio track:', error);
             return false;
         }
     }
 
     selectSubtitleTrack(trackId) {
         if (!this.player || !this.initialized) {
-            console.warn('Shaka Player not ready for subtitle track selection');
+            console.warn('[ShakaAdapter] Player not ready for subtitle selection');
             return false;
         }
 
         try {
             if (trackId === -1) {
                 this.player.setTextTrackVisibility(false);
-                console.log('✓ Subtitles disabled');
+                console.log('[ShakaAdapter] Subtitles disabled');
                 return true;
             }
 
             const tracks = this.player.getTextTracks();
-            console.log('[ShakaAdapter] selectSubtitleTrack called with trackId:', trackId);
-            console.log('[ShakaAdapter] Available text tracks:', tracks.length);
-            console.log('[ShakaAdapter] Text tracks:', tracks.map(t => ({lang: t.language, kind: t.kind})));
+            console.log('[ShakaAdapter] Selecting subtitle:', trackId, 'from', tracks.length, 'tracks');
             
             if (trackId >= 0 && trackId < tracks.length) {
                 const track = tracks[trackId];
                 this.player.selectTextTrack(track);
                 this.player.setTextTrackVisibility(true);
-                console.log('✓ Subtitle track selected:', track.language || trackId);
+                console.log('[ShakaAdapter] Subtitle track selected:', track.language || trackId);
                 return true;
             }
             
-            console.warn('[ShakaAdapter] Invalid subtitle track ID:', trackId, 'valid range: 0 -', tracks.length - 1);
             return false;
         } catch (error) {
-            console.error('Error selecting subtitle track:', error);
             return false;
         }
     }
@@ -455,15 +439,12 @@ class WebOSVideoAdapter extends VideoPlayerAdapter {
         try {
             // Check if webOS media API is available
             if (!window.webOS || !window.webOS.media) {
-                console.log('webOS media API not available');
                 return false;
             }
 
             this.initialized = true;
-            console.log('webOS Native Video API initialized successfully');
             return true;
         } catch (error) {
-            console.error('Failed to initialize webOS Video API:', error);
             return false;
         }
     }
@@ -488,7 +469,7 @@ class WebOSVideoAdapter extends VideoPlayerAdapter {
                 try {
                     this.mediaObject.unload();
                 } catch (e) {
-                    console.warn('Error unloading previous media:', e);
+                    // Ignore unload errors, will create new media object
                 }
             }
 
@@ -507,7 +488,6 @@ class WebOSVideoAdapter extends VideoPlayerAdapter {
                 this.videoElement.currentTime = options.startPosition;
             }
 
-            console.log('webOS Native Video loaded:', url);
             this.emit('loaded', { url });
 
             // Wait for video to be ready
@@ -529,14 +509,12 @@ class WebOSVideoAdapter extends VideoPlayerAdapter {
             });
 
         } catch (error) {
-            console.error('webOS Video load error:', error);
             this.emit('error', error);
             throw error;
         }
     }
 
     handleMediaEvent(event) {
-        console.log('webOS media event:', event);
         
         if (event.type === 'error') {
             this.emit('error', event);
@@ -552,12 +530,10 @@ class WebOSVideoAdapter extends VideoPlayerAdapter {
                 for (let i = 0; i < audioTracks.length; i++) {
                     audioTracks[i].enabled = (i === trackId);
                 }
-                console.log('✓ Audio track selected via webOS:', trackId);
                 return true;
             }
             return false;
         } catch (error) {
-            console.error('Error selecting audio track:', error);
             return false;
         }
     }
@@ -570,7 +546,6 @@ class WebOSVideoAdapter extends VideoPlayerAdapter {
                 for (let i = 0; i < textTracks.length; i++) {
                     textTracks[i].mode = 'disabled';
                 }
-                console.log('✓ Subtitles disabled via webOS');
                 return true;
             }
 
@@ -578,12 +553,10 @@ class WebOSVideoAdapter extends VideoPlayerAdapter {
                 for (let i = 0; i < textTracks.length; i++) {
                     textTracks[i].mode = (i === trackId) ? 'showing' : 'disabled';
                 }
-                console.log('✓ Subtitle track selected via webOS:', trackId);
                 return true;
             }
             return false;
         } catch (error) {
-            console.error('Error selecting subtitle track:', error);
             return false;
         }
     }
@@ -629,7 +602,7 @@ class WebOSVideoAdapter extends VideoPlayerAdapter {
             try {
                 this.mediaObject.unload();
             } catch (e) {
-                console.warn('Error unloading media object:', e);
+                // Ignore unload errors during cleanup
             }
             this.mediaObject = null;
         }
@@ -654,7 +627,6 @@ class HTML5VideoAdapter extends VideoPlayerAdapter {
 
     async initialize() {
         this.initialized = true;
-        console.log('HTML5 Video adapter initialized (fallback mode)');
         return true;
     }
 
@@ -662,6 +634,8 @@ class HTML5VideoAdapter extends VideoPlayerAdapter {
         if (!this.initialized) {
             throw new Error('HTML5 Video adapter not initialized');
         }
+
+        console.log('[HTML5Adapter] Loading:', url.substring(0, 80) + '...');
 
         try {
             // Clear existing sources
@@ -682,7 +656,6 @@ class HTML5VideoAdapter extends VideoPlayerAdapter {
                 this.videoElement.currentTime = options.startPosition;
             }
 
-            console.log('HTML5 Video loaded:', url);
             this.emit('loaded', { url });
 
             // Wait for video to be ready
@@ -704,7 +677,6 @@ class HTML5VideoAdapter extends VideoPlayerAdapter {
             });
 
         } catch (error) {
-            console.error('HTML5 Video load error:', error);
             this.emit('error', error);
             throw error;
         }
@@ -717,12 +689,10 @@ class HTML5VideoAdapter extends VideoPlayerAdapter {
                 for (let i = 0; i < audioTracks.length; i++) {
                     audioTracks[i].enabled = (i === trackId);
                 }
-                console.log('✓ Audio track selected via HTML5:', trackId);
                 return true;
             }
             return false;
         } catch (error) {
-            console.error('Error selecting audio track:', error);
             return false;
         }
     }
@@ -735,7 +705,6 @@ class HTML5VideoAdapter extends VideoPlayerAdapter {
                 for (let i = 0; i < textTracks.length; i++) {
                     textTracks[i].mode = 'disabled';
                 }
-                console.log('✓ Subtitles disabled via HTML5');
                 return true;
             }
 
@@ -743,12 +712,10 @@ class HTML5VideoAdapter extends VideoPlayerAdapter {
                 for (let i = 0; i < textTracks.length; i++) {
                     textTracks[i].mode = (i === trackId) ? 'showing' : 'disabled';
                 }
-                console.log('✓ Subtitle track selected via HTML5:', trackId);
                 return true;
             }
             return false;
         } catch (error) {
-            console.error('Error selecting subtitle track:', error);
             return false;
         }
     }
@@ -819,16 +786,16 @@ class VideoPlayerFactory {
 
         for (const AdapterClass of adapters) {
             try {
-                console.log(`Attempting to initialize ${AdapterClass.name}...`);
+                console.log('[PlayerFactory] Attempting:', AdapterClass.name);
                 const adapter = new AdapterClass(videoElement);
                 const success = await adapter.initialize();
                 
                 if (success) {
-                    console.log(`✓ Using ${adapter.getName()} for video playback`);
+                    console.log('[PlayerFactory] Using:', adapter.getName());
                     return adapter;
                 }
             } catch (error) {
-                console.warn(`Failed to initialize ${AdapterClass.name}:`, error);
+                console.warn('[PlayerFactory]', AdapterClass.name, 'failed:', error.message);
             }
         }
 
