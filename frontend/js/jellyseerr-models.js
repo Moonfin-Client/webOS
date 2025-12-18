@@ -203,7 +203,9 @@ var JellyseerrModels = (function() {
     }
 
     /**
-     * Create a JellyseerrMovieDetails model
+     * Create a JellyseerrMovieDetails model from API response
+     * @param {Object} data - Raw movie details from Jellyseerr API
+     * @returns {Object} Formatted movie details object
      */
     function createMovieDetails(data) {
         return {
@@ -225,12 +227,15 @@ var JellyseerrModels = (function() {
             productionCompanies: data.productionCompanies ? data.productionCompanies.map(createCompany) : [],
             credits: data.credits ? createCredits(data.credits) : null,
             externalIds: data.externalIds ? createExternalIds(data.externalIds) : null,
-            mediaInfo: data.mediaInfo ? createMediaInfo(data.mediaInfo) : null
+            mediaInfo: data.mediaInfo ? createMediaInfo(data.mediaInfo) : null,
+            keywords: data.keywords || []
         };
     }
 
     /**
-     * Create a JellyseerrTvDetails model
+     * Create a JellyseerrTvDetails model from API response
+     * @param {Object} data - Raw TV show details from Jellyseerr API
+     * @returns {Object} Formatted TV show details object
      */
     function createTvDetails(data) {
         return {
@@ -255,7 +260,8 @@ var JellyseerrModels = (function() {
             externalIds: data.externalIds ? createExternalIds(data.externalIds) : null,
             mediaInfo: data.mediaInfo ? createMediaInfo(data.mediaInfo) : null,
             networks: data.networks ? data.networks.map(createNetwork) : [],
-            createdBy: data.createdBy ? data.createdBy.map(createCreator) : []
+            createdBy: data.createdBy ? data.createdBy.map(createCreator) : [],
+            keywords: data.keywords || []
         };
     }
 

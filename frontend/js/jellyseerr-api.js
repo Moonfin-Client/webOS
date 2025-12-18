@@ -2143,6 +2143,9 @@ var JellyseerrAPI = (function() {
             if (options.studio) {
                 endpoint += '&studio=' + options.studio;
             }
+            if (options.keywords) {
+                endpoint += '&keywords=' + options.keywords;
+            }
             
             return makeRequest(endpoint, { method: 'GET' })
                 .then(function(response) {
@@ -2182,6 +2185,9 @@ var JellyseerrAPI = (function() {
             }
             if (options.network) {
                 endpoint += '&network=' + options.network;
+            }
+            if (options.keywords) {
+                endpoint += '&keywords=' + options.keywords;
             }
             
             return makeRequest(endpoint, { method: 'GET' })
@@ -2695,6 +2701,46 @@ var JellyseerrAPI = (function() {
                         crew: crew,
                         id: response.id || personId
                     };
+                });
+        },
+
+        /**
+         * Get keywords for a movie
+         * 
+         * @param {number} movieId - TMDB movie ID
+         * @returns {Promise<Array>} Array of keywords
+         */
+        getMovieKeywords: function(movieId) {
+            if (!movieId) {
+                return Promise.reject(new Error('Movie ID is required'));
+            }
+            
+            var endpoint = '/movie/' + movieId + '/keywords';
+            
+            return makeRequest(endpoint, { method: 'GET' })
+                .then(function(response) {
+                    Logger.info('Retrieved keywords for movie:', movieId);
+                    return response.keywords || [];
+                });
+        },
+
+        /**
+         * Get keywords for a TV show
+         * 
+         * @param {number} tvId - TMDB TV show ID
+         * @returns {Promise<Array>} Array of keywords
+         */
+        getTvKeywords: function(tvId) {
+            if (!tvId) {
+                return Promise.reject(new Error('TV show ID is required'));
+            }
+            
+            var endpoint = '/tv/' + tvId + '/keywords';
+            
+            return makeRequest(endpoint, { method: 'GET' })
+                .then(function(response) {
+                    Logger.info('Retrieved keywords for TV show:', tvId);
+                    return response.results || [];
                 });
         },
 

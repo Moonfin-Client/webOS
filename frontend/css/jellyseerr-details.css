@@ -462,6 +462,43 @@ body {
     white-space: nowrap;
 }
 
+/* Keywords Section */
+.keywords-section {
+    padding: 20px 0;
+}
+
+.keywords-container {
+    padding: 0 60px;
+}
+
+.keywords-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.keyword-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 10px 20px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 24px;
+    font-size: 18px;
+    font-weight: 500;
+    color: #ffffff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    outline: none;
+}
+
+.keyword-tag:focus,
+.keyword-tag:hover {
+    background: rgba(0, 164, 220, 0.3);
+    border-color: #00a4dc;
+    transform: scale(1.05);
+}
+
 /* Season Modal */
 .modal {
     position: fixed;

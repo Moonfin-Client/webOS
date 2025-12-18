@@ -136,7 +136,7 @@ var BrowseByController = (function() {
      */
     function parseUrlParams() {
         var params = new URLSearchParams(window.location.search);
-        browseType = params.get('type'); // 'genre' or 'network'
+        browseType = params.get('type'); // 'genre', 'network', or 'keyword'
         browseId = params.get('id');
         browseName = params.get('name');
         mediaType = params.get('mediaType') || 'movie';
@@ -156,6 +156,9 @@ var BrowseByController = (function() {
                 elements.headerLogo.src = 'https://image.tmdb.org/t/p/w780_filter(duotone,ffffff,bababa)/' + logoPath;
             }
             elements.headerLogo.alt = browseName || 'Network';
+        } else if (browseType === 'keyword') {
+            elements.headerTitle.textContent = browseName || 'Keyword';
+            elements.headerImage.style.display = 'none';
         }
     }
 
@@ -362,6 +365,8 @@ var BrowseByController = (function() {
             discoverOptions.genre = browseId;
         } else if (browseType === 'network') {
             discoverOptions.network = browseId;
+        } else if (browseType === 'keyword') {
+            discoverOptions.keywords = browseId;
         }
         
         var apiMethod = mediaType === 'movie' 
@@ -372,6 +377,9 @@ var BrowseByController = (function() {
             .then(function(response) {
                 console.log('[BrowseBy] More content loaded:', response);
                 isLoading = false;
+                
+                // Update totalPages from response (important for keyword filters)
+                totalPages = response.totalPages || totalPages;
                 
                 var newItems = response.results || [];
                 

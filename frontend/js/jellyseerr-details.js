@@ -167,6 +167,8 @@ var JellyseerrDetailsController = (function() {
             similarSection: document.getElementById('similarSection'),
             similarTitle: document.getElementById('similarTitle'),
             similarList: document.getElementById('similarList'),
+            keywordsSection: document.getElementById('keywordsSection'),
+            keywordsList: document.getElementById('keywordsList'),
             seasonModal: document.getElementById('seasonModal'),
             seasonList: document.getElementById('seasonList'),
             allSeasonsBtn: document.getElementById('allSeasonsBtn'),
@@ -241,6 +243,7 @@ var JellyseerrDetailsController = (function() {
                 loadCast();
                 loadRecommendations();
                 loadSimilar();
+                loadKeywords();
             })
             .catch(function(error) {
                 console.error('[Jellyseerr Details] Failed to load details:', error);
@@ -497,7 +500,9 @@ var JellyseerrDetailsController = (function() {
     }
 
     /**
-     * Load recommendations with pagination support
+     * Load recommendations for the current media with pagination
+     * @param {number} [page=1] - Page number to load
+     * @returns {Promise} Promise that resolves when recommendations are loaded
      */
     function loadRecommendations(page) {
         page = page || 1;
@@ -612,7 +617,9 @@ var JellyseerrDetailsController = (function() {
     }
 
     /**
-     * Load similar content with pagination support
+     * Load similar content for the current media with pagination
+     * @param {number} [page=1] - Page number to load
+     * @returns {Promise} Promise that resolves when similar content is loaded
      */
     function loadSimilar(page) {
         page = page || 1;
@@ -710,6 +717,67 @@ var JellyseerrDetailsController = (function() {
         });
         
         return card;
+    }
+
+    /**
+     * Load and display keywords from media details
+     * Automatically hides section if no keywords available
+     */
+    function loadKeywords() {
+        var keywords = mediaData.keywords;
+        
+        if (!keywords || keywords.length === 0) {
+            elements.keywordsSection.style.display = 'none';
+            return;
+        }
+        
+        elements.keywordsSection.style.display = 'block';
+        elements.keywordsList.innerHTML = '';
+        
+        keywords.forEach(function(keyword) {
+            var tag = createKeywordTag(keyword);
+            elements.keywordsList.appendChild(tag);
+        });
+    }
+
+    /**
+     * Create a keyword tag button element
+     * @param {Object} keyword - Keyword object with id and name properties
+     * @returns {HTMLElement} Keyword tag button
+     */
+    function createKeywordTag(keyword) {
+        var tag = document.createElement('button');
+        tag.className = 'keyword-tag';
+        tag.tabIndex = 0;
+        tag.textContent = keyword.name;
+        tag.dataset.keywordId = keyword.id;
+        tag.dataset.keywordName = keyword.name;
+        
+        tag.addEventListener('click', function() {
+            navigateToKeyword(keyword.id, keyword.name);
+        });
+        
+        tag.addEventListener('keydown', function(e) {
+            if (e.keyCode === KeyCodes.ENTER) {
+                e.preventDefault();
+                navigateToKeyword(keyword.id, keyword.name);
+            }
+            handleKeywordsKeyDown(e);
+        });
+        
+        return tag;
+    }
+
+    /**
+     * Navigate to browse-by page filtered by keyword
+     * @param {number} keywordId - TMDB keyword ID
+     * @param {string} keywordName - Keyword display name
+     */
+    function navigateToKeyword(keywordId, keywordName) {
+        var url = 'browse-by.html?type=keyword&id=' + keywordId + 
+                  '&name=' + encodeURIComponent(keywordName) + 
+                  '&mediaType=' + mediaType;
+        window.location.href = url;
     }
 
     /**
@@ -1104,6 +1172,13 @@ var JellyseerrDetailsController = (function() {
     function getSimilarCards() {
         return Array.from(document.querySelectorAll('.similar-card'));
     }
+    
+    /**
+     * Get keyword tags
+     */
+    function getKeywordTags() {
+        return Array.from(document.querySelectorAll('.keyword-tag'));
+    }
 
     /**
      * Handle keyboard navigation
@@ -1347,6 +1422,127 @@ var JellyseerrDetailsController = (function() {
                         }
                     }
                 }
+                break;
+                
+            case KeyCodes.DOWN:
+                evt.preventDefault();
+                var keywordTags = getKeywordTags();
+                if (keywordTags.length > 0) {
+                    focusManager.currentSection = 'keywords';
+                    focusManager.currentIndex = 0;
+                    keywordTags[0].focus();
+                }
+                break;
+        }
+    }
+
+    /**
+     * Handle keyboard navigation within keywords grid
+     * Dynamically calculates row layout based on element positions
+     * @param {KeyboardEvent} evt - Keyboard event
+     */
+    function handleKeywordsKeyDown(evt) {
+        var keywordTags = getKeywordTags();
+        var currentIndex = keywordTags.indexOf(document.activeElement);
+        
+        // Calculate actual grid layout based on element positions
+        var rows = [];
+        var currentRow = [];
+        var lastTop = -1;
+        
+        keywordTags.forEach(function(tag, index) {
+            var rect = tag.getBoundingClientRect();
+            // Group elements with similar top positions into rows (within 5px tolerance)
+            if (lastTop === -1 || Math.abs(rect.top - lastTop) < 5) {
+                currentRow.push(index);
+                lastTop = rect.top;
+            } else {
+                rows.push(currentRow);
+                currentRow = [index];
+                lastTop = rect.top;
+            }
+        });
+        if (currentRow.length > 0) {
+            rows.push(currentRow);
+        }
+        
+        // Find which row and column the current element is in
+        var currentRowIndex = -1;
+        var currentColIndex = -1;
+        for (var i = 0; i < rows.length; i++) {
+            var colIndex = rows[i].indexOf(currentIndex);
+            if (colIndex !== -1) {
+                currentRowIndex = i;
+                currentColIndex = colIndex;
+                break;
+            }
+        }
+        
+        switch (evt.keyCode) {
+            case KeyCodes.LEFT:
+                evt.preventDefault();
+                if (currentIndex > 0) {
+                    keywordTags[currentIndex - 1].focus();
+                }
+                break;
+                
+            case KeyCodes.RIGHT:
+                evt.preventDefault();
+                if (currentIndex < keywordTags.length - 1) {
+                    keywordTags[currentIndex + 1].focus();
+                }
+                break;
+                
+            case KeyCodes.UP:
+                evt.preventDefault();
+                if (currentRowIndex > 0) {
+                    // Move up within keywords
+                    var prevRow = rows[currentRowIndex - 1];
+                    // Try to maintain column position, or go to last item in row if shorter
+                    var targetColIndex = Math.min(currentColIndex, prevRow.length - 1);
+                    keywordTags[prevRow[targetColIndex]].focus();
+                } else {
+                    // Move to similar section
+                    var similarCards = getSimilarCards();
+                    if (similarCards.length > 0) {
+                        focusManager.currentSection = 'similar';
+                        focusManager.currentIndex = 0;
+                        similarCards[0].focus();
+                    } else {
+                        var recommendationsCards = getRecommendationsCards();
+                        if (recommendationsCards.length > 0) {
+                            focusManager.currentSection = 'recommendations';
+                            focusManager.currentIndex = 0;
+                            recommendationsCards[0].focus();
+                        } else {
+                            var castCards = getCastCards();
+                            if (castCards.length > 0) {
+                                focusManager.currentSection = 'cast';
+                                focusManager.currentIndex = 0;
+                                castCards[0].focus();
+                            } else {
+                                focusManager.currentSection = 'buttons';
+                                focusManager.currentIndex = 0;
+                                var buttons = getActionButtons();
+                                if (buttons.length > 0) {
+                                    buttons[0].focus();
+                                }
+                            }
+                        }
+                    }
+                }
+                break;
+                
+            case KeyCodes.DOWN:
+                evt.preventDefault();
+                if (currentRowIndex < rows.length - 1) {
+                    // Move down within keywords
+                    var nextRow = rows[currentRowIndex + 1];
+                    // Try to maintain column position, or go to last item in row if shorter
+                    var targetDownColIndex = Math.min(currentColIndex, nextRow.length - 1);
+                    keywordTags[nextRow[targetDownColIndex]].focus();
+                }
+                // If at bottom of keywords, stay there (no section below)
                 break;
         }
     }
