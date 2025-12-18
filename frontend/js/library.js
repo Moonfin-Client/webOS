@@ -216,10 +216,6 @@ const LibraryController = {
                 }
 
                 if (!data || !data.Items) {
-                        sortBy: self.currentSort,
-                        sortOrder: self.currentSortOrder,
-                        filter: self.currentFilter
-                    });
                     self.showError('Failed to load library items');
                     return;
                 }

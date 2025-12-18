@@ -28,8 +28,11 @@ var DiscoverController = (function() {
         { id: 'trending', title: 'Trending Now', apiMethod: 'getTrending', type: 'all' },
         { id: 'popularMovies', title: 'Popular Movies', apiMethod: 'getTrendingMovies', type: 'movie' },
         { id: 'popularTv', title: 'Popular TV Shows', apiMethod: 'getTrendingTv', type: 'tv' },
+        { id: 'genreMovies', title: 'Browse Movies by Genre', apiMethod: 'getGenreSliderMovies', type: 'genreSlider', mediaType: 'movie' },
+        { id: 'genreTv', title: 'Browse TV Shows by Genre', apiMethod: 'getGenreSliderTv', type: 'genreSlider', mediaType: 'tv' },
         { id: 'upcomingMovies', title: 'Upcoming Movies', apiMethod: 'getUpcomingMovies', type: 'movie' },
         { id: 'upcomingTv', title: 'Upcoming TV Shows', apiMethod: 'getUpcomingTv', type: 'tv' },
+        { id: 'networks', title: 'Browse by Network', apiMethod: 'getNetworks', type: 'networks' },
         { id: 'requests', title: 'My Requests', apiMethod: 'getRequests', type: 'requests' }
     ];
     
@@ -38,6 +41,31 @@ var DiscoverController = (function() {
     
     // Pagination state for each row
     var rowPagination = {};
+    
+    // Popular streaming networks (hardcoded)
+    var streamingNetworks = [
+        { id: 213, name: 'Netflix', logo: 'wwemzKWzjKYJFfCeiB57q3r4Bcm.png' },
+        { id: 2739, name: 'Disney+', logo: 'gJ8VX6JSu3ciXHuC2dDGAo2lvwM.png' },
+        { id: 1024, name: 'Prime Video', logo: 'ifhbNuuVnlwYy5oXA5VIb2YR8AZ.png' },
+        { id: 2552, name: 'Apple TV+', logo: '4KAy34EHvRM25Ih8wb82AuGU7zJ.png' },
+        { id: 453, name: 'Hulu', logo: 'pqUTCleNUiTLAVlelGxUgWn1ELh.png' },
+        { id: 49, name: 'HBO', logo: 'tuomPhY2UtuPTqqFnKMVHvSb724.png' },
+        { id: 4353, name: 'Discovery+', logo: '1D1bS3Dyw4ScYnFWTlBOvJXC3nb.png' },
+        { id: 2, name: 'ABC', logo: 'ndAvF4JLsliGreX87jAc9GdjmJY.png' },
+        { id: 19, name: 'FOX', logo: '1DSpHrWyOORkL9N2QHX7Adt31mQ.png' },
+        { id: 174, name: 'AMC', logo: 'pmvRmATOCaDykE6JrVoeYxlFHw3.png' },
+        { id: 67, name: 'Showtime', logo: 'Allse9kbjiP6ExaQrnSpIhkurEi.png' },
+        { id: 318, name: 'Starz', logo: '8GJjw3HHsAJYwIWKIPBPfqMxlEa.png' },
+        { id: 71, name: 'The CW', logo: 'ge9hzeaU7nMtQ4PjkFlc68dGAJ9.png' },
+        { id: 6, name: 'NBC', logo: 'o3OedEP0f9mfZr33jz2BfXOUK5.png' },
+        { id: 16, name: 'CBS', logo: 'nm8d7P7MJNiBLdgIzUK0gkuEA4r.png' },
+        { id: 4330, name: 'Paramount+', logo: 'fi83B1oztoS47xxcemFdPMhIzK.png' },
+        { id: 4, name: 'BBC One', logo: 'mVn7xESaTNmjBUyUtGNvDQd3CT1.png' },
+        { id: 56, name: 'Cartoon Network', logo: 'c5OC6oVCg6QP4eqzW6XIq17CQjI.png' },
+        { id: 80, name: 'Adult Swim', logo: '9AKyspxVzywuaMuZ1Bvilu8sXly.png' },
+        { id: 13, name: 'Nickelodeon', logo: 'ikZXxg6GnwpzqiZbRPhJGaZapqB.png' },
+        { id: 3353, name: 'Peacock', logo: 'gIAcGTjKKr0KOHL5s4O36roJ8p7.png' }
+    ];
     
     // Track rows currently loading more content
     var rowsLoadingMore = {};
@@ -129,6 +157,13 @@ var DiscoverController = (function() {
             elements[config.id + 'Row'] = document.getElementById(config.id + 'Row');
             elements[config.id + 'Items'] = document.getElementById(config.id + 'Items');
         });
+        
+        // Stub getNetworks method
+        if (!JellyseerrAPI.getNetworks) {
+            JellyseerrAPI.getNetworks = function() {
+                return Promise.resolve(streamingNetworks);
+            };
+        }
     }
 
     /**
@@ -308,10 +343,36 @@ var DiscoverController = (function() {
                 return;
             }
             
+            // Handle genre slider rows (no pagination)
+            if (config.type === 'genreSlider') {
+                console.log('[Discover] Loading genre slider:', config.id);
+                apiMethod.call(JellyseerrAPI)
+                    .then(function(genres) {
+                        console.log('[Discover] Genre slider', config.id, 'loaded:', genres.length, 'genres');
+                        rowData[config.id] = genres;
+                        renderGenreSliderRow(config.id, genres, config.mediaType);
+                        resolve();
+                    })
+                    .catch(function(error) {
+                        console.error('[Discover] Error loading genre slider', config.id, ':', error);
+                        reject(error);
+                    });
+                return;
+            }
+            
+            // Handle networks row (no API, use hardcoded data)
+            if (config.type === 'networks') {
+                console.log('[Discover] Loading networks row');
+                rowData[config.id] = streamingNetworks;
+                renderNetworksRow(config.id, streamingNetworks);
+                resolve();
+                return;
+            }
+            
             console.log('[Discover] Loading row:', config.id, 'method:', config.apiMethod, 'page:', page);
             var responseData; // Store response for pagination info
             
-            apiMethod.call(JellyseerrAPI, page)
+            apiMethod.call(JellyseerrAPI, { page: page })
                 .then(function(response) {
                     console.log('[Discover] Row', config.id, 'loaded, results:', response.results ? response.results.length : 0);
                     responseData = response; // Capture response
@@ -340,17 +401,93 @@ var DiscoverController = (function() {
                         rowData[config.id] = results;
                         renderRow(config.id, results);
                     } else {
-                        // Append to existing data
-                        rowData[config.id] = (rowData[config.id] || []).concat(results);
-                        appendRowItems(config.id, results);
+                        // Deduplicate before appending - check if items already exist by ID
+                        var existingData = rowData[config.id] || [];
+                        var existingIds = existingData.map(function(item) { return item.id; });
+                        var newResults = results.filter(function(item) {
+                            return existingIds.indexOf(item.id) === -1;
+                        });
+                        
+                        console.log('[Discover] Deduplication - existing:', existingData.length, 'new from API:', results.length, 'after dedup:', newResults.length);
+                        
+                        if (newResults.length > 0) {
+                            // Append to existing data
+                            rowData[config.id] = existingData.concat(newResults);
+                            appendRowItems(config.id, newResults);
+                        } else {
+                            console.log('[Discover] All items were duplicates, skipping append');
+                        }
                     }
                     
                     resolve();
                 })
                 .catch(function(error) {
                     console.error('[Discover] Error loading row', config.id, ':', error);
-                    // If it's the requests row and fails (likely due to auth), just skip it
-                    if (config.id === 'requests') {
+                    
+                    // Handle session expiration
+                    if (error.message && error.message.includes('Session expired')) {
+                        JellyseerrAPI.handleSessionExpiration(function() {
+                            // Retry the same page after re-initialization
+                            return apiMethod.call(JellyseerrAPI, { page: page })
+                                .then(function(response) {
+                                    console.log('[Discover] Retry successful for row', config.id, 'page:', page, 'results:', response.results ? response.results.length : 0);
+                                    responseData = response;
+                                    var results = response.results || response || [];
+                                    
+                                    // Enrich requests if needed
+                                    if (config.id === 'requests' && results.length > 0) {
+                                        return enrichRequestsWithMediaDetails(results);
+                                    }
+                                    return results;
+                                })
+                                .then(function(results) {
+                                    // Filter NSFW content
+                                    results = filterNSFW(results);
+                                    
+                                    // Update pagination info
+                                    if (!rowPagination[config.id]) {
+                                        rowPagination[config.id] = {};
+                                    }
+                                    rowPagination[config.id].currentPage = page;
+                                    rowPagination[config.id].totalPages = responseData.totalPages || 1;
+                                    rowPagination[config.id].hasMore = page < (responseData.totalPages || 1);
+                                    
+                                    if (page === 1) {
+                                        rowData[config.id] = results;
+                                        renderRow(config.id, results);
+                                    } else {
+                                        // Deduplicate before appending - check if items already exist by ID
+                                        var existingData = rowData[config.id] || [];
+                                        var existingIds = existingData.map(function(item) { return item.id; });
+                                        var newResults = results.filter(function(item) {
+                                            return existingIds.indexOf(item.id) === -1;
+                                        });
+                                        
+                                        console.log('[Discover] Deduplication - existing:', existingData.length, 'new from API:', results.length, 'after dedup:', newResults.length);
+                                        
+                                        if (newResults.length > 0) {
+                                            // Append to existing data
+                                            rowData[config.id] = existingData.concat(newResults);
+                                            appendRowItems(config.id, newResults);
+                                        } else {
+                                            console.log('[Discover] All items were duplicates, skipping append');
+                                        }
+                                    }
+                                    
+                                    resolve();
+                                });
+                        }, 'Discover')
+                            .catch(function(retryError) {
+                                console.error('[Discover] Re-initialization failed for row:', config.id, retryError);
+                                if (config.id === 'requests') {
+                                    hideRow(config.id);
+                                    resolve();
+                                } else {
+                                    reject(error);
+                                }
+                            });
+                    } else if (config.id === 'requests') {
+                        // If it's the requests row and fails (likely due to auth), just skip it
                         console.log('[Discover] Hiding requests row due to error');
                         hideRow(config.id);
                         resolve();
@@ -453,6 +590,145 @@ var DiscoverController = (function() {
 
     /**
      * Render a row with items
+     */
+    /**
+     * Render genre slider row
+     */
+    function renderGenreSliderRow(rowId, genres) {
+        var container = elements[rowId + 'Items'];
+        if (!container) return;
+        
+        container.innerHTML = '';
+        
+        if (!genres || genres.length === 0) {
+            hideRow(rowId);
+            return;
+        }
+        
+        var rowConfig = rowConfigs.find(function(r) { return r.id === rowId; });
+        var mediaType = rowConfig ? rowConfig.mediaType : 'movie';
+        
+        genres.forEach(function(genre, index) {
+            var card = document.createElement('div');
+            card.className = 'content-card genre-slider-card';
+            card.setAttribute('tabindex', '0');
+            card.setAttribute('data-genre-id', genre.id);
+            card.setAttribute('data-genre-name', genre.name);
+            card.setAttribute('data-media-type', mediaType);
+            card.setAttribute('data-row-id', rowId);
+            card.setAttribute('data-index', index);
+            
+            // Use random backdrop image for variety (so genres don't show the same image)
+            var backdropUrl = '';
+            if (genre.backdrops && genre.backdrops.length > 0) {
+                var randomIndex = Math.floor(Math.random() * genre.backdrops.length);
+                backdropUrl = ImageHelper.getTMDBImageUrl(genre.backdrops[randomIndex], 'w1280');
+            }
+            
+            var backdrop = document.createElement('img');
+            backdrop.className = 'genre-slider-backdrop';
+            backdrop.src = backdropUrl;
+            backdrop.alt = genre.name;
+            
+            var overlay = document.createElement('div');
+            overlay.className = 'genre-slider-overlay';
+            
+            var title = document.createElement('div');
+            title.className = 'genre-slider-title';
+            title.textContent = genre.name;
+            
+            overlay.appendChild(title);
+            card.appendChild(backdrop);
+            card.appendChild(overlay);
+            
+            // Add click handler to navigate to genre filter
+            card.addEventListener('click', function() {
+                navigateToGenre(genre.id, genre.name, mediaType);
+            });
+            
+            // Add focus handler for backdrop update
+            card.addEventListener('focus', function() {
+                if (backdropUrl && elements.globalBackdropImage) {
+                    elements.globalBackdropImage.src = backdropUrl;
+                    elements.globalBackdropImage.style.display = 'block';
+                    elements.globalBackdropImage.style.opacity = '1';
+                }
+            });
+            
+            container.appendChild(card);
+        });
+    }
+    
+    /**
+     * Navigate to genre-filtered discover page
+     */
+    function navigateToGenre(genreId, genreName, mediaType) {
+        console.log('[Discover] Navigate to genre:', genreName, 'ID:', genreId, 'Media type:', mediaType);
+        window.location.href = 'browse-by.html?type=genre&id=' + genreId + '&name=' + encodeURIComponent(genreName) + '&mediaType=' + mediaType;
+    }
+    
+    /**
+     * Render networks row
+     */
+    function renderNetworksRow(rowId, networks) {
+        var container = elements[rowId + 'Items'];
+        if (!container) return;
+        
+        container.innerHTML = '';
+        
+        if (!networks || networks.length === 0) {
+            hideRow(rowId);
+            return;
+        }
+        
+        networks.forEach(function(network, index) {
+            var card = document.createElement('div');
+            card.className = 'content-card network-card';
+            card.setAttribute('tabindex', '0');
+            card.setAttribute('data-network-id', network.id);
+            card.setAttribute('data-network-name', network.name);
+            card.setAttribute('data-row-id', rowId);
+            card.setAttribute('data-index', index);
+            
+            var logoUrl = 'https://image.tmdb.org/t/p/w780_filter(duotone,ffffff,bababa)/' + network.logo;
+            
+            var logoContainer = document.createElement('div');
+            logoContainer.className = 'network-logo-container';
+            
+            var logo = document.createElement('img');
+            logo.className = 'network-logo';
+            logo.src = logoUrl;
+            logo.alt = network.name;
+            
+            logoContainer.appendChild(logo);
+            card.appendChild(logoContainer);
+            
+            var gradient = document.createElement('div');
+            gradient.className = 'network-gradient';
+            card.appendChild(gradient);
+            
+            // Add click handler to navigate to network filter
+            card.addEventListener('click', function() {
+                navigateToNetwork(network.id, network.name);
+            });
+            
+            container.appendChild(card);
+        });
+    }
+    
+    /**
+     * Navigate to network-filtered discover page
+     */
+    function navigateToNetwork(networkId, networkName) {
+        console.log('[Discover] Navigate to network:', networkName, 'ID:', networkId);
+        // Find the logo for this network
+        var network = streamingNetworks.find(function(n) { return n.id === networkId; });
+        var logo = network ? network.logo : '';
+        window.location.href = 'browse-by.html?type=network&id=' + networkId + '&name=' + encodeURIComponent(networkName) + '&mediaType=tv&logo=' + encodeURIComponent(logo);
+    }
+    
+    /**
+     * Render a media row
      */
     function renderRow(rowId, items) {
         var container = elements[rowId + 'Items'];
@@ -803,11 +1079,22 @@ var DiscoverController = (function() {
         // Calculate relative scroll adjustment needed
         var scrollAdjustment = 0;
         
-        if (cardRect.left < containerRect.left + EDGE_THRESHOLD) {
-            // Card is too far left - scroll left
+        // Check if card is fully visible
+        var cardFullyVisible = cardRect.left >= containerRect.left && cardRect.right <= containerRect.right;
+        
+        if (!cardFullyVisible) {
+            if (cardRect.left < containerRect.left) {
+                // Card is cut off on the left - scroll left to show full card
+                scrollAdjustment = cardRect.left - (containerRect.left + HORIZONTAL_SCROLL_PADDING);
+            } else if (cardRect.right > containerRect.right) {
+                // Card is cut off on the right - scroll right to show full card
+                scrollAdjustment = cardRect.right - (containerRect.right - HORIZONTAL_SCROLL_PADDING);
+            }
+        } else if (cardRect.left < containerRect.left + EDGE_THRESHOLD) {
+            // Card is fully visible but near left edge - scroll left
             scrollAdjustment = cardRect.left - (containerRect.left + HORIZONTAL_SCROLL_PADDING);
         } else if (cardRect.right > containerRect.right - EDGE_THRESHOLD) {
-            // Card is too far right - scroll right
+            // Card is fully visible but near right edge - scroll right
             scrollAdjustment = cardRect.right - (containerRect.right - HORIZONTAL_SCROLL_PADDING);
         }
         
