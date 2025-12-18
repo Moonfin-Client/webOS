@@ -1343,7 +1343,7 @@ var BrowseController = (function() {
         
         // Handle library tiles row (special case - no API call needed)
         if (rowDef.type === 'library-tiles') {
-            console.log('[browse] Rendering library tiles, count:', rowDef.libraries?.length);
+            console.log('[browse] Rendering library tiles, count:', rowDef.libraries ? rowDef.libraries.length : 0);
             if (rowDef.libraries && rowDef.libraries.length > 0) {
                 renderRow(rowDef.title, rowDef.libraries, rowDef.type);
                 if (callback) callback(true);
@@ -1606,7 +1606,7 @@ var BrowseController = (function() {
         
         JellyfinAPI.getItems(auth.serverAddress, auth.accessToken,
             '/Users/' + auth.userId + '/Items', params, function(err, data) {
-            console.log('[browse] Featured media - API response:', err ? 'ERROR: ' + err : 'Success', 'items:', data?.Items?.length);
+            console.log('[browse] Featured media - API response:', err ? 'ERROR: ' + err : 'Success', 'items:', data && data.Items ? data.Items.length : 0);
             if (err) {
                 console.error('[browse] Featured media error:', err);
             }
@@ -1822,20 +1822,22 @@ var BrowseController = (function() {
         var img = document.createElement('img');
         img.className = 'item-image';
         
-        // Use library primary image or a default icon
+        // Use library Thumb (wide) image or Primary as fallback
         var imageUrl = '';
-        if (library.ImageTags && library.ImageTags.Primary) {
-            imageUrl = auth.serverAddress + '/Items/' + library.Id + '/Images/Primary?quality=90&maxHeight=400';
+        if (library.ImageTags && library.ImageTags.Thumb) {
+            imageUrl = auth.serverAddress + '/Items/' + library.Id + '/Images/Thumb?quality=90&maxWidth=500';
+        } else if (library.ImageTags && library.ImageTags.Primary) {
+            imageUrl = auth.serverAddress + '/Items/' + library.Id + '/Images/Primary?quality=90&maxWidth=500';
         } else {
             // Use a placeholder based on collection type
             var collectionType = library.CollectionType ? library.CollectionType.toLowerCase() : '';
-            // For now, use a simple colored placeholder
+            // For now, use a simple colored placeholder (wide format)
             var bgColor = collectionType === 'movies' ? '%23e50914' : 
                          collectionType === 'tvshows' ? '%23564d80' :
                          collectionType === 'music' ? '%231db954' : '%23333';
             imageUrl = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" ' +
-                'width="200" height="200"%3E%3Crect fill="' + bgColor + '" width="200" ' +
-                'height="200"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" ' +
+                'width="300" height="169"%3E%3Crect fill="' + bgColor + '" width="300" ' +
+                'height="169"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" ' +
                 'fill="white" font-size="24"%3E' + encodeURIComponent(library.Name.charAt(0)) +
                 '%3C/text%3E%3C/svg%3E';
         }

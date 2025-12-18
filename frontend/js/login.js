@@ -60,15 +60,8 @@ var LoginController = (function() {
             quickConnectStatus: document.getElementById('quickConnectStatus'),
             cancelQuickConnectBtn: document.getElementById('cancelQuickConnectBtn'),
             
-            manualLoginBtn: document.getElementById('manualLoginBtn'),
-            manualLoginForm: document.getElementById('manualLoginForm'),
-            manualUsername: document.getElementById('manualUsername'),
-            manualPassword: document.getElementById('manualPassword'),
-            manualLoginSubmitBtn: document.getElementById('manualLoginSubmitBtn'),
-            cancelManualLoginBtn: document.getElementById('cancelManualLoginBtn'),
-            
+            showManualLoginBtn: document.getElementById('showManualLoginBtn'),
             backToServerBtn: document.getElementById('backToServerBtn'),
-            addAccountBtn: document.getElementById('addAccountBtn'),
             
             manualLoginSection: document.getElementById('manualLoginSection'),
             useManualPasswordBtn: document.getElementById('useManualPasswordBtn'),
@@ -103,9 +96,9 @@ var LoginController = (function() {
             });
         }
         
-        // Add Account button
-        if (elements.addAccountBtn) {
-            elements.addAccountBtn.addEventListener('click', showManualLoginForm);
+        // Manual Login button
+        if (elements.showManualLoginBtn) {
+            elements.showManualLoginBtn.addEventListener('click', showManualLoginForm);
         }
         if (elements.useManualPasswordBtn) {
             elements.useManualPasswordBtn.addEventListener('click', showManualPasswordForm);
@@ -144,26 +137,47 @@ var LoginController = (function() {
         if (elements.cancelQuickConnectBtn) {
             elements.cancelQuickConnectBtn.addEventListener('click', backToUserSelection);
         }
-        if (elements.manualLoginBtn) {
-            elements.manualLoginBtn.addEventListener('click', showManualLoginForm);
-        }
         if (elements.manualLoginSubmitBtn) {
             elements.manualLoginSubmitBtn.addEventListener('click', handleManualLogin);
-        }
-        if (elements.cancelManualLoginBtn) {
-            elements.cancelManualLoginBtn.addEventListener('click', backToUserSelection);
         }
         if (elements.manualUsername) {
             elements.manualUsername.addEventListener('keydown', function(e) {
                 if (e.keyCode === KeyCodes.ENTER) {
                     e.preventDefault();
+                    e.stopPropagation();
                     elements.manualPassword.focus();
+                } else if (e.keyCode === KeyCodes.DOWN) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (elements.manualPassword && elements.manualPassword.offsetParent !== null) {
+                        elements.manualPassword.focus();
+                    }
+                } else if (e.keyCode === KeyCodes.UP) {
+                    e.preventDefault();
+                    e.stopPropagation();
                 }
             });
         }
         if (elements.manualPassword) {
             elements.manualPassword.addEventListener('keydown', function(e) {
-                if (e.keyCode === KeyCodes.ENTER) handleManualLogin();
+                if (e.keyCode === KeyCodes.ENTER) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleManualLogin();
+                }
+                else if (e.keyCode === KeyCodes.UP) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (elements.manualUsername && elements.manualUsername.offsetParent !== null) {
+                        elements.manualUsername.focus();
+                    }
+                } else if (e.keyCode === KeyCodes.DOWN) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (elements.manualLoginBtn && elements.manualLoginBtn.offsetParent !== null) {
+                        elements.manualLoginBtn.focus();
+                    }
+                }
             });
         }
         if (elements.backToServerBtn) {
@@ -412,8 +426,12 @@ var LoginController = (function() {
             return;
         }
         
-        serverUrl = JellyfinAPI.normalizeServerAddress(serverUrl);
-        elements.serverUrlInput.value = serverUrl;
+        // Remove trailing slashes
+        serverUrl = serverUrl.replace(/\/+$/, '');
+        
+        // Check if user provided a port
+        var hasPort = /:(\d+)$/.test(serverUrl);
+        var hasProtocol = /^https?:\/\//i.test(serverUrl);
         
         showStatus('Testing connection to ' + serverUrl + '...', 'info');
         clearError();
@@ -423,30 +441,88 @@ var LoginController = (function() {
             elements.connectBtn.textContent = 'Connecting...';
         }
         
-        JellyfinAPI.testServer(serverUrl, function(err, serverInfo) {
-            if (elements.connectBtn) {
-                elements.connectBtn.disabled = false;
-                elements.connectBtn.textContent = 'Connect';
+        // If user specified a port, just try that
+        if (hasPort) {
+            var normalizedUrl = JellyfinAPI.normalizeServerAddress(serverUrl);
+            elements.serverUrlInput.value = normalizedUrl;
+            tryConnect(normalizedUrl);
+        } else {
+            // Try multiple ports: 443 (HTTPS) first, then 8096 (HTTP)
+            var baseUrl = hasProtocol ? serverUrl : serverUrl;
+            var urlsToTry = [
+                'https://' + baseUrl.replace(/^https?:\/\//i, '') + ':443',
+                'http://' + baseUrl.replace(/^https?:\/\//i, '') + ':8096'
+            ];
+            
+            tryMultiplePorts(urlsToTry, 0);
+        }
+        
+        function tryMultiplePorts(urls, index) {
+            if (index >= urls.length) {
+                if (elements.connectBtn) {
+                    elements.connectBtn.disabled = false;
+                    elements.connectBtn.textContent = 'Connect';
+                }
+                showError('Unable to connect to server on ports 443 or 8096. Check the address and try again.');
+                return;
             }
             
-            if (err) {
-                showError('Unable to connect to server. Check the address and try again.');
-            } else {
-                showStatus('Connected to ' + serverInfo.name + '! Loading users...', 'success');
+            var currentUrl = urls[index];
+            
+            JellyfinAPI.testServer(currentUrl, function(err, serverInfo) {
+                if (err) {
+                    // Try next port
+                    tryMultiplePorts(urls, index + 1);
+                } else {
+                    // Success!
+                    if (elements.connectBtn) {
+                        elements.connectBtn.disabled = false;
+                        elements.connectBtn.textContent = 'Connect';
+                    }
+                    elements.serverUrlInput.value = currentUrl;
+                    showStatus('Connected to ' + serverInfo.name + '! Loading users...', 'success');
+                    
+                    connectedServer = serverInfo;
+                    
+                    // Store the server info for returning after logout
+                    storage.set('last_server', {
+                        name: serverInfo.name,
+                        address: serverInfo.address,
+                        id: serverInfo.id,
+                        version: serverInfo.version
+                    }, true);
+                    
+                    loadPublicUsers(serverInfo.address);
+                }
+            });
+        }
+        
+        function tryConnect(url) {
+            JellyfinAPI.testServer(url, function(err, serverInfo) {
+                if (elements.connectBtn) {
+                    elements.connectBtn.disabled = false;
+                    elements.connectBtn.textContent = 'Connect';
+                }
                 
-                connectedServer = serverInfo;
-                
-                // Store the server info for returning after logout
-                storage.set('last_server', {
-                    name: serverInfo.name,
-                    address: serverInfo.address,
-                    id: serverInfo.id,
-                    version: serverInfo.version
-                }, true);
-                
-                loadPublicUsers(serverInfo.address);
-            }
-        });
+                if (err) {
+                    showError('Unable to connect to server. Check the address and try again.');
+                } else {
+                    showStatus('Connected to ' + serverInfo.name + '! Loading users...', 'success');
+                    
+                    connectedServer = serverInfo;
+                    
+                    // Store the server info for returning after logout
+                    storage.set('last_server', {
+                        name: serverInfo.name,
+                        address: serverInfo.address,
+                        id: serverInfo.id,
+                        version: serverInfo.version
+                    }, true);
+                    
+                    loadPublicUsers(serverInfo.address);
+                }
+            });
+        }
     }
 
     function loadPublicUsers(serverAddress) {
@@ -492,10 +568,10 @@ var LoginController = (function() {
         elements.userRow.innerHTML = '';
         
         if (users.length === 0) {
-            // Leave empty and focus Add Account button
-            if (elements.addAccountBtn) {
+            // Leave empty and focus Manual Login button
+            if (elements.showManualLoginBtn) {
                 setTimeout(function() {
-                    elements.addAccountBtn.focus();
+                    elements.showManualLoginBtn.focus();
                 }, FOCUS_DELAY_MS);
             }
             return;
@@ -849,12 +925,15 @@ var LoginController = (function() {
             elements.userSelection.style.display = 'block';
         }
         
-        // Focus Add Account button
-        if (elements.addAccountBtn) {
-            setTimeout(function() {
-                elements.addAccountBtn.focus();
-            }, FOCUS_DELAY_MS);
-        }
+        // Focus first user card or Manual Login button
+        setTimeout(function() {
+            var userCards = document.querySelectorAll('.user-card');
+            if (userCards.length > 0) {
+                userCards[0].focus();
+            } else if (elements.showManualLoginBtn) {
+                elements.showManualLoginBtn.focus();
+            }
+        }, FOCUS_DELAY_MS);
         
         clearError();
     }
@@ -1120,41 +1199,6 @@ var LoginController = (function() {
         stopQuickConnectPolling();
     }
 
-    function showManualLoginForm() {
-        
-        if (!connectedServer) {
-            showError('No server connected');
-            return;
-        }
-        
-        // Hide user selection
-        if (elements.userSelection) {
-            elements.userSelection.style.display = 'none';
-        }
-        
-        // Show manual login form
-        if (elements.manualLoginForm) {
-            elements.manualLoginForm.style.display = 'block';
-        }
-        
-        // Clear previous inputs
-        if (elements.manualUsername) {
-            elements.manualUsername.value = '';
-        }
-        if (elements.manualPassword) {
-            elements.manualPassword.value = '';
-        }
-        
-        clearError();
-        
-        // Focus username field
-        setTimeout(function() {
-            if (elements.manualUsername) {
-                elements.manualUsername.focus();
-            }
-        }, FOCUS_DELAY_MS);
-    }
-
     function handleManualLogin() {
         var username = elements.manualUsername ? elements.manualUsername.value.trim() : '';
         var password = elements.manualPassword ? elements.manualPassword.value : '';
@@ -1175,10 +1219,10 @@ var LoginController = (function() {
         showStatus('Logging in as ' + username + '...', 'info');
         clearError();
         
-        // Disable submit button
-        if (elements.manualLoginSubmitBtn) {
-            elements.manualLoginSubmitBtn.disabled = true;
-            elements.manualLoginSubmitBtn.textContent = 'Logging in...';
+        // Disable login button
+        if (elements.manualLoginBtn) {
+            elements.manualLoginBtn.disabled = true;
+            elements.manualLoginBtn.textContent = 'Logging in...';
         }
         
         JellyfinAPI.authenticateByName(
@@ -1187,9 +1231,9 @@ var LoginController = (function() {
             password,
             function(err, authData) {
                 // Re-enable button
-                if (elements.manualLoginSubmitBtn) {
-                    elements.manualLoginSubmitBtn.disabled = false;
-                    elements.manualLoginSubmitBtn.textContent = 'Login';
+                if (elements.manualLoginBtn) {
+                    elements.manualLoginBtn.disabled = false;
+                    elements.manualLoginBtn.textContent = 'Login';
                 }
                 
                 if (err) {

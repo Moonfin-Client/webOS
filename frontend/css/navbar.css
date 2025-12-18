@@ -3,6 +3,11 @@
  * Shared across all pages
  */
 
+:root {
+    --accent-color: #007bff;
+    --accent-color-rgb: 0, 123, 255;
+}
+
 /* Top Navigation Bar */
 .top-nav {
     position: absolute;

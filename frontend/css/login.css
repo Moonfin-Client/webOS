@@ -16,15 +16,16 @@ body {
     background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
     color: #ffffff;
     overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .container {
-    min-height: 100%;
+    min-height: 100vh;
     width: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 20px 60px;
+    padding: 20px 60px 400px 60px;
 }
 
 /* Logo Section */
@@ -160,11 +161,17 @@ body {
     transition: all 0.3s ease;
     flex: 1;
     min-width: 200px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    border: 2px solid rgba(255, 255, 255, 0.2);
 }
 
 .btn:focus {
-    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.3);
+    background: var(--accent-color, #007bff);
+    border-color: var(--accent-color, #007bff);
+    box-shadow: 0 0 0 4px rgba(var(--accent-color-rgb, 0, 123, 255), 0.3);
     transform: scale(1.05);
+    color: #ffffff;
 }
 
 .btn:active {
@@ -172,13 +179,18 @@ body {
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, #00a4dc 0%, #0077b6 100%);
+    background: rgba(255, 255, 255, 0.15);
     color: #ffffff;
+    border: 2px solid rgba(255, 255, 255, 0.3);
 }
 
 .btn-primary:hover,
 .btn-primary:focus {
-    background: linear-gradient(135deg, #00b8f5 0%, #0088cc 100%);
+    background: var(--accent-color, #007bff);
+    border-color: var(--accent-color, #007bff);
+    box-shadow: 0 0 0 4px rgba(var(--accent-color-rgb, 0, 123, 255), 0.3);
+    transform: scale(1.05);
+    color: #ffffff;
 }
 
 .btn-primary:disabled {
@@ -195,8 +207,10 @@ body {
 
 .btn-secondary:hover,
 .btn-secondary:focus {
-    background: rgba(255, 255, 255, 0.2);
-    border-color: rgba(255, 255, 255, 0.5);
+    background: var(--accent-color, #007bff);
+    border-color: var(--accent-color, #007bff);
+    box-shadow: 0 0 0 4px rgba(var(--accent-color-rgb, 0, 123, 255), 0.3);
+    color: #ffffff;
 }
 
 /* Server List */
@@ -221,16 +235,16 @@ body {
 
 .server-item:hover,
 .server-item:focus {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: #00a4dc;
+    background: rgba(var(--accent-color-rgb, 0, 123, 255), 0.2);
+    border-color: var(--accent-color, #007bff);
     transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(0, 164, 220, 0.3);
+    box-shadow: 0 8px 20px rgba(var(--accent-color-rgb, 0, 123, 255), 0.3);
 }
 
 .server-item.selected {
-    background: rgba(0, 164, 220, 0.2);
-    border-color: #00a4dc;
-    box-shadow: 0 0 0 3px rgba(0, 164, 220, 0.3);
+    background: rgba(var(--accent-color-rgb, 0, 123, 255), 0.2);
+    border-color: var(--accent-color, #007bff);
+    box-shadow: 0 0 0 3px rgba(var(--accent-color-rgb, 0, 123, 255), 0.3);
 }
 
 .server-item.empty {
@@ -387,15 +401,16 @@ body {
 
 .user-card:hover,
 .user-card:focus {
-    background: rgba(0, 164, 220, 0.2);
-    border-color: #00a4dc;
+    background: rgba(var(--accent-color-rgb, 0, 123, 255), 0.2);
+    border-color: var(--accent-color, #007bff);
     transform: scale(1.05);
+    outline: none;
 }
 
 .user-card.selected {
-    background: rgba(0, 164, 220, 0.3);
-    border-color: #00a4dc;
-    box-shadow: 0 0 20px rgba(0, 164, 220, 0.5);
+    background: rgba(var(--accent-color-rgb, 0, 123, 255), 0.3);
+    border-color: var(--accent-color, #007bff);
+    box-shadow: 0 0 20px rgba(var(--accent-color-rgb, 0, 123, 255), 0.5);
 }
 
 .user-avatar {

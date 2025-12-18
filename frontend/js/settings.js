@@ -35,6 +35,7 @@ var SettingsController = (function() {
         skipIntro: true,
         autoPlay: true,
         theme: 'dark',
+        accentColor: 'blue',
         carouselSpeed: DEFAULT_CAROUSEL_SPEED_MS,
         homeRows: null, // Will be initialized with defaults
         showShuffleButton: true,
@@ -95,6 +96,7 @@ var SettingsController = (function() {
         displayUserInfo();
         attachEventListeners();
         updateSettingValues();
+        applyAccentColor();
         
         focusToSidebar();
     }
@@ -174,6 +176,7 @@ var SettingsController = (function() {
             skipIntro: true,
             autoPlay: true,
             theme: 'dark',
+            accentColor: 'blue',
             carouselSpeed: DEFAULT_CAROUSEL_SPEED_MS,
             showShuffleButton: true,
             showGenresButton: true,
@@ -225,6 +228,9 @@ var SettingsController = (function() {
         if (typeof ImageHelper !== 'undefined') {
             syncImageHelperSettings();
         }
+        
+        // Apply accent color on load
+        applyAccentColor();
     }
 
     /**
@@ -233,6 +239,21 @@ var SettingsController = (function() {
      */
     function saveSettings() {
         storage.set('jellyfin_settings', JSON.stringify(settings));
+    }
+
+    /**
+     * Apply the selected accent color to the page
+     * @private
+     */
+    function applyAccentColor() {
+        var root = document.documentElement;
+        if (settings.accentColor === 'purple') {
+            root.style.setProperty('--accent-color', '#6d4aff');
+            root.style.setProperty('--accent-color-rgb', '109, 74, 255');
+        } else {
+            root.style.setProperty('--accent-color', '#007bff');
+            root.style.setProperty('--accent-color-rgb', '0, 123, 255');
+        }
     }
 
     /**
@@ -278,6 +299,11 @@ var SettingsController = (function() {
         var themeValue = document.getElementById('themeValue');
         if (themeValue) {
             themeValue.textContent = settings.theme === 'dark' ? 'Dark' : 'Light';
+        }
+        
+        var accentColorValue = document.getElementById('accentColorValue');
+        if (accentColorValue) {
+            accentColorValue.textContent = settings.accentColor === 'blue' ? 'Blue' : 'Purple';
         }
         
         var carouselSpeedValue = document.getElementById('carouselSpeedValue');
@@ -1004,6 +1030,13 @@ var SettingsController = (function() {
                 // Theme switching not implemented yet
                 break;
                 
+            case 'accentColor':
+                settings.accentColor = settings.accentColor === 'blue' ? 'purple' : 'blue';
+                saveSettings();
+                applyAccentColor();
+                updateSettingValues();
+                break;
+                
             case 'carouselSpeed':
                 // Cycle through speeds: 5s, 8s, 10s, 15s, 20s
                 var speeds = [5000, 8000, 10000, 15000, 20000];
@@ -1389,51 +1422,96 @@ var SettingsController = (function() {
      */
     function handleHomeRowsModalNavigation(evt) {
         var items = document.querySelectorAll('.home-row-item');
-        var buttons = document.querySelectorAll('.modal-actions button');
+        var buttons = document.querySelectorAll('#homeRowsModal .modal-actions button');
         var totalItems = items.length;
+        var activeElement = document.activeElement;
         
-        switch (evt.keyCode) {
-            case KeyCodes.UP:
-                evt.preventDefault();
-                if (homeRowsModal.focusedIndex > 0) {
-                    homeRowsModal.focusedIndex--;
+        // Check if a button is currently focused
+        var buttonFocused = false;
+        var currentButtonIndex = -1;
+        buttons.forEach(function(btn, index) {
+            if (btn === activeElement) {
+                buttonFocused = true;
+                currentButtonIndex = index;
+            }
+        });
+        
+        if (buttonFocused) {
+            // Handle navigation when a button is focused
+            switch (evt.keyCode) {
+                case KeyCodes.UP:
+                    evt.preventDefault();
+                    // Go back to the list (last item)
+                    homeRowsModal.focusedIndex = totalItems - 1;
                     updateHomeRowsFocus();
-                }
-                break;
-                
-            case KeyCodes.DOWN:
-                evt.preventDefault();
-                if (homeRowsModal.focusedIndex < totalItems - 1) {
-                    homeRowsModal.focusedIndex++;
-                    updateHomeRowsFocus();
-                } else if (homeRowsModal.focusedIndex === totalItems - 1) {
-                    // Move to buttons
-                    buttons[0].focus();
-                }
-                break;
-                
-            case KeyCodes.LEFT:
-                evt.preventDefault();
-                moveRowUp(homeRowsModal.focusedIndex);
-                break;
-                
-            case KeyCodes.RIGHT:
-                evt.preventDefault();
-                moveRowDown(homeRowsModal.focusedIndex);
-                break;
-                
-            case KeyCodes.ENTER:
-                evt.preventDefault();
-                var currentItem = items[homeRowsModal.focusedIndex];
-                if (currentItem) {
-                    currentItem.click();
-                }
-                break;
-                
-            case KeyCodes.BACK:
-                evt.preventDefault();
-                closeHomeRowsModal();
-                break;
+                    break;
+                    
+                case KeyCodes.LEFT:
+                    evt.preventDefault();
+                    // Move to previous button
+                    if (currentButtonIndex > 0) {
+                        buttons[currentButtonIndex - 1].focus();
+                    }
+                    break;
+                    
+                case KeyCodes.RIGHT:
+                    evt.preventDefault();
+                    // Move to next button
+                    if (currentButtonIndex < buttons.length - 1) {
+                        buttons[currentButtonIndex + 1].focus();
+                    }
+                    break;
+                    
+                case KeyCodes.BACK:
+                    evt.preventDefault();
+                    closeHomeRowsModal();
+                    break;
+            }
+        } else {
+            // Handle navigation when a list item is focused
+            switch (evt.keyCode) {
+                case KeyCodes.UP:
+                    evt.preventDefault();
+                    if (homeRowsModal.focusedIndex > 0) {
+                        homeRowsModal.focusedIndex--;
+                        updateHomeRowsFocus();
+                    }
+                    break;
+                    
+                case KeyCodes.DOWN:
+                    evt.preventDefault();
+                    if (homeRowsModal.focusedIndex < totalItems - 1) {
+                        homeRowsModal.focusedIndex++;
+                        updateHomeRowsFocus();
+                    } else if (homeRowsModal.focusedIndex === totalItems - 1) {
+                        // Move to first button (Reset to Default)
+                        buttons[0].focus();
+                    }
+                    break;
+                    
+                case KeyCodes.LEFT:
+                    evt.preventDefault();
+                    moveRowUp(homeRowsModal.focusedIndex);
+                    break;
+                    
+                case KeyCodes.RIGHT:
+                    evt.preventDefault();
+                    moveRowDown(homeRowsModal.focusedIndex);
+                    break;
+                    
+                case KeyCodes.ENTER:
+                    evt.preventDefault();
+                    var currentItem = items[homeRowsModal.focusedIndex];
+                    if (currentItem) {
+                        currentItem.click();
+                    }
+                    break;
+                    
+                case KeyCodes.BACK:
+                    evt.preventDefault();
+                    closeHomeRowsModal();
+                    break;
+            }
         }
     }
 

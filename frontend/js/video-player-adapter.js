@@ -459,7 +459,7 @@ class WebOSVideoAdapter extends VideoPlayerAdapter {
 
             // Create media object for hardware-accelerated playback
             const mediaOption = {
-                mediaTransportType: options.mimeType?.includes('application/x-mpegURL') 
+                mediaTransportType: options.mimeType && options.mimeType.includes('application/x-mpegURL') 
                     ? 'HLS' 
                     : 'BUFFERSTREAM'
             };

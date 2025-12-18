@@ -42,8 +42,8 @@ body {
 }
 
 .settings-category.focused {
-    background: rgba(109, 74, 255, 0.2);
-    border-left-color: #6d4aff;
+    background: rgba(var(--accent-color-rgb), 0.2);
+    border-left-color: var(--accent-color);
 }
 
 .category-icon {
@@ -107,8 +107,8 @@ body {
 }
 
 .setting-item.focused {
-    background: rgba(109, 74, 255, 0.2);
-    border-color: #6d4aff;
+    background: rgba(var(--accent-color-rgb), 0.2);
+    border-color: var(--accent-color);
     transform: scale(1.02);
 }
 
@@ -181,7 +181,7 @@ body {
 
 .slider-fill {
     height: 100%;
-    background: #6d4aff;
+    background: var(--accent-color);
     border-radius: 4px;
     transition: width 0.15s ease;
 }
@@ -189,15 +189,15 @@ body {
 .slider-value-display {
     font-size: 28px;
     font-weight: 700;
-    color: #6d4aff;
+    color: var(--accent-color);
     min-width: 50px;
     text-align: center;
 }
 
 .setting-item.slider-active {
-    background: rgba(109, 74, 255, 0.25);
-    border-color: #6d4aff;
-    box-shadow: 0 0 20px rgba(109, 74, 255, 0.3);
+    background: rgba(var(--accent-color-rgb), 0.25);
+    border-color: var(--accent-color);
+    box-shadow: 0 0 20px rgba(var(--accent-color-rgb), 0.3);
 }
 
 .setting-item.slider-active .slider-fill {
@@ -292,7 +292,7 @@ body {
 .home-rows-modal h2 {
     font-size: 32px;
     margin-bottom: 10px;
-    color: #6d4aff;
+    color: var(--accent-color);
 }
 
 .modal-description {
@@ -319,26 +319,26 @@ body {
 }
 
 .home-row-item.focused {
-    background: rgba(109, 74, 255, 0.2);
-    border-color: #6d4aff;
+    background: rgba(var(--accent-color-rgb), 0.2);
+    border-color: var(--accent-color);
     transform: scale(1.02);
 }
 
 .row-checkbox {
     width: 30px;
     height: 30px;
-    border: 2px solid #6d4aff;
+    border: 2px solid var(--accent-color);
     border-radius: 6px;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 20px;
-    color: #6d4aff;
+    color: var(--accent-color);
     flex-shrink: 0;
 }
 
 .row-checkbox.checked {
-    background: #6d4aff;
+    background: var(--accent-color);
     color: #fff;
 }
 
@@ -366,7 +366,7 @@ body {
 }
 
 .row-btn:hover:not(:disabled) {
-    background: #6d4aff;
+    background: var(--accent-color);
     transform: scale(1.1);
 }
 
@@ -392,27 +392,15 @@ body {
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.2s ease;
-}
-
-.btn-primary {
-    background: #6d4aff;
-    color: #fff;
-}
-
-.btn-primary:hover,
-.btn-primary:focus {
-    background: #5a3ad6;
-    transform: scale(1.05);
-}
-
-.btn-secondary {
     background: rgba(255, 255, 255, 0.1);
     color: #fff;
 }
 
+.btn-primary:hover,
+.btn-primary:focus,
 .btn-secondary:hover,
 .btn-secondary:focus {
-    background: rgba(255, 255, 255, 0.2);
+    background: var(--accent-color);
     transform: scale(1.05);
 }
 

@@ -528,11 +528,11 @@ body {
 }
 
 .library-tile {
-    width: 280px;
+    width: 400px;
 }
 
 .library-tile .item-image {
-    height: 280px;
+    height: 225px;
     border-radius: 12px;
 }
 

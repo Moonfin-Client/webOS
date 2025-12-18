@@ -681,8 +681,8 @@ var PlayerController = (function() {
         currentMediaSource = mediaSource;
         
         // Populate audio/subtitle streams early so preferences can be applied
-        audioStreams = mediaSource.MediaStreams?.filter(function(s) { return s.Type === 'Audio'; }) || [];
-        subtitleStreams = mediaSource.MediaStreams?.filter(function(s) { return s.Type === 'Subtitle'; }) || [];
+        audioStreams = mediaSource.MediaStreams ? mediaSource.MediaStreams.filter(function(s) { return s.Type === 'Audio'; }) : [];
+        subtitleStreams = mediaSource.MediaStreams ? mediaSource.MediaStreams.filter(function(s) { return s.Type === 'Subtitle'; }) : [];
         
         var isLiveTV = itemData && itemData.Type === 'TvChannel';
         var streamUrl;
@@ -695,8 +695,8 @@ var PlayerController = (function() {
             PlaySessionId: playSessionId
         });
         
-        var videoStream = mediaSource.MediaStreams?.find(function(s) { return s.Type === 'Video'; });
-        var audioStream = mediaSource.MediaStreams?.find(function(s) { return s.Type === 'Audio'; });
+        var videoStream = mediaSource.MediaStreams ? mediaSource.MediaStreams.find(function(s) { return s.Type === 'Video'; }) : null;
+        var audioStream = mediaSource.MediaStreams ? mediaSource.MediaStreams.find(function(s) { return s.Type === 'Audio'; }) : null;
         
         var safeVideoCodecs = ['h264', 'avc'];
         var safeAudioCodecs = ['aac', 'mp3'];
@@ -728,8 +728,8 @@ var PlayerController = (function() {
         } else if (mediaSource.SupportsDirectPlay && 
             mediaSource.Container && 
             safeContainers.indexOf(mediaSource.Container.toLowerCase()) !== -1 &&
-            videoStream && safeVideoCodecs.indexOf(videoStream.Codec?.toLowerCase()) !== -1 &&
-            audioStream && safeAudioCodecs.indexOf(audioStream.Codec?.toLowerCase()) !== -1) {
+            videoStream && videoStream.Codec && safeVideoCodecs.indexOf(videoStream.Codec.toLowerCase()) !== -1 &&
+            audioStream && audioStream.Codec && safeAudioCodecs.indexOf(audioStream.Codec.toLowerCase()) !== -1) {
             
             streamUrl = auth.serverAddress + '/Videos/' + itemId + '/stream';
             params.append('Static', 'true');

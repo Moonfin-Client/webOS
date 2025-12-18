@@ -8,6 +8,7 @@
     <script src="webOSTVjs-1.2.11/webOSTV.js" charset="utf-8"></script>
     <script src="webOSTVjs-1.2.11/webOSTV-dev.js" charset="utf-8"></script>
     <script src="js/storage.js" charset="utf-8"></script>
+    <script src="js/accent-color.js" charset="utf-8"></script>
     <script src="js/ajax.js" charset="utf-8"></script>
     <script src="js/keycodes.js" charset="utf-8"></script>
     <script src="js/jellyfin-api.js" charset="utf-8"></script>
@@ -58,8 +59,7 @@
                     </div>
                 </div>
                 <div class="button-group" style="justify-content: center; margin-top: 20px;">
-                    <button id="addAccountBtn" class="btn btn-primary" tabindex="0">Add Account</button>
-                    <button id="manualLoginBtn" class="btn btn-secondary" tabindex="0">Manual Login</button>
+                    <button id="showManualLoginBtn" class="btn btn-secondary" tabindex="0">Manual Login</button>
                     <button id="backToServerBtn" class="btn btn-secondary" tabindex="0">Back to Server Selection</button>
                 </div>
             </div>
@@ -110,35 +110,6 @@
                     <div class="button-group">
                         <button id="cancelManualQuickConnectBtn" class="btn btn-secondary" tabindex="0">Back</button>
                     </div>
-                </div>
-            </div>
-
-            <!-- Manual Login Form (for hidden users) -->
-            <div class="section" id="manualLoginForm" style="display: none;">
-                <h2>Manual Login</h2>
-                <div class="form-group">
-                    <label for="manualUsername">Username</label>
-                    <input 
-                        type="text" 
-                        id="manualUsername" 
-                        placeholder="Enter your username"
-                        tabindex="0"
-                        class="input-field"
-                    >
-                </div>
-                <div class="form-group">
-                    <label for="manualPassword">Password</label>
-                    <input 
-                        type="password" 
-                        id="manualPassword" 
-                        placeholder="Enter your password (or leave blank if none)"
-                        tabindex="0"
-                        class="input-field"
-                    >
-                </div>
-                <div class="button-group">
-                    <button id="manualLoginSubmitBtn" class="btn btn-primary" tabindex="0">Login</button>
-                    <button id="cancelManualLoginBtn" class="btn btn-secondary" tabindex="0">Back</button>
                 </div>
             </div>
 
@@ -198,6 +169,25 @@
     </div>
 
     <script>
+        // Handle input focus to scroll into view when keyboard appears
+        document.addEventListener('DOMContentLoaded', function() {
+            var inputs = document.querySelectorAll('.input-field');
+            
+            inputs.forEach(function(input) {
+                input.addEventListener('focus', function() {
+                    var self = this;
+                    // Delay to allow keyboard to appear
+                    setTimeout(function() {
+                        // Scroll the input into view
+                        self.scrollIntoView({ 
+                            behavior: 'smooth', 
+                            block: 'center' 
+                        });
+                    }, 300);
+                });
+            });
+        });
+
         // webOS specific keyboard handling
         document.addEventListener('keydown', function(evt) {
             evt = evt || window.event;
@@ -229,9 +219,9 @@
                     return;
                 } else if (evt.keyCode === 40) { // Down arrow - go to buttons
                     evt.preventDefault();
-                    var addAccountBtn = document.getElementById('addAccountBtn');
-                    if (addAccountBtn && addAccountBtn.offsetParent !== null) {
-                        addAccountBtn.focus();
+                    var manualLoginBtn = document.getElementById('showManualLoginBtn');
+                    if (manualLoginBtn && manualLoginBtn.offsetParent !== null) {
+                        manualLoginBtn.focus();
                     } else {
                         var backBtn = document.getElementById('backToServerBtn');
                         if (backBtn && backBtn.offsetParent !== null) {
@@ -242,10 +232,9 @@
                 }
             }
             
-            // Handle bottom buttons navigation (Add Account, Manual Login, and Back to Server)
+            // Handle bottom buttons navigation (Manual Login and Back to Server)
             var bottomButtons = [
-                document.getElementById('addAccountBtn'),
-                document.getElementById('manualLoginBtn'),
+                document.getElementById('showManualLoginBtn'),
                 document.getElementById('backToServerBtn')
             ].filter(function(btn) { return btn && btn.offsetParent !== null; });
             
@@ -347,10 +336,13 @@
                     evt.preventDefault();
                     var useManualPasswordBtn = document.getElementById('useManualPasswordBtn');
                     var useManualQuickConnectBtn = document.getElementById('useManualQuickConnectBtn');
+                    var showManualLoginBtn = document.getElementById('showManualLoginBtn');
                     if (useManualQuickConnectBtn && useManualQuickConnectBtn.offsetParent !== null) {
                         useManualQuickConnectBtn.focus();
                     } else if (useManualPasswordBtn && useManualPasswordBtn.offsetParent !== null) {
                         useManualPasswordBtn.focus();
+                    } else if (showManualLoginBtn && showManualLoginBtn.offsetParent !== null) {
+                        showManualLoginBtn.focus();
                     }
                     return;
                 }
@@ -419,11 +411,47 @@
                 }
             }
             
+            // Handle server URL input field
+            if (activeElement && activeElement.id === 'serverUrl') {
+                if (evt.keyCode === 40) { // Down arrow - go to Connect button
+                    evt.preventDefault();
+                    var connectBtn = document.getElementById('connectBtn');
+                    if (connectBtn && connectBtn.offsetParent !== null) {
+                        connectBtn.focus();
+                    }
+                    return;
+                }
+            }
+            
             // Handle server connection buttons (horizontal)
             var serverButtons = [
                 document.getElementById('connectBtn'),
                 document.getElementById('discoverBtn')
             ].filter(function(btn) { return btn && btn.offsetParent !== null; });
+            
+            var serverButtonIndex = serverButtons.indexOf(activeElement);
+            if (serverButtonIndex !== -1) {
+                if (evt.keyCode === 37) { // Left arrow
+                    evt.preventDefault();
+                    if (serverButtonIndex > 0) {
+                        serverButtons[serverButtonIndex - 1].focus();
+                    }
+                    return;
+                } else if (evt.keyCode === 39) { // Right arrow
+                    evt.preventDefault();
+                    if (serverButtonIndex < serverButtons.length - 1) {
+                        serverButtons[serverButtonIndex + 1].focus();
+                    }
+                    return;
+                } else if (evt.keyCode === 38) { // Up arrow - go back to input
+                    evt.preventDefault();
+                    var serverUrl = document.getElementById('serverUrl');
+                    if (serverUrl && serverUrl.offsetParent !== null) {
+                        serverUrl.focus();
+                    }
+                    return;
+                }
+            }
             
             // Handle password form buttons (horizontal)
             var passwordButtons = [
@@ -465,29 +493,6 @@
                         useQuickConnectBtn.focus();
                     } else if (usePasswordBtn && usePasswordBtn.offsetParent !== null) {
                         usePasswordBtn.focus();
-                    }
-                    return;
-                }
-            }
-            
-            // Handle manual login form buttons (horizontal)
-            var manualLoginButtons = [
-                document.getElementById('manualLoginSubmitBtn'),
-                document.getElementById('cancelManualLoginBtn')
-            ].filter(function(btn) { return btn && btn.offsetParent !== null; });
-            
-            var manualLoginButtonIndex = manualLoginButtons.indexOf(activeElement);
-            if (manualLoginButtonIndex !== -1) {
-                if (evt.keyCode === 37) { // Left arrow
-                    evt.preventDefault();
-                    if (manualLoginButtonIndex > 0) {
-                        manualLoginButtons[manualLoginButtonIndex - 1].focus();
-                    }
-                    return;
-                } else if (evt.keyCode === 39) { // Right arrow
-                    evt.preventDefault();
-                    if (manualLoginButtonIndex < manualLoginButtons.length - 1) {
-                        manualLoginButtons[manualLoginButtonIndex + 1].focus();
                     }
                     return;
                 }

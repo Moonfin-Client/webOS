@@ -233,8 +233,7 @@ var JellyfinAPI = (function() {
     }
 
     function testServer(address, callback) {
-        address = normalizeServerAddress(address);
-        
+        // Don't normalize - accept the address as-is with protocol and port
         if (!address) {
             Logger.error('Invalid server address');
             if (callback) callback({ error: 'Invalid address' }, null);
