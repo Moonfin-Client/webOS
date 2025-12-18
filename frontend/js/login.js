@@ -1071,10 +1071,6 @@ var LoginController = (function() {
             }
             
             if (!authData || !authData.accessToken) {
-                    hasAuthData: !!authData,
-                    hasUsername: !!(authData && authData.username),
-                    hasAccessToken: !!(authData && authData.accessToken)
-                });
                 showError('Login failed! Invalid response from server.');
                 return;
             }

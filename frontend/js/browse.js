@@ -1590,13 +1590,17 @@ var BrowseController = (function() {
             userId: auth.userId,
             limit: 10,
             includeItemTypes: includeItemTypes,
-            filters: 'IsNotFolder',
             sortBy: 'Random',
             fields: 'Overview,ProductionYear,OfficialRating,RunTimeTicks,Genres',
             imageTypeLimit: 1,
             enableImageTypes: 'Backdrop,Primary,Logo',
             recursive: true
         };
+        
+        // Only apply IsNotFolder filter for movies since Series are folders (they contain episodes)
+        if (featuredMediaFilter !== 'tv') {
+            params.filters = 'IsNotFolder';
+        }
         
         console.log('[browse] Featured media - API params:', params);
         
