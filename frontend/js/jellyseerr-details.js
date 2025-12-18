@@ -60,6 +60,26 @@ var JellyseerrDetailsController = (function() {
         if (typeof NavbarController !== 'undefined') {
             NavbarController.init('discover');
         }
+        
+        // Add DOWN key handler to navbar buttons for returning to details
+        setTimeout(function() {
+            var navButtons = document.querySelectorAll('.nav-btn');
+            navButtons.forEach(function(btn) {
+                btn.addEventListener('keydown', function(e) {
+                    if (e.keyCode === KeyCodes.DOWN) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        // Return focus to buttons section
+                        focusManager.currentSection = 'buttons';
+                        focusManager.currentIndex = 0;
+                        var buttons = getActionButtons();
+                        if (buttons.length > 0) {
+                            buttons[0].focus();
+                        }
+                    }
+                });
+            });
+        }, 500);
     }
     
     /**
@@ -894,6 +914,14 @@ var JellyseerrDetailsController = (function() {
         if (buttons.length === 0) return;
         
         switch (evt.keyCode) {
+            case KeyCodes.UP:
+                evt.preventDefault();
+                // Navigate to navbar
+                if (typeof NavbarController !== 'undefined' && NavbarController.focusNavbar) {
+                    NavbarController.focusNavbar();
+                }
+                break;
+                
             case KeyCodes.LEFT:
                 evt.preventDefault();
                 if (focusManager.currentIndex > 0) {

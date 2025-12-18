@@ -1725,6 +1725,40 @@ var JellyseerrAPI = (function() {
         },
 
         /**
+         * Handle session expiration with automatic re-initialization and retry
+         * Centralizes session expiration logic to avoid code duplication
+         * 
+         * @param {Function} retryCallback - Function to call after successful re-initialization
+         * @param {string} contextName - Name of calling context for logging (e.g., 'BrowseBy', 'Discover')
+         * @returns {Promise<*>} Result of retry callback
+         */
+        handleSessionExpiration: function(retryCallback, contextName) {
+            var self = this;
+            contextName = contextName || 'API';
+            
+            Logger.info('[' + contextName + '] Session expired, attempting re-initialization...');
+            
+            return this.initializeFromPreferences()
+                .then(function(success) {
+                    if (success) {
+                        Logger.success('[' + contextName + '] Re-initialized from preferences, retrying operation');
+                        return retryCallback();
+                    }
+                    
+                    // If initializeFromPreferences failed, try auto-login
+                    Logger.info('[' + contextName + '] Attempting auto-login...');
+                    return self.attemptAutoLogin()
+                        .then(function(loginSuccess) {
+                            if (loginSuccess) {
+                                Logger.success('[' + contextName + '] Auto-login successful, retrying operation');
+                                return retryCallback();
+                            }
+                            throw new Error('Session re-initialization failed');
+                        });
+                });
+        },
+
+        /**
          * Auto-login with stored credentials
          * Attempts to restore session from cookies or re-authenticate
          * 
@@ -2059,6 +2093,110 @@ var JellyseerrAPI = (function() {
         },
 
         // ==================== Discovery Endpoints ====================
+
+        /**
+         * Get genre slider for movies
+         * @returns {Promise<Array>} Array of genres with backdrop images
+         */
+        getGenreSliderMovies: function() {
+            return makeRequest('/discover/genreslider/movie', { method: 'GET' })
+                .then(function(response) {
+                    Logger.info('Retrieved movie genre slider');
+                    return response;
+                });
+        },
+
+        /**
+         * Get genre slider for TV shows
+         * @returns {Promise<Array>} Array of genres with backdrop images
+         */
+        getGenreSliderTv: function() {
+            return makeRequest('/discover/genreslider/tv', { method: 'GET' })
+                .then(function(response) {
+                    Logger.info('Retrieved TV genre slider');
+                    return response;
+                });
+        },
+
+        /**
+         * Discover movies with filters
+         * 
+         * @param {Object} options - Query options
+         * @param {number} options.page - Page number (default: 1)
+         * @param {string} options.sortBy - Sort method (default: 'popularity.desc')
+         * @param {string} options.genre - Genre ID to filter by
+         * @param {string} options.studio - Studio ID to filter by
+         * @param {string} options.language - Language code (default: 'en')
+         * @returns {Promise<Object>} Paginated movie results
+         */
+        discoverMovies: function(options) {
+            options = options || {};
+            var page = options.page || 1;
+            var sortBy = options.sortBy || 'popularity.desc';
+            var language = options.language || 'en';
+            
+            var endpoint = '/discover/movies?page=' + page + '&sortBy=' + sortBy + '&language=' + language;
+            
+            if (options.genre) {
+                endpoint += '&genre=' + options.genre;
+            }
+            if (options.studio) {
+                endpoint += '&studio=' + options.studio;
+            }
+            
+            return makeRequest(endpoint, { method: 'GET' })
+                .then(function(response) {
+                    Logger.info('Discovered movies with filters:', options);
+                    return {
+                        page: response.page || page,
+                        totalPages: response.totalPages || 1,
+                        totalResults: response.totalResults || 0,
+                        results: (response.results || []).map(function(item) {
+                            return JellyseerrModels.createDiscoverItem(item);
+                        })
+                    };
+                });
+        },
+
+        /**
+         * Discover TV shows with filters
+         * 
+         * @param {Object} options - Query options
+         * @param {number} options.page - Page number (default: 1)
+         * @param {string} options.sortBy - Sort method (default: 'popularity.desc')
+         * @param {string} options.genre - Genre ID to filter by
+         * @param {string} options.network - Network ID to filter by
+         * @param {string} options.language - Language code (default: 'en')
+         * @returns {Promise<Object>} Paginated TV show results
+         */
+        discoverTv: function(options) {
+            options = options || {};
+            var page = options.page || 1;
+            var sortBy = options.sortBy || 'popularity.desc';
+            var language = options.language || 'en';
+            
+            var endpoint = '/discover/tv?page=' + page + '&sortBy=' + sortBy + '&language=' + language;
+            
+            if (options.genre) {
+                endpoint += '&genre=' + options.genre;
+            }
+            if (options.network) {
+                endpoint += '&network=' + options.network;
+            }
+            
+            return makeRequest(endpoint, { method: 'GET' })
+                .then(function(response) {
+                    Logger.info('Discovered TV shows with filters:', options);
+                    return {
+                        page: response.page || page,
+                        totalPages: response.totalPages || 1,
+                        totalResults: response.totalResults || 0,
+                        results: (response.results || []).map(function(item) {
+                            return JellyseerrModels.createDiscoverItem(item);
+                        })
+                    };
+                });
+        },
 
         /**
          * Get trending content (movies and TV shows)
