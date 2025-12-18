@@ -136,7 +136,7 @@ var BrowseByController = (function() {
      */
     function parseUrlParams() {
         var params = new URLSearchParams(window.location.search);
-        browseType = params.get('type'); // 'genre', 'network', or 'keyword'
+        browseType = params.get('type'); // 'genre', 'network', 'studio', or 'keyword'
         browseId = params.get('id');
         browseName = params.get('name');
         mediaType = params.get('mediaType') || 'movie';
@@ -147,15 +147,15 @@ var BrowseByController = (function() {
         if (browseType === 'genre') {
             elements.headerTitle.textContent = browseName || 'Genre';
             elements.headerImage.style.display = 'none';
-        } else if (browseType === 'network') {
+        } else if (browseType === 'network' || browseType === 'studio') {
             elements.headerTitle.style.display = 'none';
             elements.headerImage.style.display = 'block';
-            // Network logos use TMDB filter
+            // Network/Studio logos use TMDB filter
             var logoPath = params.get('logo');
             if (logoPath) {
                 elements.headerLogo.src = 'https://image.tmdb.org/t/p/w780_filter(duotone,ffffff,bababa)/' + logoPath;
             }
-            elements.headerLogo.alt = browseName || 'Network';
+            elements.headerLogo.alt = browseName || (browseType === 'studio' ? 'Studio' : 'Network');
         } else if (browseType === 'keyword') {
             elements.headerTitle.textContent = browseName || 'Keyword';
             elements.headerImage.style.display = 'none';
@@ -287,6 +287,8 @@ var BrowseByController = (function() {
             discoverOptions.genre = browseId;
         } else if (browseType === 'network') {
             discoverOptions.network = browseId;
+        } else if (browseType === 'studio') {
+            discoverOptions.studio = browseId;
         }
         
         var apiMethod = mediaType === 'movie' 

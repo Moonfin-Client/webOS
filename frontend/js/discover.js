@@ -30,9 +30,10 @@ var DiscoverController = (function() {
         { id: 'popularTv', title: 'Popular TV Shows', apiMethod: 'getTrendingTv', type: 'tv' },
         { id: 'genreMovies', title: 'Browse Movies by Genre', apiMethod: 'getGenreSliderMovies', type: 'genreSlider', mediaType: 'movie' },
         { id: 'genreTv', title: 'Browse TV Shows by Genre', apiMethod: 'getGenreSliderTv', type: 'genreSlider', mediaType: 'tv' },
+        { id: 'studios', title: 'Browse by Studio', apiMethod: 'getStudios', type: 'studios' },
+        { id: 'networks', title: 'Browse by Network', apiMethod: 'getNetworks', type: 'networks' },
         { id: 'upcomingMovies', title: 'Upcoming Movies', apiMethod: 'getUpcomingMovies', type: 'movie' },
         { id: 'upcomingTv', title: 'Upcoming TV Shows', apiMethod: 'getUpcomingTv', type: 'tv' },
-        { id: 'networks', title: 'Browse by Network', apiMethod: 'getNetworks', type: 'networks' },
         { id: 'requests', title: 'My Requests', apiMethod: 'getRequests', type: 'requests' }
     ];
     
@@ -65,6 +66,21 @@ var DiscoverController = (function() {
         { id: 80, name: 'Adult Swim', logo: '9AKyspxVzywuaMuZ1Bvilu8sXly.png' },
         { id: 13, name: 'Nickelodeon', logo: 'ikZXxg6GnwpzqiZbRPhJGaZapqB.png' },
         { id: 3353, name: 'Peacock', logo: 'gIAcGTjKKr0KOHL5s4O36roJ8p7.png' }
+    ];
+    
+    // Popular movie studios (hardcoded)
+    var movieStudios = [
+        { id: 2, name: 'Disney', logo: 'wdrCwmRnLFJhEoH8GSfymY85KHT.png' },
+        { id: 127928, name: '20th Century Studios', logo: 'h0rjX5vjW5r8yEnUBStFarjcLT4.png' },
+        { id: 34, name: 'Sony Pictures', logo: 'GagSvqWlyPdkFHMfQ3pNq6ix9P.png' },
+        { id: 174, name: 'Warner Bros. Pictures', logo: 'ky0xOc5OrhzkZ1N6KyUxacfQsCk.png' },
+        { id: 33, name: 'Universal', logo: '8lvHyhjr8oUKOOy2dKXoALWKdp0.png' },
+        { id: 4, name: 'Paramount', logo: 'fycMZt242LVjagMByZOLUGbCvv3.png' },
+        { id: 3, name: 'Pixar', logo: '1TjvGVDMYsj6JBxOAkUHpPEwLf7.png' },
+        { id: 521, name: 'Dreamworks', logo: 'kP7t6RwGz2AvvTkvnI1uteEwHet.png' },
+        { id: 420, name: 'Marvel Studios', logo: 'hUzeosd33nzE5MCNsZxCGEKTXaQ.png' },
+        { id: 9993, name: 'DC', logo: '2Tc1P3Ac8M479naPp1kYT3izLS5.png' },
+        { id: 41077, name: 'A24', logo: '1ZXsGaFPgrgS6ZZGS37AqD5uU12.png' }
     ];
     
     // Track rows currently loading more content
@@ -162,6 +178,13 @@ var DiscoverController = (function() {
         if (!JellyseerrAPI.getNetworks) {
             JellyseerrAPI.getNetworks = function() {
                 return Promise.resolve(streamingNetworks);
+            };
+        }
+        
+        // Stub getStudios method
+        if (!JellyseerrAPI.getStudios) {
+            JellyseerrAPI.getStudios = function() {
+                return Promise.resolve(movieStudios);
             };
         }
     }
@@ -365,6 +388,15 @@ var DiscoverController = (function() {
                 console.log('[Discover] Loading networks row');
                 rowData[config.id] = streamingNetworks;
                 renderNetworksRow(config.id, streamingNetworks);
+                resolve();
+                return;
+            }
+            
+            // Handle studios row (no API, use hardcoded data)
+            if (config.type === 'studios') {
+                console.log('[Discover] Loading studios row');
+                rowData[config.id] = movieStudios;
+                renderStudiosRow(config.id, movieStudios);
                 resolve();
                 return;
             }
@@ -717,6 +749,55 @@ var DiscoverController = (function() {
     }
     
     /**
+     * Render studios row
+     */
+    function renderStudiosRow(rowId, studios) {
+        var container = elements[rowId + 'Items'];
+        if (!container) return;
+        
+        container.innerHTML = '';
+        
+        if (!studios || studios.length === 0) {
+            hideRow(rowId);
+            return;
+        }
+        
+        studios.forEach(function(studio, index) {
+            var card = document.createElement('div');
+            card.className = 'content-card network-card';
+            card.setAttribute('tabindex', '0');
+            card.setAttribute('data-studio-id', studio.id);
+            card.setAttribute('data-studio-name', studio.name);
+            card.setAttribute('data-row-id', rowId);
+            card.setAttribute('data-index', index);
+            
+            var logoUrl = 'https://image.tmdb.org/t/p/w780_filter(duotone,ffffff,bababa)/' + studio.logo;
+            
+            var logoContainer = document.createElement('div');
+            logoContainer.className = 'network-logo-container';
+            
+            var logo = document.createElement('img');
+            logo.className = 'network-logo';
+            logo.src = logoUrl;
+            logo.alt = studio.name;
+            
+            logoContainer.appendChild(logo);
+            card.appendChild(logoContainer);
+            
+            var gradient = document.createElement('div');
+            gradient.className = 'network-gradient';
+            card.appendChild(gradient);
+            
+            // Add click handler to navigate to studio filter
+            card.addEventListener('click', function() {
+                navigateToStudio(studio.id, studio.name);
+            });
+            
+            container.appendChild(card);
+        });
+    }
+    
+    /**
      * Navigate to network-filtered discover page
      */
     function navigateToNetwork(networkId, networkName) {
@@ -725,6 +806,17 @@ var DiscoverController = (function() {
         var network = streamingNetworks.find(function(n) { return n.id === networkId; });
         var logo = network ? network.logo : '';
         window.location.href = 'browse-by.html?type=network&id=' + networkId + '&name=' + encodeURIComponent(networkName) + '&mediaType=tv&logo=' + encodeURIComponent(logo);
+    }
+    
+    /**
+     * Navigate to studio-filtered discover page
+     */
+    function navigateToStudio(studioId, studioName) {
+        console.log('[Discover] Navigate to studio:', studioName, 'ID:', studioId);
+        // Find the logo for this studio
+        var studio = movieStudios.find(function(s) { return s.id === studioId; });
+        var logo = studio ? studio.logo : '';
+        window.location.href = 'browse-by.html?type=studio&id=' + studioId + '&name=' + encodeURIComponent(studioName) + '&mediaType=movie&logo=' + encodeURIComponent(logo);
     }
     
     /**
@@ -906,6 +998,16 @@ var DiscoverController = (function() {
         }
         
         backdropUpdateTimer = setTimeout(function() {
+            // Check if current row is networks or studios - don't show backdrop
+            var currentRow = focusManager.rows[focusManager.currentRowIndex];
+            if (currentRow && (currentRow.id === 'networks' || currentRow.id === 'studios')) {
+                if (elements.globalBackdropImage) {
+                    elements.globalBackdropImage.style.opacity = '0';
+                    elements.globalBackdropImage.style.display = 'none';
+                }
+                return;
+            }
+            
             if (!item.backdropPath) return;
             
             var backdropUrl = ImageHelper.getTMDBImageUrl(item.backdropPath, 'original');
@@ -1180,6 +1282,22 @@ var DiscoverController = (function() {
         }
         
         var data = card.dataset;
+        var rowId = data.rowId;
+        
+        // Hide detail section for genre slider, networks, and studios rows
+        if (rowId === 'genreMovies' || rowId === 'genreTv' || rowId === 'networks' || rowId === 'studios') {
+            elements.detailSection.style.display = 'none';
+            if (elements.rowsContainer) {
+                elements.rowsContainer.classList.remove('with-detail');
+            }
+            
+            // Hide backdrop for networks and studios
+            if ((rowId === 'networks' || rowId === 'studios') && elements.globalBackdropImage) {
+                elements.globalBackdropImage.style.opacity = '0';
+                elements.globalBackdropImage.style.display = 'none';
+            }
+            return;
+        }
         
         // Show detail section and add padding to rows container
         elements.detailSection.style.display = 'block';
@@ -1191,6 +1309,7 @@ var DiscoverController = (function() {
         if (elements.globalBackdropImage && data.backdropUrl) {
             elements.globalBackdropImage.src = data.backdropUrl;
             elements.globalBackdropImage.style.display = 'block';
+            elements.globalBackdropImage.style.opacity = '1';
         }
         
         // Update title

@@ -2428,13 +2428,17 @@ var JellyseerrAPI = (function() {
             var language = options.language || 'en';
             var encodedQuery = encodeURIComponent(query.trim());
             
+            console.log('[JellyseerrAPI] Search query:', query);
+            console.log('[JellyseerrAPI] Encoded query:', encodedQuery);
+            
             var endpoint = '/search?query=' + encodedQuery + '&page=' + page + '&language=' + language;
             
             // Add media type filter if specified
             if (options.mediaType === 'movie' || options.mediaType === 'tv') {
-                url += '&mediaType=' + options.mediaType;
+                endpoint += '&mediaType=' + options.mediaType;
             }
             
+            var self = this;
             return makeRequest(endpoint, { method: 'GET' })
                 .then(function(response) {
                     Logger.info('Search completed for:', query, 'page:', page);
@@ -2446,6 +2450,16 @@ var JellyseerrAPI = (function() {
                             return JellyseerrModels.createDiscoverItem(item);
                         })
                     };
+                })
+                .catch(function(error) {
+                    // Handle session expiration
+                    if (error.message && error.message.includes('Session expired')) {
+                        Logger.info('Search session expired, attempting recovery...');
+                        return self.handleSessionExpiration(function() {
+                            return self.search(query, options);
+                        }, 'Search');
+                    }
+                    throw error;
                 });
         },
 

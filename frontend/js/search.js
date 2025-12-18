@@ -197,6 +197,8 @@ var SearchController = (function() {
     function handleSearchInput(evt) {
         const query = evt.target.value.trim();
         
+        console.log('[Search] Input value:', evt.target.value);
+        console.log('[Search] Query after trim:', query);
         
         // Show/hide clear button
         if (elements.clearBtn) {
@@ -356,11 +358,16 @@ var SearchController = (function() {
                 // Also search Jellyseerr if enabled and authenticated
                 if (jellyseerrEnabled) {
                     console.log('Jellyseerr enabled, starting search...');
+                    console.log('[Search] Sending to Jellyseerr API:', query);
                     JellyseerrAPI.search(query).then(function(jellyseerrResponse) {
                         console.log('Jellyseerr search results:', jellyseerrResponse);
+                        // Filter out people/actors from results
+                        var filteredResults = (jellyseerrResponse.results || []).filter(function(item) {
+                            return item.mediaType !== 'person';
+                        });
                         // Add Jellyseerr results to current results
-                        currentResults.jellyseerr = jellyseerrResponse.results || [];
-                        console.log('Added', currentResults.jellyseerr.length, 'Jellyseerr results');
+                        currentResults.jellyseerr = filteredResults;
+                        console.log('Added', currentResults.jellyseerr.length, 'Jellyseerr results (actors excluded)');
                         // Re-display to show Jellyseerr row
                         displayResults();
                     }).catch(function(error) {
