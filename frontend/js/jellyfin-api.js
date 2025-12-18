@@ -3,9 +3,15 @@
  * Handles server discovery, authentication, and API calls
  */
 
+/**
+ * Jellyfin API Client for webOS
+ * Provides methods for server discovery, authentication, and media API calls
+ * @module JellyfinAPI
+ */
 var JellyfinAPI = (function() {
     'use strict';
 
+    /** @enum {number} Log level constants */
     const LOG_LEVELS = {
         ERROR: 0,
         WARN: 1,
@@ -15,6 +21,7 @@ var JellyfinAPI = (function() {
     
     let currentLogLevel = LOG_LEVELS.ERROR;
 
+    /** @type {Object} Internal logger for API operations */
     const Logger = {
         setLevel: function(level) {
             currentLogLevel = level;
@@ -512,6 +519,32 @@ var JellyfinAPI = (function() {
         });
     }
 
+    /**
+     * Get a single item with user data
+     * @param {string} serverAddress - Jellyfin server URL
+     * @param {string} userId - User ID
+     * @param {string} accessToken - Access token
+     * @param {string} itemId - Item ID to retrieve
+     * @param {Function} callback - Callback(error, item)
+     */
+    function getItem(serverAddress, userId, accessToken, itemId, callback) {
+        var endpoint = '/Users/' + userId + '/Items/' + itemId;
+        
+        ajax.request(serverAddress + endpoint, {
+            method: 'GET',
+            headers: {
+                'X-Emby-Authorization': getAuthHeader(accessToken)
+            },
+            success: function(response) {
+                if (callback) callback(null, response);
+            },
+            error: function(err) {
+                Logger.error('Failed to get item:', itemId, err);
+                if (callback) callback(err, null);
+            }
+        });
+    }
+
     function getPublicUsers(serverAddress, callback) {
         var endpoint = serverAddress + '/Users/Public';
         
@@ -866,13 +899,21 @@ var JellyfinAPI = (function() {
     }
 
     /**
-     * Get Live TV recordings
+     * Get Live TV recordings for the authenticated user
+     * Convenience wrapper that uses stored authentication
+     * @param {Function} callback - Callback(error, recordings)
      */
-    function getLiveTVRecordings(serverAddress, userId, accessToken, callback) {
-        Logger.info('Fetching Live TV recordings for userId:', userId);
+    function getLiveTVRecordings(callback) {
+        const auth = getStoredAuth();
+        if (!auth) {
+            if (callback) callback('Not authenticated', null);
+            return;
+        }
+
+        Logger.info('Fetching Live TV recordings for userId:', auth.userId);
         
         var params = {
-            UserId: userId,
+            UserId: auth.userId,
             Limit: 50,
             Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,Overview',
             ImageTypeLimit: 1,
@@ -883,7 +924,7 @@ var JellyfinAPI = (function() {
         
         var endpoint = '/LiveTv/Recordings';
         
-        getItems(serverAddress, accessToken, endpoint, params, function(err, response) {
+        getItems(auth.serverAddress, auth.accessToken, endpoint, params, function(err, response) {
             if (err) {
                 Logger.error('Failed to get Live TV recordings:', err);
                 if (callback) callback(err, null);
@@ -892,6 +933,140 @@ var JellyfinAPI = (function() {
             
             Logger.success('Live TV recordings retrieved:', response.Items ? response.Items.length : 0);
             if (callback) callback(null, response);
+        });
+    }
+
+    /**
+     * Get Live TV channels
+     * @param {string} [userId] - User ID (uses stored auth if not provided)
+     * @param {number} [startIndex=0] - Start index for pagination
+     * @param {number} [limit=100] - Maximum number of channels to return
+     * @param {boolean} [isFavorite=false] - If true, only return favorite channels
+     * @param {Function} callback - Callback(error, channels)
+     */
+    function getChannels(userId, startIndex, limit, isFavorite, callback) {
+        const auth = getStoredAuth();
+        if (!auth) {
+            if (callback) callback('Not authenticated', null);
+            return;
+        }
+
+        Logger.info('Fetching Live TV channels' + (isFavorite ? ' (favorites only)' : ''));
+
+        const params = {
+            UserId: userId || auth.userId,
+            StartIndex: startIndex || 0,
+            Limit: limit || 100,
+            Fields: 'PrimaryImageAspectRatio,ChannelInfo',
+            ImageTypeLimit: 1,
+            EnableImageTypes: 'Primary',
+            SortBy: 'SortName',
+            SortOrder: 'Ascending',
+            EnableUserData: true
+        };
+
+        if (isFavorite) {
+            params.IsFavorite = true;
+        }
+
+        const endpoint = '/LiveTv/Channels';
+
+        getItems(auth.serverAddress, auth.accessToken, endpoint, params, function(err, response) {
+            if (err) {
+                Logger.error('Failed to get Live TV channels:', err);
+                if (callback) callback(err, null);
+                return;
+            }
+
+            Logger.success('Live TV channels retrieved:', response.Items ? response.Items.length : 0);
+            if (callback) callback(null, response.Items || []);
+        });
+    }
+
+    /**
+     * Get Live TV programs for channel(s) in a time range
+     * @param {string|string[]} channelIds - Single channel ID or array of channel IDs
+     * @param {Date} startDate - Start of time range
+     * @param {Date} endDate - End of time range
+     * @param {Function} callback - Callback(error, programs)
+     */
+    function getPrograms(channelIds, startDate, endDate, callback) {
+        const auth = getStoredAuth();
+        if (!auth) {
+            if (callback) callback('Not authenticated', null);
+            return;
+        }
+
+        // Convert single channelId to array, or accept array of channelIds
+        const channelIdArray = Array.isArray(channelIds) ? channelIds : [channelIds];
+        const channelIdsString = channelIdArray.join(',');
+
+        Logger.info('Fetching programs for', channelIdArray.length, 'channel(s) from', startDate.toISOString(), 'to', endDate.toISOString());
+
+        const params = {
+            UserId: auth.userId,
+            ChannelIds: channelIdsString,
+            MinEndDate: startDate.toISOString(),
+            MaxStartDate: endDate.toISOString(),
+            Fields: 'Overview,ChannelInfo',
+            EnableUserData: true,
+            EnableImageTypes: 'Primary,Backdrop',
+            ImageTypeLimit: 1,
+            SortBy: 'StartDate'
+        };
+
+        const endpoint = '/LiveTv/Programs';
+
+        getItems(auth.serverAddress, auth.accessToken, endpoint, params, function(err, response) {
+            if (err) {
+                Logger.error('Failed to get programs:', err);
+                console.error('Failed to get programs for channel', channelId, ':', err);
+                if (callback) callback(err, null);
+                return;
+            }
+
+            const programCount = response.Items ? response.Items.length : 0;
+            console.log('API Response for', channelIdArray.length, 'channel(s):', {
+                totalRecordCount: response.TotalRecordCount,
+                itemCount: programCount
+            });
+            Logger.success('Programs retrieved:', programCount, 'programs for', channelIdArray.length, 'channel(s)');
+            if (programCount === 0) {
+                Logger.warn('No programs found for', channelIdArray.length, 'channel(s) in time range', startDate.toISOString(), 'to', endDate.toISOString());
+            }
+            if (callback) callback(null, response.Items || []);
+        });
+    }
+
+    /**
+     * Get a single Live TV program by ID
+     * @param {string} programId - Program ID
+     * @param {Function} callback - Callback(error, program)
+     */
+    function getProgram(programId, callback) {
+        const auth = getStoredAuth();
+        if (!auth) {
+            if (callback) callback('Not authenticated', null);
+            return;
+        }
+
+        Logger.info('Fetching program:', programId);
+
+        const url = auth.serverAddress + '/Items/' + programId + '?UserId=' + auth.userId;
+
+        ajax.request(url, {
+            method: 'GET',
+            headers: {
+                'X-Emby-Authorization': getAuthHeader(auth.accessToken)
+            },
+            success: function(response) {
+                Logger.success('Program retrieved:', response.Name);
+                if (callback) callback(null, response);
+            },
+            error: function(error) {
+                Logger.error('Failed to get program:', error);
+                if (callback) callback(error, null);
+            }
         });
     }
 
@@ -927,6 +1102,282 @@ var JellyfinAPI = (function() {
         });
     }
 
+    /**
+     * Get default timer settings with programId to get program-specific defaults
+     */
+    function getDefaultTimer(programId, callback) {
+        const auth = getStoredAuth();
+        if (!auth) {
+            if (callback) callback('Not authenticated', null);
+            return;
+        }
+
+        Logger.info('Getting default timer settings for programId:', programId);
+
+        const url = auth.serverAddress + '/LiveTv/Timers/Defaults?programId=' + encodeURIComponent(programId);
+
+        ajax.request(url, {
+            method: 'GET',
+            headers: {
+                'X-Emby-Authorization': getAuthHeader(auth.accessToken)
+            },
+            success: function(response) {
+                Logger.success('Got default timer settings with program data');
+                if (callback) callback(null, response);
+            },
+            error: function(error) {
+                Logger.error('Failed to get default timer:', error);
+                if (callback) callback(error, null);
+            }
+        });
+    }
+
+    /**
+     * Create a Live TV recording timer
+     * Automatically retrieves default timer settings and creates a one-time recording
+     * @param {Object} program - Program object to record
+     * @param {Function} callback - Callback(error, timer)
+     */
+    function createRecordingTimer(program, callback) {
+        const auth = getStoredAuth();
+        if (!auth) {
+            if (callback) callback('Not authenticated', null);
+            return;
+        }
+
+        Logger.info('Creating recording timer for program:', program.Name);
+
+        // Get default timer to use as template
+        getDefaultTimer(program.Id, function(err, defaultTimer) {
+            if (err) {
+                Logger.error('Failed to get default timer:', err);
+                if (callback) callback(err, null);
+                return;
+            }
+
+            const url = auth.serverAddress + '/LiveTv/Timers';
+
+            // Build timer from defaultTimer but exclude series-specific fields
+            // Based on API documentation example
+            const timer = {
+                ChannelId: defaultTimer.ChannelId,
+                ProgramId: defaultTimer.ProgramId,
+                StartDate: defaultTimer.StartDate,
+                EndDate: defaultTimer.EndDate,
+                PrePaddingSeconds: defaultTimer.PrePaddingSeconds,
+                PostPaddingSeconds: defaultTimer.PostPaddingSeconds,
+                IsPrePaddingRequired: defaultTimer.IsPrePaddingRequired,
+                IsPostPaddingRequired: defaultTimer.IsPostPaddingRequired,
+                KeepUntil: defaultTimer.KeepUntil,
+                Priority: defaultTimer.Priority
+            };
+            
+            // Add optional fields from defaultTimer if present (excluding series-specific ones)
+            if (defaultTimer.ChannelName) timer.ChannelName = defaultTimer.ChannelName;
+            if (defaultTimer.ExternalChannelId) timer.ExternalChannelId = defaultTimer.ExternalChannelId;
+            if (defaultTimer.ExternalProgramId) timer.ExternalProgramId = defaultTimer.ExternalProgramId;
+            if (defaultTimer.Name) timer.Name = defaultTimer.Name;
+            if (defaultTimer.Overview) timer.Overview = defaultTimer.Overview;
+            if (defaultTimer.ServiceName) timer.ServiceName = defaultTimer.ServiceName;
+            if (defaultTimer.ServerId) timer.ServerId = defaultTimer.ServerId;
+
+            ajax.request(url, {
+                method: 'POST',
+                headers: {
+                    'X-Emby-Authorization': getAuthHeader(auth.accessToken),
+                    'Content-Type': 'application/json'
+                },
+                data: timer,  // Pass object directly, ajax.js will stringify it
+                success: function(response) {
+                    Logger.success('Recording timer created successfully');
+                    if (callback) callback(null, response);
+                },
+                error: function(error) {
+                    console.error('Timer creation failed. Timer object:', timer);
+                    console.error('Error response:', error);
+                    if (error.responseText) {
+                        console.error('Error response body:', error.responseText);
+                    }
+                    if (error.responseData) {
+                        console.error('Error response JSON:', error.responseData);
+                    }
+                    Logger.error('Failed to create recording timer:', error);
+                    if (callback) callback(error, null);
+                }
+            });
+        });
+    }
+
+    /**
+     * Cancel a scheduled Live TV recording timer
+     * @param {string} timerId - Timer ID to cancel
+     * @param {Function} callback - Callback(error, result)
+     */
+    function cancelRecordingTimer(timerId, callback) {
+        const auth = getStoredAuth();
+        if (!auth) {
+            if (callback) callback('Not authenticated', null);
+            return;
+        }
+
+        Logger.info('Canceling recording timer:', timerId);
+
+        const url = auth.serverAddress + '/LiveTv/Timers/' + timerId;
+
+        ajax.request(url, {
+            method: 'DELETE',
+            headers: {
+                'X-Emby-Authorization': getAuthHeader(auth.accessToken)
+            },
+            success: function(response) {
+                Logger.success('Recording timer canceled successfully');
+                if (callback) callback(null, response);
+            },
+            error: function(error) {
+                Logger.error('Failed to cancel recording timer:', error);
+                if (callback) callback(error, null);
+            }
+        });
+    }
+
+    /**
+     * Get all scheduled Live TV recording timers
+     * @param {Function} callback - Callback(error, timers)
+     */
+    function getRecordingTimers(callback) {
+        const auth = getStoredAuth();
+        if (!auth) {
+            if (callback) callback('Not authenticated', null);
+            return;
+        }
+
+        Logger.info('Fetching recording timers');
+
+        const url = auth.serverAddress + '/LiveTv/Timers';
+
+        ajax.request(url, {
+            method: 'GET',
+            headers: {
+                'X-Emby-Authorization': getAuthHeader(auth.accessToken)
+            },
+            success: function(response) {
+                Logger.success('Recording timers retrieved:', response.Items ? response.Items.length : 0);
+                if (callback) callback(null, response.Items || []);
+            },
+            error: function(error) {
+                Logger.error('Failed to get recording timers:', error);
+                if (callback) callback(error, null);
+            }
+        });
+    }
+
+    /**
+     * Get Live TV series timers (recurring recordings)
+     */
+    function getSeriesTimers(callback) {
+        const auth = getStoredAuth();
+        if (!auth) {
+            if (callback) callback('Not authenticated', null);
+            return;
+        }
+
+        Logger.info('Fetching series timers');
+
+        const url = auth.serverAddress + '/LiveTv/SeriesTimers';
+
+        ajax.request(url, {
+            method: 'GET',
+            headers: {
+                'X-Emby-Authorization': getAuthHeader(auth.accessToken)
+            },
+            success: function(response) {
+                Logger.success('Series timers retrieved:', response.Items ? response.Items.length : 0);
+                if (callback) callback(null, response.Items || []);
+            },
+            error: function(error) {
+                Logger.error('Failed to get series timers:', error);
+                if (callback) callback(error, null);
+            }
+        });
+    }
+
+    /**
+     * Delete a completed recording
+     * @param {string} recordingId - Recording ID to delete
+     * @param {Function} callback - Callback(error, result)
+     */
+    function deleteRecording(recordingId, callback) {
+        const auth = getStoredAuth();
+        if (!auth) {
+            if (callback) callback('Not authenticated', null);
+            return;
+        }
+
+        Logger.info('Deleting recording:', recordingId);
+
+        const url = auth.serverAddress + '/LiveTv/Recordings/' + recordingId;
+
+        ajax.request(url, {
+            method: 'DELETE',
+            headers: {
+                'X-Emby-Authorization': getAuthHeader(auth.accessToken)
+            },
+            success: function(response) {
+                Logger.success('Recording deleted successfully');
+                if (callback) callback(null, response);
+            },
+            error: function(error) {
+                Logger.error('Failed to delete recording:', error);
+                if (callback) callback(error, null);
+            }
+        });
+    }
+
+    /**
+     * Mark an item as favorite (convenience wrapper)
+     * @param {string} itemId - Item ID
+     * @param {Function} callback - Callback(error, result)
+     */
+    function favoriteItem(itemId, callback) {
+        const auth = getStoredAuth();
+        if (!auth) {
+            if (callback) callback('Not authenticated', null);
+            return;
+        }
+        
+        setFavorite(auth.serverAddress, auth.userId, auth.accessToken, itemId, true, callback);
+    }
+
+    /**
+     * Remove an item from favorites (convenience wrapper)
+     * @param {string} itemId - Item ID
+     * @param {Function} callback - Callback(error, result)
+     */
+    function unfavoriteItem(itemId, callback) {
+        const auth = getStoredAuth();
+        if (!auth) {
+            if (callback) callback('Not authenticated', null);
+            return;
+        }
+        
+        setFavorite(auth.serverAddress, auth.userId, auth.accessToken, itemId, false, callback);
+    }
+
+    /**
+     * Get item by ID (convenience wrapper using stored auth)
+     * @param {string} itemId - Item ID
+     * @param {Function} callback - Callback(error, item)
+     */
+    function getItemById(itemId, callback) {
+        const auth = getStoredAuth();
+        if (!auth) {
+            if (callback) callback('Not authenticated', null);
+            return;
+        }
+        
+        getItem(auth.serverAddress, auth.userId, auth.accessToken, itemId, callback);
+    }
+
     return {
         init: initDeviceId,
         discoverServers: discoverServers,
@@ -948,10 +1399,22 @@ var JellyfinAPI = (function() {
         getLiveTVInfo: getLiveTVInfo,
         getLiveTVChannels: getLiveTVChannels,
         getLiveTVRecordings: getLiveTVRecordings,
+        getChannels: getChannels,
+        getPrograms: getPrograms,
+        getProgram: getProgram,
+        createRecordingTimer: createRecordingTimer,
+        cancelRecordingTimer: cancelRecordingTimer,
+        getDefaultTimer: getDefaultTimer,
+        getRecordingTimers: getRecordingTimers,
+        getSeriesTimers: getSeriesTimers,
+        deleteRecording: deleteRecording,
         getCollections: getCollections,
         getSystemInfo: getSystemInfo,
         setFavorite: setFavorite,
         setPlayed: setPlayed,
+        favoriteItem: favoriteItem,
+        unfavoriteItem: unfavoriteItem,
+        getItem: getItemById,
         logout: logout,
         getStoredAuth: getStoredAuth,
         getAuthHeader: getAuthHeader,

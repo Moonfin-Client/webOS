@@ -1,9 +1,17 @@
+/**
+ * Navbar Module
+ * Manages navigation bar loading, user libraries, clock, and toolbar settings
+ * @module Navbar
+ */
 (function() {
     'use strict';
     
-    // Constants
-    const CLOCK_UPDATE_INTERVAL_MS = 60000; // Update clock every minute
+    const CLOCK_UPDATE_INTERVAL_MS = 60000;
     
+    /**
+     * Load navbar HTML component
+     * @param {Function} callback - Callback to execute after navbar loads
+     */
     function loadNavbar(callback) {
         var xhr = new XMLHttpRequest();
         xhr.open('GET', 'components/navbar.html', true);
@@ -135,7 +143,8 @@
                 return item.CollectionType === 'movies' || 
                        item.CollectionType === 'tvshows' || 
                        item.CollectionType === 'music' ||
-                       item.CollectionType === 'boxsets';
+                       item.CollectionType === 'boxsets' ||
+                       item.CollectionType === 'livetv';
             });
             
             var settingsBtn = document.getElementById('settingsBtn');
@@ -154,7 +163,12 @@
                     btn.appendChild(label);
                     
                     btn.addEventListener('click', function() {
-                        window.location.href = 'library.html?id=' + library.Id;
+                        // Live TV goes to the guide page
+                        if (library.CollectionType === 'livetv') {
+                            window.location.href = 'live-tv.html';
+                        } else {
+                            window.location.href = 'library.html?id=' + library.Id;
+                        }
                     });
                     
                     // Append after settingsBtn (libraries come at the end)

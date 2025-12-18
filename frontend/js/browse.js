@@ -1317,10 +1317,12 @@ var BrowseController = (function() {
     }
 
     function loadRows(rowDefinitions) {
+        console.log('[browse] loadRows called with', rowDefinitions.length, 'rows:', rowDefinitions);
         var completed = 0;
         var hasContent = false;
         
         rowDefinitions.forEach(function(rowDef) {
+            console.log('[browse] Loading row:', rowDef.title, 'type:', rowDef.type);
             loadRow(rowDef, function(success) {
                 completed++;
                 if (success) hasContent = true;
@@ -1337,9 +1339,11 @@ var BrowseController = (function() {
     }
 
     function loadRow(rowDef, callback) {
+        console.log('[browse] loadRow called for:', rowDef.title, 'type:', rowDef.type);
         
         // Handle library tiles row (special case - no API call needed)
         if (rowDef.type === 'library-tiles') {
+            console.log('[browse] Rendering library tiles, count:', rowDef.libraries?.length);
             if (rowDef.libraries && rowDef.libraries.length > 0) {
                 renderRow(rowDef.title, rowDef.libraries, rowDef.type);
                 if (callback) callback(true);
@@ -1351,13 +1355,17 @@ var BrowseController = (function() {
         
         // Use specialized API functions for specific row types
         if (rowDef.type === 'resume') {
+            console.log('[browse] Fetching resume items...');
             // Continue Watching - use dedicated resume endpoint
             JellyfinAPI.getResumeItems(auth.serverAddress, auth.userId, auth.accessToken, function(err, data) {
+                console.log('[browse] Resume items response:', err ? 'ERROR: ' + err : 'Success', 'data:', data);
                 if (err || !data || !data.Items || data.Items.length === 0) {
+                    console.log('[browse] No resume items to display');
                     if (callback) callback(false);
                     return;
                 }
                 
+                console.log('[browse] Rendering', data.Items.length, 'resume items');
                 renderRow(rowDef.title, data.Items, rowDef.type);
                 if (callback) callback(true);
             });
@@ -1379,13 +1387,17 @@ var BrowseController = (function() {
         }
         
         if (rowDef.type === 'nextup') {
+            console.log('[browse] Fetching next up items...');
             // Next Up - use dedicated next up endpoint
             JellyfinAPI.getNextUpItems(auth.serverAddress, auth.userId, auth.accessToken, function(err, data) {
+                console.log('[browse] Next up response:', err ? 'ERROR: ' + err : 'Success', 'data:', data);
                 if (err || !data || !data.Items || data.Items.length === 0) {
+                    console.log('[browse] No next up items to display');
                     if (callback) callback(false);
                     return;
                 }
                 
+                console.log('[browse] Rendering', data.Items.length, 'next up items');
                 renderRow(rowDef.title, data.Items, rowDef.type);
                 if (callback) callback(true);
             });
@@ -1393,30 +1405,38 @@ var BrowseController = (function() {
         }
         
         if (rowDef.type === 'latest' && rowDef.parentId) {
+            console.log('[browse] Fetching latest media for parentId:', rowDef.parentId, 'itemType:', rowDef.itemType);
             // Latest Media - use dedicated latest endpoint
             var includeTypes = rowDef.itemType || null;
             JellyfinAPI.getLatestMedia(auth.serverAddress, auth.userId, auth.accessToken,
                 rowDef.parentId, includeTypes, function(err, data) {
+                console.log('[browse] Latest media response:', err ? 'ERROR: ' + err : 'Success', 'data:', data);
                 if (err || !data || !data.Items || data.Items.length === 0) {
+                    console.log('[browse] No latest items to display');
                     if (callback) callback(false);
                     return;
                 }
                 
+                console.log('[browse] Rendering', data.Items.length, 'latest items');
                 renderRow(rowDef.title, data.Items, rowDef.type);
                 if (callback) callback(true);
             });
             return;
         }
         
-        // Live TV Support: Handle Live TV channels
+        // Live TV Support: Handle Live TV channels (favorites only)
         if (rowDef.type === 'livetv-channels') {
-            JellyfinAPI.getLiveTVChannels(auth.serverAddress, auth.userId, auth.accessToken, function(err, data) {
-                if (err || !data || !data.Items || data.Items.length === 0) {
+            console.log('[browse] Fetching favorite Live TV channels...');
+            JellyfinAPI.getChannels(null, 0, 50, true, function(err, data) {
+                console.log('[browse] Favorite Live TV channels response:', err ? 'ERROR: ' + err : 'Success', 'data:', data);
+                if (err || !data || data.length === 0) {
+                    console.log('[browse] No favorite Live TV channels to display');
                     if (callback) callback(false);
                     return;
                 }
                 
-                renderRow(rowDef.title, data.Items, rowDef.type);
+                console.log('[browse] Rendering', data.length, 'favorite Live TV channels');
+                renderRow(rowDef.title, data, rowDef.type);
                 if (callback) callback(true);
             });
             return;
@@ -1424,12 +1444,16 @@ var BrowseController = (function() {
         
         // Live TV Support: Handle Live TV recordings
         if (rowDef.type === 'livetv-recordings') {
-            JellyfinAPI.getLiveTVRecordings(auth.serverAddress, auth.userId, auth.accessToken, function(err, data) {
+            console.log('[browse] Fetching Live TV recordings...');
+            JellyfinAPI.getLiveTVRecordings(function(err, data) {
+                console.log('[browse] Live TV recordings response:', err ? 'ERROR: ' + err : 'Success', 'data:', data);
                 if (err || !data || !data.Items || data.Items.length === 0) {
+                    console.log('[browse] No Live TV recordings to display');
                     if (callback) callback(false);
                     return;
                 }
                 
+                console.log('[browse] Rendering', data.Items.length, 'Live TV recordings');
                 renderRow(rowDef.title, data.Items, rowDef.type);
                 if (callback) callback(true);
             });
@@ -1438,12 +1462,16 @@ var BrowseController = (function() {
         
         // Collections Support: Handle Collections (Box Sets)
         if (rowDef.type === 'collections') {
+            console.log('[browse] Fetching collections...');
             JellyfinAPI.getCollections(auth.serverAddress, auth.userId, auth.accessToken, function(err, data) {
+                console.log('[browse] Collections response:', err ? 'ERROR: ' + err : 'Success', 'data:', data);
                 if (err || !data || !data.Items || data.Items.length === 0) {
+                    console.log('[browse] No collections to display');
                     if (callback) callback(false);
                     return;
                 }
                 
+                console.log('[browse] Rendering', data.Items.length, 'collections');
                 renderRow(rowDef.title, data.Items, rowDef.type);
                 if (callback) callback(true);
             });
@@ -1515,12 +1543,16 @@ var BrowseController = (function() {
             params.limit = 100;
         }
         
+        console.log('[browse] Fetching generic items, endpoint:', endpoint, 'params:', params);
         JellyfinAPI.getItems(auth.serverAddress, auth.accessToken, endpoint, params, function(err, data) {
+            console.log('[browse] Generic items response:', err ? 'ERROR: ' + err : 'Success', 'data:', data);
             if (err || !data || !data.Items || data.Items.length === 0) {
+                console.log('[browse] No generic items to display');
                 if (callback) callback(false);
                 return;
             }
             
+            console.log('[browse] Rendering', data.Items.length, 'generic items');
             renderRow(rowDef.title, data.Items, rowDef.type);
             if (callback) callback(true);
         });
@@ -1535,9 +1567,11 @@ var BrowseController = (function() {
         var featuredMediaFilter = 'both'; // default
         try {
             var settings = storage.get('jellyfin_settings');
+            console.log('[browse] Featured media - raw settings:', settings);
             if (settings) {
                 var parsedSettings = JSON.parse(settings);
                 featuredMediaFilter = parsedSettings.featuredMediaFilter || 'both';
+                console.log('[browse] Featured media filter setting:', featuredMediaFilter);
             }
         } catch (e) {
             console.error('Error reading featured media filter setting:', e);
@@ -1549,6 +1583,8 @@ var BrowseController = (function() {
         } else if (featuredMediaFilter === 'tv') {
             includeItemTypes = 'Series';
         }
+        
+        console.log('[browse] Featured media - includeItemTypes:', includeItemTypes);
         
         var params = {
             userId: auth.userId,
@@ -1562,13 +1598,22 @@ var BrowseController = (function() {
             recursive: true
         };
         
+        console.log('[browse] Featured media - API params:', params);
+        
         JellyfinAPI.getItems(auth.serverAddress, auth.accessToken,
             '/Users/' + auth.userId + '/Items', params, function(err, data) {
+            console.log('[browse] Featured media - API response:', err ? 'ERROR: ' + err : 'Success', 'items:', data?.Items?.length);
+            if (err) {
+                console.error('[browse] Featured media error:', err);
+            }
             if (!err && data && data.Items && data.Items.length > 0) {
+                console.log('[browse] Featured media - loaded', data.Items.length, 'items:', data.Items.map(i => i.Name + ' (' + i.Type + ')'));
                 featuredCarousel.items = data.Items;
                 displayFeaturedItem(0);
                 createCarouselIndicators();
                 startCarouselAutoPlay();
+            } else {
+                console.log('[browse] Featured media - no items found or error');
             }
         });
     }
@@ -1717,6 +1762,7 @@ var BrowseController = (function() {
     }
 
     function renderRow(title, items, type) {
+        console.log('[browse] renderRow called:', title, 'items:', items.length, 'type:', type);
         var rowDiv = document.createElement('div');
         rowDiv.className = 'content-row';
         

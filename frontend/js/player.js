@@ -1,3 +1,9 @@
+/**
+ * Player Controller Module
+ * Manages video playback, controls, track selection, and playback reporting
+ * Supports direct play, transcoding, and Live TV streaming
+ * @module PlayerController
+ */
 var PlayerController = (function() {
     'use strict';
 
@@ -5,7 +11,8 @@ var PlayerController = (function() {
     let itemId = null;
     let itemData = null;
     let videoPlayer = null;
-    let playerAdapter = null; // Video player adapter (Shaka/webOS/HTML5)
+    /** @type {Object|null} Video player adapter (Shaka/webOS/HTML5) */
+    let playerAdapter = null;
     let controlsVisible = false;
     let controlsTimeout = null;
     let playbackInfo = null;
@@ -80,10 +87,6 @@ var PlayerController = (function() {
         }
         
         if (!mediaSource || !mediaSource.SupportsTranscoding) {
-                hasMediaSource: !!mediaSource,
-                supportsTranscoding: mediaSource?.SupportsTranscoding,
-                container: mediaSource?.Container
-            });
             return false;
         }
         
@@ -138,8 +141,7 @@ var PlayerController = (function() {
 
         itemId = getItemIdFromUrl();
         if (!itemId) {
-            alert('No item ID provided');
-            window.history.back();
+            showErrorDialog('Invalid Request', 'No media ID was provided. Please select a media item to play.');
             return;
         }
 
@@ -177,6 +179,11 @@ var PlayerController = (function() {
             videoInfoBtn: document.getElementById('videoInfoBtn'),
             backBtn: document.getElementById('backBtn'),
             loadingIndicator: document.getElementById('loadingIndicator'),
+            errorDialog: document.getElementById('errorDialog'),
+            errorDialogTitle: document.getElementById('errorDialogTitle'),
+            errorDialogMessage: document.getElementById('errorDialogMessage'),
+            errorDialogDetails: document.getElementById('errorDialogDetails'),
+            errorDialogBtn: document.getElementById('errorDialogBtn'),
             audioModal: document.getElementById('audioModal'),
             audioTrackList: document.getElementById('audioTrackList'),
             subtitleModal: document.getElementById('subtitleModal'),
@@ -196,7 +203,12 @@ var PlayerController = (function() {
             skipOverlay: document.getElementById('skipOverlay'),
             skipButton: document.getElementById('skipButton'),
             skipButtonText: document.getElementById('skipButtonText'),
-            skipButtonTime: document.getElementById('skipButtonTime')
+            skipButtonTime: document.getElementById('skipButtonTime'),
+            errorDialog: document.getElementById('errorDialog'),
+            errorDialogTitle: document.getElementById('errorDialogTitle'),
+            errorDialogMessage: document.getElementById('errorDialogMessage'),
+            errorDialogDetails: document.getElementById('errorDialogDetails'),
+            errorDialogBtn: document.getElementById('errorDialogBtn')
         };
 
         videoPlayer = elements.videoPlayer;
@@ -219,6 +231,8 @@ var PlayerController = (function() {
     }
 
     function setupEventListeners() {
+        // Error dialog
+        elements.errorDialogBtn.addEventListener('click', closeErrorDialog);
         // Keyboard controls
         document.addEventListener('keydown', handleKeyDown);
 
@@ -350,6 +364,16 @@ var PlayerController = (function() {
     function handleKeyDown(evt) {
         evt = evt || window.event;
 
+        // Handle error dialog first
+        if (elements.errorDialog && elements.errorDialog.style.display !== 'none') {
+            if (evt.keyCode === KeyCodes.OK || evt.keyCode === KeyCodes.ENTER || 
+                evt.keyCode === KeyCodes.BACK || evt.keyCode === 461) {
+                evt.preventDefault();
+                closeErrorDialog();
+            }
+            return;
+        }
+
         // Handle modal navigation separately
         if (activeModal) {
             handleModalKeyDown(evt);
@@ -476,9 +500,11 @@ var PlayerController = (function() {
         }
     }
 
+    /**
+     * Handle keyboard navigation within modal dialogs
+     * @param {KeyboardEvent} evt - Keyboard event
+     */
     function handleModalKeyDown(evt) {
-            'currentModalFocusIndex:', currentModalFocusIndex,
-            'focusableItems:', modalFocusableItems.length, 'activeModal:', activeModal);
         currentModalFocusIndex = TrackSelector.handleModalKeyDown(
             evt,
             modalFocusableItems,
@@ -553,9 +579,14 @@ var PlayerController = (function() {
     function getPlaybackInfo() {
         var playbackUrl = auth.serverAddress + '/Items/' + itemId + '/PlaybackInfo';
         
+        // Check if this is Live TV
+        var isLiveTV = itemData && itemData.Type === 'TvChannel';
+        
         var requestData = {
             UserId: auth.userId,
-            DeviceProfile: getDeviceProfile()
+            DeviceProfile: getDeviceProfile(),
+            // For Live TV, we need to auto-open the live stream
+            AutoOpenLiveStream: isLiveTV
         };
 
         ajax.request(playbackUrl, {
@@ -572,21 +603,30 @@ var PlayerController = (function() {
                 if (playbackInfo.MediaSources && playbackInfo.MediaSources.length > 0) {
                     startPlayback(playbackInfo.MediaSources[0]);
                 } else {
-                    alert('No playable media sources found');
-                    window.history.back();
+                    showErrorDialog(
+                        'No Media Sources',
+                        'No playable media sources were found for this item.',
+                        'The server did not provide any compatible media streams.'
+                    );
                 }
             },
             error: function(err) {
+                var title = 'Playback Error';
+                var message = 'Failed to get playback information from the server.';
+                var details = '';
                 
-                var errorMsg = 'Failed to get playback information';
                 if (err && err.error === 500) {
-                    errorMsg += '\\n\\nServer Error (500): The Jellyfin server encountered an error processing this item. This may indicate:\\n- Corrupted or incompatible media file\\n- Missing codecs on the server\\n- Server configuration issue\\n\\nCheck the Jellyfin server logs for details.';
+                    title = 'Server Error';
+                    message = 'The Jellyfin server encountered an error processing this item.';
+                    details = 'This may indicate:\n• Corrupted or incompatible media file\n• Missing codecs on the server\n• Server configuration issue\n\nError Code: 500\n\nCheck the Jellyfin server logs for more details.';
                 } else if (err && err.error) {
-                    errorMsg += ' (Error ' + err.error + ')';
+                    details = 'Error Code: ' + err.error;
+                    if (err.responseData && err.responseData.Message) {
+                        details += '\nMessage: ' + err.responseData.Message;
+                    }
                 }
                 
-                alert(errorMsg);
-                window.history.back();
+                showErrorDialog(title, message, details);
             }
         });
     }
@@ -640,11 +680,11 @@ var PlayerController = (function() {
         playSessionId = generateUUID();
         currentMediaSource = mediaSource;
         
-        
         // Populate audio/subtitle streams early so preferences can be applied
         audioStreams = mediaSource.MediaStreams?.filter(function(s) { return s.Type === 'Audio'; }) || [];
         subtitleStreams = mediaSource.MediaStreams?.filter(function(s) { return s.Type === 'Subtitle'; }) || [];
         
+        var isLiveTV = itemData && itemData.Type === 'TvChannel';
         var streamUrl;
         var mimeType;
         var useDirectPlay = false;
@@ -662,7 +702,30 @@ var PlayerController = (function() {
         var safeAudioCodecs = ['aac', 'mp3'];
         var safeContainers = ['mp4'];
         
-        if (mediaSource.SupportsDirectPlay && 
+        // Check if media source has a pre-configured transcoding URL (for Live TV)
+        if (mediaSource.TranscodingUrl) {
+            streamUrl = auth.serverAddress + mediaSource.TranscodingUrl;
+            
+            params = new URLSearchParams();
+            var urlParts = streamUrl.split('?');
+            if (urlParts.length > 1) {
+                streamUrl = urlParts[0];
+                params = new URLSearchParams(urlParts[1]);
+            }
+            
+            if (!params.has('api_key')) {
+                params.append('api_key', auth.accessToken);
+            }
+            if (!params.has('PlaySessionId')) {
+                params.append('PlaySessionId', playSessionId);
+            }
+            if (!params.has('deviceId')) {
+                params.append('deviceId', JellyfinAPI.init());
+            }
+            
+            mimeType = 'application/x-mpegURL';
+            isTranscoding = true;
+        } else if (mediaSource.SupportsDirectPlay && 
             mediaSource.Container && 
             safeContainers.indexOf(mediaSource.Container.toLowerCase()) !== -1 &&
             videoStream && safeVideoCodecs.indexOf(videoStream.Codec?.toLowerCase()) !== -1 &&
@@ -686,22 +749,25 @@ var PlayerController = (function() {
             params.append('MinSegments', '3');
             params.append('BreakOnNonKeyFrames', 'false');
             
-            // Check for user-selected track preferences from details page
-            var preferredAudioIndex = localStorage.getItem('preferredAudioTrack_' + itemId);
-            var preferredSubtitleIndex = localStorage.getItem('preferredSubtitleTrack_' + itemId);
-            
-            if (preferredAudioIndex !== null && audioStreams[preferredAudioIndex]) {
-                params.append('AudioStreamIndex', audioStreams[preferredAudioIndex].Index);
-            }
-            
-            if (preferredSubtitleIndex !== null && preferredSubtitleIndex >= 0 && subtitleStreams[preferredSubtitleIndex]) {
-                params.append('SubtitleStreamIndex', subtitleStreams[preferredSubtitleIndex].Index);
-                params.append('SubtitleMethod', 'Encode');
+            // Check for user-selected track preferences from details page (not for Live TV)
+            if (!isLiveTV) {
+                var preferredAudioIndex = localStorage.getItem('preferredAudioTrack_' + itemId);
+                var preferredSubtitleIndex = localStorage.getItem('preferredSubtitleTrack_' + itemId);
+                
+                if (preferredAudioIndex !== null && audioStreams[preferredAudioIndex]) {
+                    params.append('AudioStreamIndex', audioStreams[preferredAudioIndex].Index);
+                }
+                
+                if (preferredSubtitleIndex !== null && preferredSubtitleIndex >= 0 && subtitleStreams[preferredSubtitleIndex]) {
+                    params.append('SubtitleStreamIndex', subtitleStreams[preferredSubtitleIndex].Index);
+                    params.append('SubtitleMethod', 'Encode');
+                }
             }
             
             mimeType = 'application/x-mpegURL';
             isTranscoding = true;
         } else {
+            console.log('Unsupported media source:', {
                 container: mediaSource.Container,
                 supportsDirectPlay: mediaSource.SupportsDirectPlay,
                 supportsDirectStream: mediaSource.SupportsDirectStream,
@@ -716,12 +782,12 @@ var PlayerController = (function() {
         var videoUrl = streamUrl + '?' + params.toString();
         
         console.log('[Player] Starting playback');
-        console.log('[Player] Method:', useDirectPlay ? 'Direct Play' : 'Transcode');
+        console.log('[Player] Method:', isLiveTV ? 'Live TV' : (useDirectPlay ? 'Direct Play' : 'Transcode'));
         console.log('[Player] Container:', mediaSource.Container);
         console.log('[Player] URL:', videoUrl.substring(0, 100) + '...');
         
         var startPosition = 0;
-        if (itemData.UserData && itemData.UserData.PlaybackPositionTicks > 0) {
+        if (!isLiveTV && itemData.UserData && itemData.UserData.PlaybackPositionTicks > 0) {
             startPosition = itemData.UserData.PlaybackPositionTicks / TICKS_PER_SECOND;
         }
         
@@ -1440,6 +1506,43 @@ var PlayerController = (function() {
         if (elements.loadingIndicator) {
             elements.loadingIndicator.style.display = 'none';
         }
+    }
+
+    /**
+     * Show user-friendly error dialog
+     * @param {string} title - Error title
+     * @param {string} message - User-friendly error message
+     * @param {string} [details] - Technical details (optional)
+     */
+    function showErrorDialog(title, message, details) {
+        hideLoading();
+        
+        if (!elements.errorDialog) return;
+        
+        elements.errorDialogTitle.textContent = title || 'Playback Error';
+        elements.errorDialogMessage.textContent = message || 'An error occurred during playback';
+        
+        if (details) {
+            elements.errorDialogDetails.textContent = details;
+            elements.errorDialogDetails.style.display = 'block';
+        } else {
+            elements.errorDialogDetails.style.display = 'none';
+        }
+        
+        elements.errorDialog.style.display = 'flex';
+        setTimeout(() => {
+            elements.errorDialogBtn.focus();
+        }, 100);
+    }
+
+    /**
+     * Close error dialog and navigate back
+     */
+    function closeErrorDialog() {
+        if (elements.errorDialog) {
+            elements.errorDialog.style.display = 'none';
+        }
+        window.history.back();
     }
 
     /**
@@ -2305,6 +2408,7 @@ var PlayerController = (function() {
                     if (data && data.Items && data.Items.length > 0) {
                         data.Items.forEach(function(seg, idx) {
                             var duration = (seg.EndTicks - seg.StartTicks) / 10000000;
+                            console.log('Segment', idx, seg.Type,
                                         'from', (seg.StartTicks / 10000000).toFixed(0), 'to', (seg.EndTicks / 10000000).toFixed(0));
                         });
                         

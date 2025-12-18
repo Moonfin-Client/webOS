@@ -24,8 +24,25 @@
 
 var ajax = new AJAX();
 
-function AJAX() {};
+/**
+ * AJAX utility for making HTTP requests
+ * @constructor
+ */
+function AJAX() {}
 
+/**
+ * Make an HTTP request
+ * @param {string} url - The URL to request
+ * @param {Object} settings - Request settings
+ * @param {string} [settings.method='GET'] - HTTP method
+ * @param {Object} [settings.headers] - Request headers
+ * @param {Object} [settings.data] - Request body data (will be JSON stringified)
+ * @param {number} [settings.timeout] - Request timeout in milliseconds
+ * @param {Function} [settings.success] - Success callback
+ * @param {Function} [settings.error] - Error callback
+ * @param {Function} [settings.abort] - Abort callback
+ * @returns {XMLHttpRequest} The XMLHttpRequest object
+ */
 AJAX.prototype.request = function(url, settings) {
 	var method = (settings.method) ? settings.method : "GET";
 	var xhr = new XMLHttpRequest();
@@ -90,7 +107,16 @@ AJAX.prototype.request = function(url, settings) {
                     settings.success({success: true})
                 }
             } else if (settings.error) {
-                settings.error({error: xhr.status});
+                let errorData = {error: xhr.status};
+                try {
+                    if (xhr.responseText) {
+                        errorData.responseText = xhr.responseText;
+                        errorData.responseData = JSON.parse(xhr.responseText);
+                    }
+                } catch (e) {
+                    // Response wasn't JSON
+                }
+                settings.error(errorData);
 			}
         }
 	}
