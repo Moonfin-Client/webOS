@@ -1531,10 +1531,29 @@ var BrowseController = (function() {
             return;
         }
         
+        // Get featured media filter setting
+        var featuredMediaFilter = 'both'; // default
+        try {
+            var settings = storage.get('jellyfin_settings');
+            if (settings) {
+                var parsedSettings = JSON.parse(settings);
+                featuredMediaFilter = parsedSettings.featuredMediaFilter || 'both';
+            }
+        } catch (e) {
+            console.error('Error reading featured media filter setting:', e);
+        }
+        
+        var includeItemTypes = 'Movie,Series';
+        if (featuredMediaFilter === 'movies') {
+            includeItemTypes = 'Movie';
+        } else if (featuredMediaFilter === 'tv') {
+            includeItemTypes = 'Series';
+        }
+        
         var params = {
             userId: auth.userId,
             limit: 10,
-            includeItemTypes: 'Movie,Series',
+            includeItemTypes: includeItemTypes,
             filters: 'IsNotFolder',
             sortBy: 'Random',
             fields: 'Overview,ProductionYear,OfficialRating,RunTimeTicks,Genres',

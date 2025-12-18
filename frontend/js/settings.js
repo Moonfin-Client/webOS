@@ -180,6 +180,7 @@ var SettingsController = (function() {
             showFavoritesButton: true,
             showLibrariesInToolbar: true,
             showFeaturedBanner: true,
+            featuredMediaFilter: 'both',
             imageType: 'Primary',
             posterSize: 300,
             preferParentThumb: false,
@@ -326,6 +327,17 @@ var SettingsController = (function() {
         var showFeaturedBannerValue = document.getElementById('show-featured-banner-value');
         if (showFeaturedBannerValue) {
             showFeaturedBannerValue.textContent = settings.showFeaturedBanner ? 'On' : 'Off';
+        }
+        
+        var featuredMediaFilterValue = document.getElementById('featured-media-filter-value');
+        if (featuredMediaFilterValue) {
+            var filterText = 'Both';
+            if (settings.featuredMediaFilter === 'movies') {
+                filterText = 'Movies Only';
+            } else if (settings.featuredMediaFilter === 'tv') {
+                filterText = 'TV Shows Only';
+            }
+            featuredMediaFilterValue.textContent = filterText;
         }
         
         // Backdrop blur settings
@@ -1090,6 +1102,19 @@ var SettingsController = (function() {
                 
             case 'show-featured-banner':
                 settings.showFeaturedBanner = !settings.showFeaturedBanner;
+                saveSettings();
+                updateSettingValues();
+                break;
+                
+            case 'featured-media-filter':
+                // Cycle through: both -> movies -> tv -> both
+                if (settings.featuredMediaFilter === 'both') {
+                    settings.featuredMediaFilter = 'movies';
+                } else if (settings.featuredMediaFilter === 'movies') {
+                    settings.featuredMediaFilter = 'tv';
+                } else {
+                    settings.featuredMediaFilter = 'both';
+                }
                 saveSettings();
                 updateSettingValues();
                 break;

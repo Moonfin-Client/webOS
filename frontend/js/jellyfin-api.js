@@ -619,6 +619,8 @@ var JellyfinAPI = (function() {
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb',
             MediaTypes: 'Video',
+            IncludeItemTypes: 'Movie,Series,Episode',
+            ExcludeItemTypes: 'Recording',
             SortBy: 'DatePlayed',
             SortOrder: 'Descending'
         };
