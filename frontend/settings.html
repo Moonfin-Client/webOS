@@ -31,6 +31,10 @@
                 <div class="category-icon">⚙</div>
                 <div class="category-label">General</div>
             </div>
+            <div class="settings-category" data-category="homescreen">
+                <div class="category-icon">🏠</div>
+                <div class="category-label">Home Screen</div>
+            </div>
             <div class="settings-category" data-category="playback">
                 <div class="category-icon"><img src="assets/play.png" alt="Playback" style="width: 1em; height: 1em;"></div>
                 <div class="category-label">Playback</div>
@@ -39,9 +43,9 @@
                 <div class="category-icon"><img src="assets/request_hd.png" alt="Display" style="width: 1em; height: 1em;"></div>
                 <div class="category-label">Display</div>
             </div>
-            <div class="settings-category" data-category="moonfin">
-                <div class="category-icon"><img src="assets/icon-transparent130.png" alt="Moonfin" style="width: 1em; height: 1em;"></div>
-                <div class="category-label">Moonfin</div>
+            <div class="settings-category" data-category="interface">
+                <div class="category-icon">🎛</div>
+                <div class="category-label">Interface</div>
             </div>
             <div class="settings-category" data-category="jellyseerr">
                 <div class="category-icon"><img src="assets/jellyseer_jellyfish.png" alt="Jellyseerr" style="width: 1em; height: 1em;"></div>
@@ -64,22 +68,7 @@
                 <h1>General Settings</h1>
                 
                 <div class="settings-group">
-                                        <div class="setting-item" data-setting="playThemeMusic" tabindex="0">
-                                            <div class="setting-label">
-                                                <div class="setting-title">Play Theme Music</div>
-                                                <div class="setting-description">Play TV show or movie theme music when browsing or viewing details</div>
-                                            </div>
-                                            <div class="setting-value" id="playThemeMusicValue">On</div>
-                                        </div>
-                    <h2>Home Screen</h2>
-                    
-                    <div class="setting-item" data-setting="homeSections" tabindex="0">
-                        <div class="setting-label">
-                            <div class="setting-title">Home Rows</div>
-                            <div class="setting-description">Configure which rows appear on the home screen and their order</div>
-                        </div>
-                        <div class="setting-value">Configure</div>
-                    </div>
+                    <h2>Application</h2>
                     
                     <div class="setting-item" data-setting="autoLogin" tabindex="0">
                         <div class="setting-label">
@@ -88,10 +77,6 @@
                         </div>
                         <div class="setting-value" id="autoLoginValue">Off</div>
                     </div>
-                </div>
-
-                <div class="settings-group">
-                    <h2>Interface</h2>
                     
                     <div class="setting-item" data-setting="clockDisplay" tabindex="0">
                         <div class="setting-label">
@@ -99,6 +84,59 @@
                             <div class="setting-description">Show clock in the interface</div>
                         </div>
                         <div class="setting-value" id="clockDisplayValue">12-Hour</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Home Screen Settings -->
+            <div class="settings-panel" id="homescreenPanel">
+                <h1>Home Screen Settings</h1>
+                
+                <div class="settings-group">
+                    <h2>Content Rows</h2>
+                    
+                    <div class="setting-item" data-setting="homeSections" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Configure Home Rows</div>
+                            <div class="setting-description">Choose which rows appear on the home screen and their order</div>
+                        </div>
+                        <div class="setting-value">Configure</div>
+                    </div>
+                    
+                    <div class="setting-item" data-setting="merge-continue-watching" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Merge Continue Watching & Next Up</div>
+                            <div class="setting-description">Combine both rows into a single row sorted by recently played</div>
+                        </div>
+                        <div class="setting-value" id="merge-continue-watching-value">Off</div>
+                    </div>
+                </div>
+                
+                <div class="settings-group">
+                    <h2>Featured Media</h2>
+                    
+                    <div class="setting-item" data-setting="show-featured-banner" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Show Featured Banner</div>
+                            <div class="setting-description">Display the featured media carousel at the top of the home screen</div>
+                        </div>
+                        <div class="setting-value" id="show-featured-banner-value">On</div>
+                    </div>
+                    
+                    <div class="setting-item" data-setting="featured-media-filter" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Featured Media Type</div>
+                            <div class="setting-description">Choose which media types to show in featured carousel</div>
+                        </div>
+                        <div class="setting-value" id="featured-media-filter-value">Both</div>
+                    </div>
+                    
+                    <div class="setting-item" data-setting="carouselSpeed" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Carousel Speed</div>
+                            <div class="setting-description">Time between featured media transitions</div>
+                        </div>
+                        <div class="setting-value" id="carouselSpeedValue">8 seconds</div>
                     </div>
                 </div>
             </div>
@@ -120,20 +158,32 @@
                     
                     <div class="setting-item" data-setting="autoPlay" tabindex="0">
                         <div class="setting-label">
-                            <div class="setting-title">Auto Play Next</div>
-                            <div class="setting-description">Automatically play the next episode</div>
+                            <div class="setting-title">Auto Play Next Episode</div>
+                            <div class="setting-description">Automatically play the next episode in a series</div>
                         </div>
                         <div class="setting-value" id="autoPlayValue">On</div>
                     </div>
                 </div>
-            </div>
-
-            <!-- Moonfin Settings -->
-            <div class="settings-panel" id="moonfinPanel">
-                <h1>Moonfin Settings</h1>
                 
                 <div class="settings-group">
-                    <h2>Toolbar Customization</h2>
+                    <h2>Audio</h2>
+                    
+                    <div class="setting-item" data-setting="playThemeMusic" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Play Theme Music</div>
+                            <div class="setting-description">Play TV show or movie theme music when browsing or viewing details</div>
+                        </div>
+                        <div class="setting-value" id="playThemeMusicValue">On</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Interface Settings -->
+            <div class="settings-panel" id="interfacePanel">
+                <h1>Interface Settings</h1>
+                
+                <div class="settings-group">
+                    <h2>Navigation Bar</h2>
                     
                     <div class="setting-item" data-setting="showShuffleButton" tabindex="0">
                         <div class="setting-label">
@@ -167,70 +217,6 @@
                         <div class="setting-value" id="showLibrariesInToolbarValue">On</div>
                     </div>
                 </div>
-                
-                <div class="settings-group">
-                    <h2>Home Screen</h2>
-                    
-                    <div class="setting-item" data-setting="show-featured-banner" tabindex="0">
-                        <div class="setting-label">
-                            <div class="setting-title">Show Featured Media</div>
-                            <div class="setting-description">Display the featured media carousel at the top of the home screen</div>
-                        </div>
-                        <div class="setting-value" id="show-featured-banner-value">On</div>
-                    </div>
-                    
-                    <div class="setting-item" data-setting="featured-media-filter" tabindex="0">
-                        <div class="setting-label">
-                            <div class="setting-title">Featured Media Type</div>
-                            <div class="setting-description">Choose which media types to show in featured carousel</div>
-                        </div>
-                        <div class="setting-value" id="featured-media-filter-value">Both</div>
-                    </div>
-                </div>
-                
-                <div class="settings-group">
-                    <h2>Continue Watching</h2>
-                    
-                    <div class="setting-item" data-setting="merge-continue-watching" tabindex="0">
-                        <div class="setting-label">
-                            <div class="setting-title">Merge Continue Watching & Next Up</div>
-                            <div class="setting-description">Combine both rows into a single row sorted by recently played</div>
-                        </div>
-                        <div class="setting-value" id="merge-continue-watching-value">Off</div>
-                    </div>
-                </div>
-                
-                <div class="settings-group">
-                    <h2>Backdrop Blur</h2>
-                    
-                    <div class="setting-item" data-setting="backdrop-blur-home" tabindex="0">
-                        <div class="setting-label">
-                            <div class="setting-title">Home Screen Blur Amount</div>
-                            <div class="setting-description">Blur intensity for backdrops on home, genres, and favorites screens (0-5)</div>
-                        </div>
-                        <div class="slider-container" style="display: none;">
-                            <div class="slider-track">
-                                <div class="slider-fill" id="backdrop-blur-home-fill" style="width: 60%"></div>
-                            </div>
-                            <div class="slider-value-display" id="backdrop-blur-home-slider-value">3</div>
-                        </div>
-                        <div class="setting-value" id="backdrop-blur-home-value">3</div>
-                    </div>
-                    
-                    <div class="setting-item" data-setting="backdrop-blur-detail" tabindex="0">
-                        <div class="setting-label">
-                            <div class="setting-title">Detail Screen Blur Amount</div>
-                            <div class="setting-description">Blur intensity for backdrops on movie, TV show, and episode details (0-5)</div>
-                        </div>
-                        <div class="slider-container" style="display: none;">
-                            <div class="slider-track">
-                                <div class="slider-fill" id="backdrop-blur-detail-fill" style="width: 60%"></div>
-                            </div>
-                            <div class="slider-value-display" id="backdrop-blur-detail-slider-value">3</div>
-                        </div>
-                        <div class="setting-value" id="backdrop-blur-detail-value">3</div>
-                    </div>
-                </div>
             </div>
 
             <!-- Display Settings -->
@@ -258,7 +244,7 @@
                 </div>
 
                 <div class="settings-group">
-                    <h2>Poster & Artwork</h2>
+                    <h2>Artwork</h2>
                     
                     <div class="setting-item" data-setting="imageType" tabindex="0">
                         <div class="setting-label">
@@ -270,14 +256,34 @@
                 </div>
 
                 <div class="settings-group">
-                    <h2>Content</h2>
+                    <h2>Background Effects</h2>
                     
-                    <div class="setting-item" data-setting="carouselSpeed" tabindex="0">
+                    <div class="setting-item" data-setting="backdrop-blur-home" tabindex="0">
                         <div class="setting-label">
-                            <div class="setting-title">Featured Carousel Speed</div>
-                            <div class="setting-description">Time between carousel transitions</div>
+                            <div class="setting-title">Home Screen Blur</div>
+                            <div class="setting-description">Blur intensity for backdrops on home, genres, and favorites screens (0-5)</div>
                         </div>
-                        <div class="setting-value" id="carouselSpeedValue">8 seconds</div>
+                        <div class="slider-container" style="display: none;">
+                            <div class="slider-track">
+                                <div class="slider-fill" id="backdrop-blur-home-fill" style="width: 60%"></div>
+                            </div>
+                            <div class="slider-value-display" id="backdrop-blur-home-slider-value">3</div>
+                        </div>
+                        <div class="setting-value" id="backdrop-blur-home-value">3</div>
+                    </div>
+                    
+                    <div class="setting-item" data-setting="backdrop-blur-detail" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">Detail Screen Blur</div>
+                            <div class="setting-description">Blur intensity for backdrops on movie, TV show, and episode details (0-5)</div>
+                        </div>
+                        <div class="slider-container" style="display: none;">
+                            <div class="slider-track">
+                                <div class="slider-fill" id="backdrop-blur-detail-fill" style="width: 60%"></div>
+                            </div>
+                            <div class="slider-value-display" id="backdrop-blur-detail-slider-value">3</div>
+                        </div>
+                        <div class="setting-value" id="backdrop-blur-detail-value">3</div>
                     </div>
                 </div>
             </div>
