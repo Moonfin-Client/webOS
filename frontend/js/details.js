@@ -356,7 +356,8 @@ var DetailsController = (function() {
         
         var params = {
             userId: auth.userId,
-            fields: 'Overview,Genres,People,Studios,Taglines,CommunityRating,CriticRating,OfficialRating,ProductionYear,RunTimeTicks,MediaStreams,Path,ProviderIds'
+            fields: 'Overview,Genres,People,Studios,Taglines,CommunityRating,CriticRating,OfficialRating,ProductionYear,RunTimeTicks,MediaStreams,Path,ProviderIds',
+            _: new Date().getTime()  // Cache-busting timestamp
         };
         
         var endpoint = '/Users/' + auth.userId + '/Items/' + itemId;
@@ -1323,7 +1324,12 @@ var DetailsController = (function() {
         }
         
         // For all other types, play directly
-        window.location.href = 'player.html?id=' + itemData.Id;
+        // If there's a saved position, add position=0 to start from beginning
+        var url = 'player.html?id=' + itemData.Id;
+        if (itemData.UserData && itemData.UserData.PlaybackPositionTicks > 0) {
+            url += '&position=0';
+        }
+        window.location.href = url;
     }
 
     function handleResume() {
@@ -2051,4 +2057,15 @@ var DetailsController = (function() {
 
 window.addEventListener('load', function() {
     DetailsController.init();
+});
+
+// Reload details when returning from player (e.g., after back button)
+window.addEventListener('pageshow', function(event) {
+    // Only reload if this is a navigation from cache (back button)
+    if (event.persisted || performance.navigation.type === 2) {
+        var itemIdFromUrl = new URLSearchParams(window.location.search).get('id');
+        if (itemIdFromUrl) {
+            DetailsController.init();
+        }
+    }
 });
