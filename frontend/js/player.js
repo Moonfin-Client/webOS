@@ -2524,7 +2524,7 @@ var PlayerController = (function() {
                         console.log('[loadNextEpisode] Next episode loaded:', nextEpisodeData.Name, nextEpisodeData.Id);
                     } else {
                         nextEpisodeData = null;
-                        console.log('[loadNextEpisode] No next episode available - Items length:', data?.Items?.length);
+                        console.log('[loadNextEpisode] No next episode available - Items length:', data && data.Items ? data.Items.length : 'N/A');
                     }
                 } catch (e) {
                     console.log('[loadNextEpisode] Error parsing next episode:', e);

@@ -929,18 +929,29 @@ var BrowseController = (function() {
         console.trace('[browse] Stack trace');
         showLoading();
         
+        // Add timeout to prevent hanging on getUserViews
+        var userViewsTimeout = setTimeout(function() {
+            console.error('[browse] getUserViews timed out after 10 seconds');
+            showError('Failed to load libraries - request timed out');
+        }, 10000);
+        
         JellyfinAPI.getUserViews(auth.serverAddress, auth.userId, auth.accessToken, function(err, views) {
+            clearTimeout(userViewsTimeout);
+            
             if (err) {
+                console.error('[browse] getUserViews error:', err);
                 showError('Failed to load libraries');
                 return;
             }
             
             if (!views || !views.Items) {
+                console.error('[browse] getUserViews returned invalid data');
                 showError('Failed to load libraries');
                 return;
             }
             
             if (views.Items.length === 0) {
+                console.warn('[browse] No media libraries available');
                 showError('No media libraries available');
                 return;
             }
@@ -1046,8 +1057,16 @@ var BrowseController = (function() {
             }
             
             // Live TV Support: Check for Live TV availability
+            // Add timeout to prevent hanging
+            var liveTVTimeout = setTimeout(function() {
+                console.warn('[browse] Live TV check timed out, continuing without it');
+                continueLoadingRows();
+            }, 5000);
+            
             JellyfinAPI.getLiveTVInfo(auth.serverAddress, auth.userId, auth.accessToken,
                 function(liveTVErr, liveTVInfo) {
+                clearTimeout(liveTVTimeout);
+                
                 if (!liveTVErr && liveTVInfo && liveTVInfo.available && isRowEnabled('livetv')) {
                     
                     // Add Live TV Channels row
@@ -1068,16 +1087,31 @@ var BrowseController = (function() {
                         order: getRowOrder('livetv', homeRowsSettings) + 0.5
                     });
                 } else {
+                    if (liveTVErr) {
+                        console.warn('[browse] Live TV check failed:', liveTVErr);
+                    }
                 }
                 
                 continueLoadingRows();
             });
             
+            var continueLoadingRowsCalled = false;
             function continueLoadingRows() {
+                // Prevent double-calling from timeout race condition
+                if (continueLoadingRowsCalled) return;
+                continueLoadingRowsCalled = true;
+                
                 // Add Collections row if enabled
                 if (isRowEnabled('collections')) {
+                    var collectionsTimeout = setTimeout(function() {
+                        console.warn('[browse] Collections check timed out, continuing without it');
+                        continueWithLibraries();
+                    }, 5000);
+                    
                     JellyfinAPI.getCollections(auth.serverAddress, auth.userId, auth.accessToken,
                         function(collErr, collData) {
+                        clearTimeout(collectionsTimeout);
+                        
                         if (!collErr && collData && collData.Items && collData.Items.length > 0) {
                             rowsToLoad.push({
                                 title: 'Collections',
@@ -1086,6 +1120,9 @@ var BrowseController = (function() {
                                 order: getRowOrder('collections', homeRowsSettings)
                             });
                         } else {
+                            if (collErr) {
+                                console.warn('[browse] Collections check failed:', collErr);
+                            }
                         }
                         
                         continueWithLibraries();
@@ -1344,6 +1381,23 @@ var BrowseController = (function() {
         var completed = 0;
         var hasContent = false;
         
+        // Add failsafe timeout to always hide loading indicator
+        var loadingFailsafe = setTimeout(function() {
+            console.warn('[browse] loadRows failsafe triggered - forcing hideLoading after 15 seconds');
+            hideLoading();
+            if (!hasContent) {
+                showError('Loading timed out. Some content may not have loaded.');
+            }
+        }, 15000);
+        
+        // If no rows to load, hide loading immediately
+        if (rowDefinitions.length === 0) {
+            clearTimeout(loadingFailsafe);
+            hideLoading();
+            showError('No content rows configured');
+            return;
+        }
+        
         rowDefinitions.forEach(function(rowDef) {
             console.log('[browse] Loading row:', rowDef.title, 'type:', rowDef.type);
             loadRow(rowDef, function(success) {
@@ -1351,6 +1405,7 @@ var BrowseController = (function() {
                 if (success) hasContent = true;
                 
                 if (completed === rowDefinitions.length) {
+                    clearTimeout(loadingFailsafe);
                     hideLoading();
                     if (!hasContent) {
                         showError('No content available in your library');
@@ -1364,14 +1419,33 @@ var BrowseController = (function() {
     function loadRow(rowDef, callback) {
         console.log('[browse] loadRow called for:', rowDef.title, 'type:', rowDef.type);
         
+        // Add per-row timeout to ensure callback is always called
+        var rowCallbackCalled = false;
+        var rowTimeout = setTimeout(function() {
+            if (!rowCallbackCalled) {
+                console.warn('[browse] Row loading timed out after 8 seconds:', rowDef.title);
+                rowCallbackCalled = true;
+                if (callback) callback(false);
+            }
+        }, 8000);
+        
+        // Wrapper to ensure callback is only called once
+        var safeCallback = function(success) {
+            if (rowCallbackCalled) return;
+            rowCallbackCalled = true;
+            clearTimeout(rowTimeout);
+            console.log('[browse] Row completed:', rowDef.title, 'success:', success);
+            if (callback) callback(success);
+        };
+        
         // Handle library tiles row (special case - no API call needed)
         if (rowDef.type === 'library-tiles') {
             console.log('[browse] Rendering library tiles, count:', rowDef.libraries ? rowDef.libraries.length : 0);
             if (rowDef.libraries && rowDef.libraries.length > 0) {
                 renderRow(rowDef.title, rowDef.libraries, rowDef.type);
-                if (callback) callback(true);
+                safeCallback(true);
             } else {
-                if (callback) callback(false);
+                safeCallback(false);
             }
             return;
         }
@@ -1384,13 +1458,13 @@ var BrowseController = (function() {
                 console.log('[browse] Resume items response:', err ? 'ERROR: ' + err : 'Success', 'data:', data);
                 if (err || !data || !data.Items || data.Items.length === 0) {
                     console.log('[browse] No resume items to display');
-                    if (callback) callback(false);
+                    safeCallback(false);
                     return;
                 }
                 
                 console.log('[browse] Rendering', data.Items.length, 'resume items');
                 renderRow(rowDef.title, data.Items, rowDef.type);
-                if (callback) callback(true);
+                safeCallback(true);
             });
             return;
         }
@@ -1399,12 +1473,12 @@ var BrowseController = (function() {
             // Merged Continue Watching - combines Resume and Next Up
             JellyfinAPI.getMergedContinueWatching(auth.serverAddress, auth.userId, auth.accessToken, function(err, data) {
                 if (err || !data || !data.Items || data.Items.length === 0) {
-                    if (callback) callback(false);
+                    safeCallback(false);
                     return;
                 }
                 
                 renderRow(rowDef.title, data.Items, 'resume');
-                if (callback) callback(true);
+                safeCallback(true);
             });
             return;
         }
@@ -1416,13 +1490,13 @@ var BrowseController = (function() {
                 console.log('[browse] Next up response:', err ? 'ERROR: ' + err : 'Success', 'data:', data);
                 if (err || !data || !data.Items || data.Items.length === 0) {
                     console.log('[browse] No next up items to display');
-                    if (callback) callback(false);
+                    safeCallback(false);
                     return;
                 }
                 
                 console.log('[browse] Rendering', data.Items.length, 'next up items');
                 renderRow(rowDef.title, data.Items, rowDef.type);
-                if (callback) callback(true);
+                safeCallback(true);
             });
             return;
         }
@@ -1436,13 +1510,13 @@ var BrowseController = (function() {
                 console.log('[browse] Latest media response:', err ? 'ERROR: ' + err : 'Success', 'data:', data);
                 if (err || !data || !data.Items || data.Items.length === 0) {
                     console.log('[browse] No latest items to display');
-                    if (callback) callback(false);
+                    safeCallback(false);
                     return;
                 }
                 
                 console.log('[browse] Rendering', data.Items.length, 'latest items');
                 renderRow(rowDef.title, data.Items, rowDef.type);
-                if (callback) callback(true);
+                safeCallback(true);
             });
             return;
         }
@@ -1454,13 +1528,13 @@ var BrowseController = (function() {
                 console.log('[browse] Favorite Live TV channels response:', err ? 'ERROR: ' + err : 'Success', 'data:', data);
                 if (err || !data || data.length === 0) {
                     console.log('[browse] No favorite Live TV channels to display');
-                    if (callback) callback(false);
+                    safeCallback(false);
                     return;
                 }
                 
                 console.log('[browse] Rendering', data.length, 'favorite Live TV channels');
                 renderRow(rowDef.title, data, rowDef.type);
-                if (callback) callback(true);
+                safeCallback(true);
             });
             return;
         }
@@ -1472,13 +1546,13 @@ var BrowseController = (function() {
                 console.log('[browse] Live TV recordings response:', err ? 'ERROR: ' + err : 'Success', 'data:', data);
                 if (err || !data || !data.Items || data.Items.length === 0) {
                     console.log('[browse] No Live TV recordings to display');
-                    if (callback) callback(false);
+                    safeCallback(false);
                     return;
                 }
                 
                 console.log('[browse] Rendering', data.Items.length, 'Live TV recordings');
                 renderRow(rowDef.title, data.Items, rowDef.type);
-                if (callback) callback(true);
+                safeCallback(true);
             });
             return;
         }
@@ -1490,13 +1564,13 @@ var BrowseController = (function() {
                 console.log('[browse] Collections response:', err ? 'ERROR: ' + err : 'Success', 'data:', data);
                 if (err || !data || !data.Items || data.Items.length === 0) {
                     console.log('[browse] No collections to display');
-                    if (callback) callback(false);
+                    safeCallback(false);
                     return;
                 }
                 
                 console.log('[browse] Rendering', data.Items.length, 'collections');
                 renderRow(rowDef.title, data.Items, rowDef.type);
-                if (callback) callback(true);
+                safeCallback(true);
             });
             return;
         }
@@ -1571,13 +1645,13 @@ var BrowseController = (function() {
             console.log('[browse] Generic items response:', err ? 'ERROR: ' + err : 'Success', 'data:', data);
             if (err || !data || !data.Items || data.Items.length === 0) {
                 console.log('[browse] No generic items to display');
-                if (callback) callback(false);
+                safeCallback(false);
                 return;
             }
             
             console.log('[browse] Rendering', data.Items.length, 'generic items');
             renderRow(rowDef.title, data.Items, rowDef.type);
-            if (callback) callback(true);
+            safeCallback(true);
         });
     }
 

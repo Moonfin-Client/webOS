@@ -1,10 +1,9 @@
+/**
+ * Library Controller
+ * Handles library grid navigation, filtering, and item selection
+ * @namespace LibraryController
+ */
 const LibraryController = {
-    /**
-     * Library Controller
-     * Handles library grid navigation, filtering, and item selection
-     * @namespace LibraryController
-     */
-    const LibraryController = {
     libraryId: null,
     libraryName: null,
     libraryType: null,
@@ -32,11 +31,6 @@ const LibraryController = {
      * Gets library ID from URL, caches elements, and loads library items
      */
     init() {
-            /**
-             * Initialize the library controller
-             * Gets library ID from URL, caches elements, and loads library items
-             */
-            init() {
         const urlParams = new URLSearchParams(window.location.search);
         this.libraryId = urlParams.get('id');
         
@@ -70,10 +64,6 @@ const LibraryController = {
      * Cache frequently accessed DOM elements for better performance
      */
     cacheElements() {
-            /**
-             * Cache frequently accessed DOM elements for better performance
-             */
-            cacheElements() {
         this.elements.loading = document.getElementById('loading');
         this.elements.itemGrid = document.getElementById('item-grid');
         this.elements.errorDisplay = document.getElementById('error-display');
@@ -84,10 +74,6 @@ const LibraryController = {
      * Set up keyboard and click event listeners
      */
     setupEventListeners() {
-            /**
-             * Set up keyboard and click event listeners
-             */
-            setupEventListeners() {
         document.addEventListener('keydown', (e) => this.handleKeyDown(e));
 
         // Filter buttons
@@ -146,11 +132,6 @@ const LibraryController = {
      * @private
      */
     updateColumns() {
-            /**
-             * Update grid column count based on viewport width
-             * @private
-             */
-            updateColumns() {
         const width = window.innerWidth;
         if (width >= 1920) {
             this.columns = 7;
@@ -166,11 +147,6 @@ const LibraryController = {
      * Fetches library details and items, then displays them in grid
      */
     loadLibrary() {
-            /**
-             * Load library items from Jellyfin server
-             * Fetches library details and items, then displays them in grid
-             */
-            loadLibrary() {
         const self = this;
         self.showLoading();
 
@@ -300,12 +276,6 @@ const LibraryController = {
      * @private
      */
     displayItems() {
-            /**
-             * Display library items in the grid
-             * Clears existing items and renders current item list
-             * @private
-             */
-            displayItems() {
         if (!this.elements.itemGrid) return;
         
         this.elements.itemGrid.innerHTML = '';
@@ -337,14 +307,6 @@ const LibraryController = {
      * @private
      */
     createGridItem(item, index) {
-            /**
-             * Create a grid item element for a library item
-             * @param {Object} item - Jellyfin item object
-             * @param {number} index - Item index in the grid
-             * @returns {HTMLElement} Grid item element
-             * @private
-             */
-            createGridItem(item, index) {
         const auth = JellyfinAPI.getStoredAuth();
         const div = document.createElement('div');
         div.className = 'grid-item';
@@ -459,12 +421,6 @@ const LibraryController = {
      * @private
      */
     handleKeyDown(e) {
-            /**
-             * Handle keyboard navigation in library grid
-             * @param {KeyboardEvent} e - Keyboard event
-             * @private
-             */
-            handleKeyDown(e) {
         const keyCode = e.keyCode;
 
         // Handle navbar navigation separately
@@ -541,12 +497,6 @@ const LibraryController = {
      * @private
      */
     updateFocus() {
-            /**
-             * Update focus to the current grid item
-             * Scrolls item into view smoothly
-             * @private
-             */
-            updateFocus() {
         const items = document.querySelectorAll('.grid-item');
         items.forEach((item, index) => {
             if (index === this.currentIndex) {
@@ -562,12 +512,6 @@ const LibraryController = {
      * @private
      */
     selectItem(index) {
-            /**
-             * Navigate to details page for selected item
-             * @param {number} index - Index of item to select
-             * @private
-             */
-            selectItem(index) {
         const item = this.items[index];
         if (!item) return;
 
@@ -580,11 +524,6 @@ const LibraryController = {
      * @private
      */
     showSortMenu() {
-            /**
-             * Show sort menu modal
-             * @private
-             */
-            showSortMenu() {
         
         // Different sort options based on library type
         let sortOptions;
@@ -644,11 +583,6 @@ const LibraryController = {
      * @private
      */
     showFilterMenu() {
-            /**
-             * Show filter menu modal
-             * @private
-             */
-            showFilterMenu() {
         
         // Different filter options based on library type
         let filterStates;
@@ -726,22 +660,12 @@ const LibraryController = {
      * @private
      */
     showLoading() {
-            /**
-             * Show loading indicator, hide grid and errors
-             * @private
-             */
-            showLoading() {
         if (this.elements.loading) this.elements.loading.style.display = 'flex';
         if (this.elements.errorDisplay) this.elements.errorDisplay.style.display = 'none';
         if (this.elements.itemGrid) this.elements.itemGrid.style.display = 'none';
     },
 
     hideLoading() {
-            /**
-             * Hide loading indicator, show grid
-             * @private
-             */
-            hideLoading() {
         if (this.elements.loading) this.elements.loading.style.display = 'none';
         if (this.elements.itemGrid) this.elements.itemGrid.style.display = 'grid';
     },
@@ -752,12 +676,6 @@ const LibraryController = {
      * @private
      */
     showError(message) {
-            /**
-             * Show error message, hide loading and grid
-             * @param {string} message - Error message to display
-             * @private
-             */
-            showError(message) {
         if (this.elements.loading) this.elements.loading.style.display = 'none';
         if (this.elements.itemGrid) this.elements.itemGrid.style.display = 'none';
         if (this.elements.errorDisplay) {
@@ -771,11 +689,6 @@ const LibraryController = {
      * @private
      */
     showEmptyFilteredResults() {
-            /**
-             * Show inline message for empty filtered results
-             * @private
-             */
-            showEmptyFilteredResults() {
         // Hide loading
         if (this.elements.loading) this.elements.loading.style.display = 'none';
         if (this.elements.errorDisplay) this.elements.errorDisplay.style.display = 'none';
@@ -804,11 +717,6 @@ const LibraryController = {
     },
 
     showEmptyLibrary() {
-            /**
-             * Show message for empty library
-             * @private
-             */
-            showEmptyLibrary() {
         // Hide loading and grid
         if (this.elements.loading) this.elements.loading.style.display = 'none';
         if (this.elements.itemGrid) this.elements.itemGrid.style.display = 'none';
@@ -867,12 +775,6 @@ const LibraryController = {
      * @private
      */
     getNavButtons() {
-            /**
-             * Get all navbar button elements
-             * @returns {HTMLElement[]} Array of navbar button elements
-             * @private
-             */
-            getNavButtons() {
         return Array.from(document.querySelectorAll('.nav-left .nav-btn, .nav-center .nav-btn'));
     },
 
@@ -880,11 +782,6 @@ const LibraryController = {
      * @private
      */
     focusToFilterBar() {
-            /**
-             * Focus to the filter bar
-             * @private
-             */
-            focusToFilterBar() {
         const sortBtn = document.getElementById('sort-btn');
         if (sortBtn) {
             sortBtn.focus();
@@ -896,11 +793,6 @@ const LibraryController = {
      * @private
      */
     focusFirstGridItem() {
-            /**
-             * Focus to the first grid item
-             * @private
-             */
-            focusFirstGridItem() {
         if (this.items.length > 0) {
             this.currentIndex = 0;
             this.updateFocus();
@@ -911,11 +803,6 @@ const LibraryController = {
      * @private
      */
     focusToNavBar() {
-            /**
-             * Move focus from grid to navbar
-             * @private
-             */
-            focusToNavBar() {
         this.inNavBar = true;
         const navButtons = this.getNavButtons();
         
@@ -934,11 +821,6 @@ const LibraryController = {
      * @private
      */
     focusToGrid() {
-            /**
-             * Move focus from navbar back to grid
-             * @private
-             */
-            focusToGrid() {
         this.inNavBar = false;
         const navButtons = this.getNavButtons();
         navButtons.forEach(btn => btn.classList.remove('focused'));
@@ -951,12 +833,6 @@ const LibraryController = {
      * @private
      */
     handleNavBarNavigation(e) {
-            /**
-             * Handle keyboard navigation within navbar
-             * @param {KeyboardEvent} e - Keyboard event
-             * @private
-             */
-            handleNavBarNavigation(e) {
         const navButtons = this.getNavButtons();
         
         navButtons.forEach(btn => btn.classList.remove('focused'));

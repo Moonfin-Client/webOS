@@ -1,0 +1,158 @@
+/**
+ * Legacy Browser Compatibility CSS
+ * Polyfills for CSS features not supported in WebOS 6 (Chromium 53)
+ * 
+ * This file provides fallbacks for:
+ * - Flexbox gap property (added in Chrome 84)
+ * 
+ * Strategy: Use margin-right on child elements except the last one to simulate gap
+ */
+
+/* Buttons containers - horizontal spacing */
+.featured-buttons > *:not(:last-child),
+.detail-buttons > *:not(:last-child),
+.popup-actions > *:not(:last-child),
+.action-buttons > *:not(:last-child) {
+    margin-right: 15px;
+}
+
+/* Navbar spacing */
+.nav-left > *:not(:last-child),
+.nav-center > *:not(:last-child) {
+    margin-right: 14px;
+}
+
+/* Filter/Control bars */
+.filter-bar > *:not(:last-child),
+.sort-controls > *:not(:last-child) {
+    margin-right: 12px;
+}
+
+/* Content rows - vertical spacing */
+.rows-container > *:not(:last-child),
+.browse-container > *:not(:last-child) {
+    margin-bottom: 40px;
+}
+
+/* Row items - horizontal scrolling */
+.row-scroller > *:not(:last-child),
+.row-items > *:not(:last-child),
+.item-row > *:not(:last-child) {
+    margin-right: 20px;
+}
+
+/* Cast/crew rows */
+.cast-row > *:not(:last-child),
+.crew-row > *:not(:last-child) {
+    margin-right: 15px;
+}
+
+/* Metadata and info sections - vertical spacing */
+.detail-metadata > *:not(:last-child),
+.popup-metadata > *:not(:last-child),
+.program-info > *:not(:last-child),
+.show-info > *:not(:last-child) {
+    margin-bottom: 12px;
+}
+
+/* Popup/Modal content - vertical spacing */
+.popup-info > *:not(:last-child),
+.modal-content > *:not(:last-child) {
+    margin-bottom: 20px;
+}
+
+.popup-body > *:not(:last-child) {
+    margin-right: 30px;
+}
+
+/* Metadata items - horizontal spacing */
+.metadata-item > *:not(:last-child),
+.info-item > *:not(:last-child) {
+    margin-right: 10px;
+}
+
+/* Grid layouts - use margins on all items and negative margin on container */
+.library-grid,
+.search-results,
+.channel-grid,
+.season-grid,
+.episode-grid {
+    margin: -10px;
+}
+
+.library-grid > *,
+.search-results > *,
+.channel-grid > *,
+.season-grid > *,
+.episode-grid > * {
+    margin: 10px;
+}
+
+/* Channel items - horizontal spacing */
+.channels-container > *:not(:last-child),
+.channel-list > *:not(:last-child) {
+    margin-right: 15px;
+}
+
+/* Season and episode lists - vertical */
+.season-list > *:not(:last-child),
+.episode-list > *:not(:last-child) {
+    margin-bottom: 15px;
+}
+
+/* Detail sections */
+.detail-content > *:not(:last-child),
+.detail-section > *:not(:last-child) {
+    margin-bottom: 30px;
+}
+
+/* Info rows */
+.detail-info-row > *:not(:last-child),
+.info-row > *:not(:last-child) {
+    margin-right: 8px;
+}
+
+/* Settings sections */
+.settings-section > *:not(:last-child),
+.settings-group > *:not(:last-child) {
+    margin-bottom: 20px;
+}
+
+.settings-controls > *:not(:last-child) {
+    margin-right: 15px;
+}
+
+/* Discovery/Browse sections */
+.discover-section > *:not(:last-child),
+.browse-section > *:not(:last-child) {
+    margin-bottom: 25px;
+}
+
+/* Player controls */
+.player-controls > *:not(:last-child),
+.playback-controls > *:not(:last-child) {
+    margin-right: 12px;
+}
+
+/* Track selector */
+.track-options > *:not(:last-child),
+.track-list > *:not(:last-child) {
+    margin-bottom: 10px;
+}
+
+/* Recording items */
+.recording-items > *:not(:last-child),
+.recording-list > *:not(:last-child) {
+    margin-right: 20px;
+}
+
+/* Server/login sections */
+.server-list > *:not(:last-child),
+.user-list > *:not(:last-child) {
+    margin-bottom: 20px;
+}
+
+.login-buttons > *:not(:last-child),
+.connection-buttons > *:not(:last-child) {
+    margin-right: 20px;
+}

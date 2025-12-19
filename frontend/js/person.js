@@ -253,6 +253,12 @@ var PersonController = (function() {
             var birthdayStr = birthdayDate.toLocaleDateString('en-US', {
                 year: 'numeric',
                 month: 'long',
+                day: 'numeric'
+            });
+            elements.birthday.textContent = birthdayStr;
+            elements.birthdayContainer.style.display = 'flex';
+        }
+        
         var auth = JellyfinAPI.getStoredAuth();
         
         // Set profile image
@@ -314,8 +320,8 @@ var PersonController = (function() {
         
         // Set overview as biography
         if (person.Overview) {
-            elements.biography.textContent = person.OverviewhowsList, 'tv');
-            elements.tvShowsSection.style.display = 'block';
+            elements.biography.textContent = person.Overview;
+            elements.biographyContainer.style.display = 'block';
         }
     }
 
@@ -364,54 +370,44 @@ var PersonController = (function() {
         // Info
         var info = document.createElement('div');
         info.className = 'credit-info';
-         for Jellyfin item
-     */
-    function createCreditCard(credit, type, index) {
-        var auth = JellyfinAPI.getStoredAuth();
-        var card = document.createElement('div');
-        card.className = 'credit-card';
-        card.setAttribute('data-item-id', credit.Id);
-        card.setAttribute('data-type', type);
-        card.setAttribute('data-index', index);
-        card.setAttribute('tabindex', '0');
-        
-        // Poster
-        var posterContainer = document.createElement('div');
-        posterContainer.className = 'credit-poster-container';
-        
-        if (credit.ImageTags && credit.ImageTags.Primary) {
-            var poster = document.createElement('img');
-            poster.className = 'credit-poster';
-            poster.src = auth.serverAddress + '/Items/' + credit.Id + '/Images/Primary?fillHeight=400&quality=90';
-            poster.alt = credit.Name || 'Media';
-            posterContainer.appendChild(poster);
-        } else {
-            var placeholder = document.createElement('div');
-            placeholder.className = 'credit-poster-placeholder';
-            placeholder.textContent = '🎬';
-            posterContainer.appendChild(placeholder);
-        }
-        
-        card.appendChild(posterContainer);
-        
-        // Info
-        var info = document.createElement('div');
-        info.className = 'credit-info';
         
         var title = document.createElement('div');
         title.className = 'credit-title';
-        title.textContent = credit.Name || 'Unknown';
+        title.textContent = credit.title || credit.name || 'Unknown';
         info.appendChild(title);
         
         var subtitle = document.createElement('div');
         subtitle.className = 'credit-subtitle';
         
-        // Show year
-        if (credit.ProductionYear) {
-            subtitle.textContent = credit.ProductionYear;
-        } else if (credit.PremiereDate) {
-            var year = new Date(credit.PremiereDate).getFullYear();
-            subtitle.textContent = yearay = 'none';
+        // Show year or role
+        if (credit.releaseDate || credit.firstAirDate) {
+            var dateStr = credit.releaseDate || credit.firstAirDate;
+            var year = new Date(dateStr).getFullYear();
+            subtitle.textContent = year;
+        } else if (credit.character) {
+            subtitle.textContent = 'as ' + credit.character;
+        }
+        
+        info.appendChild(subtitle);
+        card.appendChild(info);
+        
+        // Click handler
+        card.addEventListener('click', function() {
+            if (type === 'movie') {
+                window.location.href = 'jellyseerr-details.html?type=movie&id=' + credit.id;
+            } else {
+                window.location.href = 'jellyseerr-details.html?type=tv&id=' + credit.id;
+            }
+        });
+        
+        return card;
+    }
+
+    /**
+     * Show error message
+     */
+    function showError(message) {
+        elements.loading.style.display = 'none';
         elements.personDetails.style.display = 'none';
         elements.errorMessage.style.display = 'flex';
         elements.errorText.textContent = message;
@@ -437,14 +433,15 @@ var PersonController = (function() {
                 focusToCredits();
             }
         } else if (state.focusContext === 'credits') {
-            handleCreditsNavigation(keyCode);
+            handleCreditsNavigation(event);
         }
     }
 
     /**
-     * H// Navigate to Jellyfin details page
-        window.location.href = 'details.html?id=' + credit.Id
-    function handleCreditsNavigation(keyCode) {
+     * Handle credits navigation
+     */
+    function handleCreditsNavigation(event) {
+        var keyCode = event.keyCode;
         var sections = [];
         if (state.credits.movies.length > 0) sections.push('movies');
         if (state.credits.tvShows.length > 0) sections.push('tvShows');
