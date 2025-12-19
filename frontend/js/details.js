@@ -1,4 +1,9 @@
 var DetailsController = (function() {
+    /**
+     * Theme music URL for the current item
+     * @type {string|null}
+     */
+    var themeMusicUrl = null;
     'use strict';
 
     let auth = null;
@@ -396,6 +401,22 @@ var DetailsController = (function() {
      * @private
      */
     function displayItemDetails() {
+        // Play theme music if available and enabled
+        if (typeof ThemeMusicPlayer !== 'undefined' && ThemeMusicPlayer.isEnabled()) {
+            themeMusicUrl = null;
+            if (itemData) {
+                if (itemData.ThemeSongId && auth && auth.serverAddress) {
+                    themeMusicUrl = auth.serverAddress + '/Audio/' + itemData.ThemeSongId + '/stream?static=true&api_key=' + auth.accessToken;
+                } else if (itemData.ThemeSongUrl) {
+                    themeMusicUrl = itemData.ThemeSongUrl;
+                }
+            }
+            if (themeMusicUrl) {
+                ThemeMusicPlayer.play(themeMusicUrl);
+            } else {
+                ThemeMusicPlayer.stop();
+            }
+        }
         // Check if this is a Person type (actor, director, etc.)
         if (itemData.Type === 'Person') {
             displayPersonDetails();
@@ -2061,6 +2082,10 @@ window.addEventListener('load', function() {
 
 // Reload details when returning from player (e.g., after back button)
 window.addEventListener('pageshow', function(event) {
+    // Stop theme music if returning from player or navigation
+    if (typeof ThemeMusicPlayer !== 'undefined') {
+        ThemeMusicPlayer.stop();
+    }
     // Only reload if this is a navigation from cache (back button)
     if (event.persisted || performance.navigation.type === 2) {
         var itemIdFromUrl = new URLSearchParams(window.location.search).get('id');

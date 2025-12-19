@@ -2352,6 +2352,10 @@ window.addEventListener('load', function() {
 });
 
 window.addEventListener('visibilitychange', function() {
+        // Stop theme music on navigation away
+        if (typeof ThemeMusicPlayer !== 'undefined') {
+            ThemeMusicPlayer.stop();
+        }
     if (!document.hidden) {
         BrowseController.reloadCurrentView();
     }

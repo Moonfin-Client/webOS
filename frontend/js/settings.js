@@ -30,6 +30,11 @@ var SettingsController = (function() {
     const CAROUSEL_SPEED_TO_SECONDS = 1000;
 
     var settings = {
+    /**
+     * Play theme music in details view
+     * @type {boolean}
+     */
+    playThemeMusic: true,
         autoLogin: false,
         clockDisplay: '12-hour',
         skipIntro: true,
@@ -260,6 +265,11 @@ var SettingsController = (function() {
      * @private
      */
     function updateSettingValues() {
+        // Update theme music setting value
+        var playThemeMusicValue = document.getElementById('playThemeMusicValue');
+        if (playThemeMusicValue) {
+            playThemeMusicValue.textContent = settings.playThemeMusic ? 'On' : 'Off';
+        }
         var autoLoginValue = document.getElementById('autoLoginValue');
         if (autoLoginValue) {
             autoLoginValue.textContent = settings.autoLogin ? 'On' : 'Off';
@@ -954,6 +964,15 @@ var SettingsController = (function() {
         var settingName = item.dataset.setting;
         
         switch (settingName) {
+        case 'playThemeMusic':
+            // Toggle theme music setting
+            settings.playThemeMusic = !settings.playThemeMusic;
+            saveSettings();
+            updateSettingValues();
+            if (typeof ThemeMusicPlayer !== 'undefined') {
+                ThemeMusicPlayer.setEnabled(settings.playThemeMusic);
+            }
+            break;
             case 'homeSections':
                 openHomeRowsModal();
                 break;
@@ -1562,6 +1581,10 @@ var SettingsController = (function() {
      * @private
      */
     function syncImageHelperSettings() {
+        // Sync theme music setting
+        if (typeof ThemeMusicPlayer !== 'undefined') {
+            ThemeMusicPlayer.setEnabled(settings.playThemeMusic);
+        }
         if (typeof ImageHelper === 'undefined') return;
         
         ImageHelper.setImageType(settings.imageType);
