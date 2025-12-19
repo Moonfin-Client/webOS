@@ -113,10 +113,12 @@
             
             if (discoverBtn) {
                 if (!jellyseerrEnabled || !jellyseerrShowDiscover) {
-                    // Remove from DOM completely
-                    discoverBtn.remove();
+                    // Hide button completely and make it unfocusable
+                    discoverBtn.style.display = 'none';
+                    discoverBtn.setAttribute('tabindex', '-1');
                 } else {
                     discoverBtn.style.display = '';
+                    discoverBtn.removeAttribute('tabindex');
                 }
             }
             

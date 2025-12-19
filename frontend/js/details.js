@@ -160,6 +160,10 @@ var DetailsController = (function() {
             requestBtnWrapper: document.getElementById('requestBtnWrapper'),
             deleteRequestBtn: document.getElementById('deleteRequestBtn'),
             deleteRequestBtnWrapper: document.getElementById('deleteRequestBtnWrapper'),
+            goToSeriesBtn: document.getElementById('goToSeriesBtn'),
+            goToSeriesBtnWrapper: document.getElementById('goToSeriesBtnWrapper'),
+            deleteRequestBtn: document.getElementById('deleteRequestBtn'),
+            deleteRequestBtnWrapper: document.getElementById('deleteRequestBtnWrapper'),
             seasonSelectorModal: document.getElementById('seasonSelectorModal'),
             allSeasonsBtn: document.getElementById('allSeasonsBtn'),
             firstSeasonBtn: document.getElementById('firstSeasonBtn'),
@@ -201,6 +205,9 @@ var DetailsController = (function() {
         }
         if (elements.moreBtn) {
             elements.moreBtn.addEventListener('click', handleMore);
+        }
+        if (elements.goToSeriesBtn) {
+            elements.goToSeriesBtn.addEventListener('click', handleGoToSeries);
         }
         if (elements.backBtn) {
             elements.backBtn.addEventListener('click', goBack);
@@ -645,8 +652,9 @@ var DetailsController = (function() {
             }
         }
         
-        if (elements.moreBtnWrapper) {
-            elements.moreBtnWrapper.style.display = 'flex';
+        // Show "Go to Series" button for episodes
+        if (itemData.Type === 'Episode' && itemData.SeriesId && elements.goToSeriesBtnWrapper) {
+            elements.goToSeriesBtnWrapper.style.display = 'flex';
         }
         
         setTimeout(function() {
@@ -1508,6 +1516,12 @@ var DetailsController = (function() {
 
     function handleMore() {
         alert('More options menu not yet implemented');
+    }
+
+    function handleGoToSeries() {
+        if (itemData && itemData.SeriesId) {
+            window.location.href = 'details.html?id=' + itemData.SeriesId;
+        }
     }
 
     function goBack() {

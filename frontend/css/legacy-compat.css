@@ -16,6 +16,11 @@
     margin-right: 15px;
 }
 
+/* Featured carousel indicators */
+.featured-indicators > *:not(:last-child) {
+    margin-right: 10px;
+}
+
 /* Navbar spacing */
 .nav-left > *:not(:last-child),
 .nav-center > *:not(:last-child) {
@@ -34,17 +39,35 @@
     margin-bottom: 40px;
 }
 
+/* Featured metadata */
+.featured-meta > *:not(:last-child) {
+    margin-right: 15px;
+}
+
 /* Row items - horizontal scrolling */
 .row-scroller > *:not(:last-child),
-.row-items > *:not(:last-child),
 .item-row > *:not(:last-child) {
     margin-right: 20px;
 }
 
+.row-items > *:not(:last-child) {
+    margin-right: 16px;
+}
+
 /* Cast/crew rows */
 .cast-row > *:not(:last-child),
-.crew-row > *:not(:last-child) {
-    margin-right: 15px;
+.crew-row > *:not(:last-child),
+.cast-list > *:not(:last-child),
+.crew-list > *:not(:last-child) {
+    margin-right: 20px;
+}
+
+/* TV Show specific sections */
+.nextup-list > *:not(:last-child),
+.seasons-list > *:not(:last-child),
+.episodes-list > *:not(:last-child),
+.similar-list > *:not(:last-child) {
+    margin-right: 20px;
 }
 
 /* Metadata and info sections - vertical spacing */
@@ -155,4 +178,118 @@
 .login-buttons > *:not(:last-child),
 .connection-buttons > *:not(:last-child) {
     margin-right: 20px;
+}
+/* Browse-by page */
+.controls-left > *:not(:last-child),
+.active-filters > *:not(:last-child) {
+    margin-right: 12px;
+}
+
+.control-btn > *:not(:last-child) {
+    margin-right: 10px;
+}
+
+.content-grid {
+    margin: -12.5px;
+}
+
+.content-grid > * {
+    margin: 12.5px;
+}
+
+.modal-options > *:not(:last-child) {
+    margin-bottom: 12px;
+}
+
+/* Discover/Browse sections - Additional */
+.category-nav > *:not(:last-child) {
+    margin-right: 15px;
+}
+
+.media-type-filter > *:not(:last-child) {
+    margin-right: 15px;
+}
+
+.connection-actions > *:not(:last-child) {
+    margin-right: 20px;
+}
+
+/* Jellyseerr details */
+.recommendations-list > *:not(:last-child) {
+    margin-right: 20px;
+}
+
+.modal-buttons > *:not(:last-child),
+.modal-actions > *:not(:last-child) {
+    margin-right: 12px;
+}
+
+/* Library page */
+.filter-bar > *:not(:last-child) {
+    margin-right: 20px;
+}
+
+/* Live TV */
+.guide-controls > *:not(:last-child) {
+    margin-right: 15px;
+}
+
+.metadata-item > *:not(:last-child) {
+    margin-right: 10px;
+}
+
+/* Navbar */
+.nav-pill > *:not(:last-child) {
+    margin-right: 0px;
+}
+
+.nav-btn-icon > *:not(:last-child) {
+    margin-right: 8px;
+}
+
+/* Person page */
+.person-header > *:not(:last-child) {
+    margin-right: 40px;
+}
+
+.skeleton-meta > *:not(:last-child) {
+    margin-right: 16px;
+}
+
+/* Player controls */
+.control-buttons > *:not(:last-child),
+.control-buttons-bottom > *:not(:last-child) {
+    margin-right: 20px;
+}
+
+/* Recordings page */
+.recordings-tabs > *:not(:last-child) {
+    margin-right: 20px;
+}
+
+.scheduled-item-actions > *:not(:last-child) {
+    margin-right: 10px;
+}
+
+/* Search page */
+.source-selector > *:not(:last-child) {
+    margin-right: 15px;
+}
+
+.result-items > *:not(:last-child) {
+    margin-right: 20px;
+}
+
+/* Settings page */
+.row-controls > *:not(:last-child) {
+    margin-right: 10px;
+}
+
+/* Card metadata - horizontal */
+.card-meta > *:not(:last-child) {
+    margin-right: 12px;
+}
+
+.card-rating > *:not(:last-child) {
+    margin-right: 4px;
 }
