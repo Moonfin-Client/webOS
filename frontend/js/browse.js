@@ -66,6 +66,14 @@ var BrowseController = (function() {
                 }, CONTENT_LOAD_DELAY_MS);
             }
         }, NAVBAR_CHECK_INTERVAL_MS);
+        
+        // Handle page show event (when returning via back button)
+        window.addEventListener('pageshow', function(event) {
+            // If page is being restored from cache, reload home view
+            if (event.persisted || performance.navigation.type === 2) {
+                switchView('home');
+            }
+        });
     }
 
     /**
@@ -203,6 +211,13 @@ var BrowseController = (function() {
                 evt.preventDefault();
                 return;
             } else if (!focusManager.inNavBar) {
+                // If we're viewing a library, go back to home
+                if (currentView === 'library') {
+                    switchView('home');
+                    evt.preventDefault();
+                    return;
+                }
+                // Otherwise move focus to navbar
                 focusToNavBar();
                 evt.preventDefault();
                 return;
@@ -1271,6 +1286,14 @@ var BrowseController = (function() {
                 parentId: libraryId
             });
             
+        } else if (collectionType === 'boxsets') {
+            // Collections library - show all collections
+            rowsToLoad.push({
+                title: 'All Collections',
+                type: 'collections',
+                parentId: libraryId
+            });
+            
         } else {
             // Generic library view - just show all items
             rowsToLoad.push({
@@ -1985,7 +2008,33 @@ var BrowseController = (function() {
         
         var titleDiv = document.createElement('div');
         titleDiv.className = 'item-title';
-        titleDiv.textContent = item.Name;
+        
+        // For episodes, show series name and episode info
+        if (item.Type === 'Episode') {
+            var seriesName = document.createElement('div');
+            seriesName.className = 'series-name';
+            seriesName.textContent = item.SeriesName || item.Name;
+            
+            var episodeInfo = document.createElement('div');
+            episodeInfo.className = 'episode-info';
+            var episodeText = '';
+            if (item.ParentIndexNumber) {
+                episodeText += 'S' + item.ParentIndexNumber;
+            }
+            if (item.IndexNumber) {
+                episodeText += 'E' + item.IndexNumber;
+            }
+            if (item.Name) {
+                if (episodeText) episodeText += ' - ';
+                episodeText += item.Name;
+            }
+            episodeInfo.textContent = episodeText;
+            
+            titleDiv.appendChild(seriesName);
+            titleDiv.appendChild(episodeInfo);
+        } else {
+            titleDiv.textContent = item.Name;
+        }
         
         // Add progress bar for items with playback progress
         var progressContainer = null;
@@ -2281,8 +2330,19 @@ var BrowseController = (function() {
         return setting ? setting.order : 999;
     }
 
+    /**
+     * Initialize the browse controller and set up the page
+     * @function
+     */
+    // Expose public API
     return {
+        /**
+         * Initialize the browse controller and set up the page
+         */
         init: init,
+        /**
+         * Reload the current view (home, library, etc.)
+         */
         reloadCurrentView: reloadCurrentView
     };
 })();

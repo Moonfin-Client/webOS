@@ -46,7 +46,6 @@ var SettingsController = (function() {
         // Image Helper settings
         imageType: 'Primary',
         posterSize: 300, // X-Large (always highest quality)
-        preferParentThumb: false,
         // Continue Watching settings
         mergeContinueWatchingNextUp: false,
         // Backdrop blur settings
@@ -314,14 +313,8 @@ var SettingsController = (function() {
         // Image Helper settings
         var imageTypeValue = document.getElementById('imageTypeValue');
         if (imageTypeValue) {
-            var imageTypeText = settings.imageType === 'Primary' ? 'Poster' : 
-                                settings.imageType === 'Thumb' ? 'Thumbnail' : 'Banner';
+            var imageTypeText = settings.imageType === 'Primary' ? 'Poster' : 'Thumbnail';
             imageTypeValue.textContent = imageTypeText;
-        }
-        
-        var preferParentThumbValue = document.getElementById('preferParentThumbValue');
-        if (preferParentThumbValue) {
-            preferParentThumbValue.textContent = settings.preferParentThumb ? 'On' : 'Off';
         }
         
         var mergeContinueWatchingValue = document.getElementById('merge-continue-watching-value');
@@ -1084,23 +1077,14 @@ var SettingsController = (function() {
                 break;
                 
             case 'imageType':
-                // Cycle through: Primary -> Thumb -> Banner -> Primary
+                // Toggle between: Primary <-> Thumb
                 if (settings.imageType === 'Primary') {
                     settings.imageType = 'Thumb';
-                } else if (settings.imageType === 'Thumb') {
-                    settings.imageType = 'Banner';
                 } else {
                     settings.imageType = 'Primary';
                 }
                 // Always keep posterSize at maximum (300)
                 settings.posterSize = 300;
-                saveSettings();
-                updateSettingValues();
-                syncImageHelperSettings();
-                break;
-                
-            case 'preferParentThumb':
-                settings.preferParentThumb = !settings.preferParentThumb;
                 saveSettings();
                 updateSettingValues();
                 syncImageHelperSettings();
@@ -1582,7 +1566,6 @@ var SettingsController = (function() {
         
         ImageHelper.setImageType(settings.imageType);
         ImageHelper.setPosterSize(settings.posterSize);
-        ImageHelper.setPreferParentThumb(settings.preferParentThumb);
     }
 
     /**

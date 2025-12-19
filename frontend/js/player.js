@@ -154,6 +154,19 @@ var PlayerController = (function() {
         var params = new URLSearchParams(window.location.search);
         return params.get('id');
     }
+    
+    /**
+     * Get the start position (in seconds) from the URL query parameter, if present
+     * @returns {number|null} Start position in seconds, or null if not specified
+     */
+    function getStartPositionFromUrl() {
+        var params = new URLSearchParams(window.location.search);
+        var position = params.get('position');
+        if (position !== null) {
+            return parseInt(position, 10);
+        }
+        return null;
+    }
 
     function cacheElements() {
         elements = {
@@ -340,9 +353,8 @@ var PlayerController = (function() {
             // Now load the item and start playback
             loadItemAndPlay();
             
-            // Load skip segments and next episode data
+            // Load skip segments (next episode will be loaded after item loads)
             loadMediaSegments();
-            loadNextEpisode();
             
         } catch (error) {
             alert('Failed to initialize video player: ' + error.message);
@@ -571,6 +583,10 @@ var PlayerController = (function() {
                 elements.mediaSubtitle.textContent = subtitle;
             }
 
+            // Load media segments and next episode data for episodes
+            loadMediaSegments();
+            loadNextEpisode();
+
             // Get playback info
             getPlaybackInfo();
         });
@@ -787,7 +803,12 @@ var PlayerController = (function() {
         console.log('[Player] URL:', videoUrl.substring(0, 100) + '...');
         
         var startPosition = 0;
-        if (!isLiveTV && itemData.UserData && itemData.UserData.PlaybackPositionTicks > 0) {
+        var urlPosition = getStartPositionFromUrl();
+        if (urlPosition !== null) {
+            // Position specified in URL takes precedence
+            startPosition = urlPosition;
+        } else if (!isLiveTV && itemData.UserData && itemData.UserData.PlaybackPositionTicks > 0) {
+            // Otherwise use saved position if available
             startPosition = itemData.UserData.PlaybackPositionTicks / TICKS_PER_SECOND;
         }
         
@@ -1057,7 +1078,9 @@ var PlayerController = (function() {
      */
     function seekForward() {
         if (videoPlayer.duration) {
-            seekPosition = Math.min(seekPosition + SKIP_INTERVAL_SECONDS, videoPlayer.duration);
+            // Use pending seek position if a seek is in progress, otherwise use current video time
+            var currentPosition = pendingSeekPosition !== null ? pendingSeekPosition : videoPlayer.currentTime;
+            seekPosition = Math.min(currentPosition + SKIP_INTERVAL_SECONDS, videoPlayer.duration);
             seekTo(seekPosition);
             showControls();
         }
@@ -1067,7 +1090,9 @@ var PlayerController = (function() {
      * Seek backward by interval on seekbar
      */
     function seekBackward() {
-        seekPosition = Math.max(seekPosition - SKIP_INTERVAL_SECONDS, 0);
+        // Use pending seek position if a seek is in progress, otherwise use current video time
+        var currentPosition = pendingSeekPosition !== null ? pendingSeekPosition : videoPlayer.currentTime;
+        seekPosition = Math.max(currentPosition - SKIP_INTERVAL_SECONDS, 0);
         seekTo(seekPosition);
         showControls();
     }
@@ -1456,24 +1481,43 @@ var PlayerController = (function() {
     }
 
     function exitPlayer() {
-        reportPlaybackStop();
-        stopProgressReporting();
-        
-        clearLoadingTimeout();
-        
-        if (seekDebounceTimer) {
-            clearTimeout(seekDebounceTimer);
-            seekDebounceTimer = null;
+        // Report stop with current position before navigating away
+        if (playSessionId) {
+            makePlaybackRequest(
+                auth.serverAddress + '/Sessions/Playing/Stopped',
+                buildPlaybackData(),
+                function() {
+                    // Navigate after stop report succeeds
+                    finishExit();
+                },
+                function(err) {
+                    // Navigate even if stop report fails
+                    finishExit();
+                }
+            );
+        } else {
+            finishExit();
         }
         
-        if (playerAdapter) {
-            playerAdapter.destroy().catch(function(err) {
-            });
-            playerAdapter = null;
+        function finishExit() {
+            stopProgressReporting();
+            
+            clearLoadingTimeout();
+            
+            if (seekDebounceTimer) {
+                clearTimeout(seekDebounceTimer);
+                seekDebounceTimer = null;
+            }
+            
+            if (playerAdapter) {
+                playerAdapter.destroy().catch(function(err) {
+                });
+                playerAdapter = null;
+            }
+            
+            setLoadingState(LoadingState.IDLE);
+            window.history.back();
         }
-        
-        setLoadingState(LoadingState.IDLE);
-        window.history.back();
     }
 
     // ============================================================================
@@ -2436,10 +2480,19 @@ var PlayerController = (function() {
      * Load next episode data for "Play Next Episode" button
      */
     function loadNextEpisode() {
-        if (!auth || !itemData) return;
+        console.log('[loadNextEpisode] START');
+        console.log('[loadNextEpisode] auth:', !!auth, 'itemData:', !!itemData);
+        
+        if (!auth || !itemData) {
+            console.log('[loadNextEpisode] Missing auth or itemData, returning');
+            return;
+        }
+        
+        console.log('[loadNextEpisode] itemData.Type:', itemData.Type, 'itemData.SeriesId:', itemData.SeriesId);
         
         // Only load next episode for TV episodes
         if (itemData.Type !== 'Episode' || !itemData.SeriesId) {
+            console.log('[loadNextEpisode] Not an episode or no SeriesId, returning');
             return;
         }
         
@@ -2455,6 +2508,8 @@ var PlayerController = (function() {
             return encodeURIComponent(key) + '=' + encodeURIComponent(params[key]);
         }).join('&');
         
+        console.log('[loadNextEpisode] Making request to:', url + '?' + queryString);
+        
         ajax.request(url + '?' + queryString, {
             method: 'GET',
             headers: {
@@ -2463,16 +2518,21 @@ var PlayerController = (function() {
             success: function(response) {
                 try {
                     var data = response;
+                    console.log('[loadNextEpisode] Response:', data);
                     if (data && data.Items && data.Items.length > 1) {
                         nextEpisodeData = data.Items[1]; // Second item is the next episode
+                        console.log('[loadNextEpisode] Next episode loaded:', nextEpisodeData.Name, nextEpisodeData.Id);
                     } else {
                         nextEpisodeData = null;
+                        console.log('[loadNextEpisode] No next episode available - Items length:', data?.Items?.length);
                     }
                 } catch (e) {
+                    console.log('[loadNextEpisode] Error parsing next episode:', e);
                     nextEpisodeData = null;
                 }
             },
             error: function(status, response) {
+                console.log('[loadNextEpisode] Request failed - status:', status, 'response:', response);
                 nextEpisodeData = null;
             }
         });
@@ -2596,39 +2656,83 @@ var PlayerController = (function() {
     }
 
     /**
+     * Play next episode without page reload
+     */
+    /**
+     * Play the next episode in the series without reloading the page
+     */
+    function playNextEpisode() {
+        console.log('[playNextEpisode] START');
+        if (!nextEpisodeData) {
+            console.log('[playNextEpisode] No next episode data available');
+            return;
+        }
+        
+        console.log('[playNextEpisode] Next episode:', nextEpisodeData.Name, nextEpisodeData.Id);
+        
+        // Save next episode ID before clearing
+        var nextEpisodeId = nextEpisodeData.Id;
+        console.log('[playNextEpisode] Saved next episode ID:', nextEpisodeId);
+        
+        // Stop current playback reporting
+        console.log('[playNextEpisode] Stopping current playback...');
+        console.log('[playNextEpisode] Reporting playback stop...');
+        reportPlaybackStop();
+        console.log('[playNextEpisode] Stopping progress reporting...');
+        stopProgressReporting();
+        
+        // Clear current state
+        console.log('[playNextEpisode] Clearing current state...');
+        currentSkipSegment = null;
+        skipOverlayVisible = false;
+        hideSkipOverlay();
+        mediaSegments = [];
+        nextEpisodeData = null;
+        
+        // Update browser history so BACK goes to correct details page
+        if (window && window.history && window.location) {
+            var newUrl = 'player.html?id=' + nextEpisodeId;
+            window.history.replaceState({}, '', newUrl);
+        }
+        // Load and play the next episode (keep playerAdapter alive)
+        console.log('[playNextEpisode] Setting itemId to:', nextEpisodeId);
+        itemId = nextEpisodeId;
+        console.log('[playNextEpisode] Calling loadItemAndPlay()...');
+        loadItemAndPlay();
+        console.log('[playNextEpisode] END');
+    }
+    
+    /**
+     * Execute skip action (seek past segment or play next episode)
+     */
+    /**
      * Execute skip action (seek past segment or play next episode)
      */
     function executeSkip() {
-        if (!currentSkipSegment) return;
+        console.log('[executeSkip] START - currentSkipSegment:', currentSkipSegment);
+        if (!currentSkipSegment) {
+            console.log('[executeSkip] No currentSkipSegment, returning');
+            return;
+        }
         
         var segmentType = currentSkipSegment.Type;
+        console.log('[executeSkip] segmentType:', segmentType, 'nextEpisodeData:', nextEpisodeData);
         
-        // For outro/credits with next episode available, check autoPlay setting
+        // For outro/credits with next episode available, play next episode directly
+        // (User manually pressed skip, so honor that intent regardless of autoPlay setting)
         if ((segmentType === 'Outro' || segmentType === 'Credits') && nextEpisodeData) {
-            // Check if autoPlay is enabled
-            var stored = storage.get('jellyfin_settings');
-            var autoPlayEnabled = true; // Default to enabled
-            if (stored) {
-                try {
-                    var settings = JSON.parse(stored);
-                    autoPlayEnabled = settings.autoPlay !== false;
-                } catch (e) {
-                    // If parsing fails, use default
-                }
-            }
-            
-            if (autoPlayEnabled) {
-                window.location.href = 'player.html?id=' + nextEpisodeData.Id;
-                return;
-            } else {
-                // Just skip the credits, don't autoplay
-            }
+            console.log('[executeSkip] Conditions met - calling playNextEpisode()');
+            playNextEpisode();
+            console.log('[executeSkip] Returned from playNextEpisode()');
+            return;
         }
         
         // Otherwise, seek past the segment
         var skipToTime = currentSkipSegment.EndTicks / 10000000;
+        console.log('[executeSkip] Seeking to:', skipToTime);
         videoPlayer.currentTime = skipToTime;
         hideSkipOverlay();
+        console.log('[executeSkip] END');
     }
 
     return {

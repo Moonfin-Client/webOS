@@ -12,6 +12,10 @@
      * Load navbar HTML component
      * @param {Function} callback - Callback to execute after navbar loads
      */
+    /**
+     * Load navbar HTML component
+     * @param {Function} callback - Callback to execute after navbar loads
+     */
     function loadNavbar(callback) {
         var xhr = new XMLHttpRequest();
         xhr.open('GET', 'components/navbar.html', true);
@@ -31,6 +35,9 @@
         xhr.send();
     }
     
+    /**
+     * Initialize the navbar, load user info, libraries, and set up handlers
+     */
     function initNavbar() {
         var auth = JellyfinAPI.getStoredAuth();
         if (!auth) return;
@@ -73,6 +80,9 @@
         setupNavbarHandlers();
     }
     
+    /**
+     * Apply toolbar settings from storage to the navbar
+     */
     function applyToolbarSettings() {
         var settingsStr = storage.get('jellyfin_settings');
         if (!settingsStr) return;
@@ -120,6 +130,9 @@
         }
     }
     
+    /**
+     * Load user libraries and add them to the navbar
+     */
     function loadUserLibraries() {
         var auth = JellyfinAPI.getStoredAuth();
         if (!auth) return;
@@ -181,6 +194,9 @@
         });
     }
     
+    /**
+     * Update the clock display in the navbar
+     */
     function updateClock() {
         var clockElement = document.getElementById('navClock');
         if (!clockElement) return;
@@ -208,6 +224,9 @@
         }
     }
     
+    /**
+     * Handle click on the shuffle button to play a random item
+     */
     function handleShuffleClick() {
         
         var auth = JellyfinAPI.getStoredAuth();
@@ -237,6 +256,9 @@
         });
     }
     
+    /**
+     * Set up event handlers for all navbar buttons
+     */
     function setupNavbarHandlers() {
         var homeBtn = document.getElementById('homeBtn');
         var searchBtn = document.getElementById('searchBtn');
@@ -361,6 +383,9 @@
         setupNavbarNavigation();
     }
     
+    /**
+     * Set up keyboard navigation for navbar buttons
+     */
     function setupNavbarNavigation() {
         var navButtons = document.querySelectorAll('.nav-btn');
         
@@ -376,11 +401,13 @@
                     e.preventDefault();
                     if (currentIndex > 0) {
                         allButtons[currentIndex - 1].focus();
+                        scrollNavButtonIntoView(allButtons[currentIndex - 1]);
                     }
                 } else if (e.keyCode === KeyCodes.RIGHT) {
                     e.preventDefault();
                     if (currentIndex < allButtons.length - 1) {
                         allButtons[currentIndex + 1].focus();
+                        scrollNavButtonIntoView(allButtons[currentIndex + 1]);
                     }
                 }
             });
@@ -411,6 +438,10 @@
         updateClock: updateClock
     };
     
+    /**
+     * Set the active page in the navbar
+     * @param {string} page - Page identifier
+     */
     function setActivePage(page) {
         // Remove active class from all buttons
         var buttons = document.querySelectorAll('.nav-btn');
@@ -447,6 +478,10 @@
         }
     }
     
+    /**
+     * Scroll a navbar button into view within the nav-pill container
+     * @param {HTMLElement} button - The button to scroll into view
+     */
     /**
      * Scroll a navbar button into view within the nav-pill container
      * @param {HTMLElement} button - The button to scroll into view

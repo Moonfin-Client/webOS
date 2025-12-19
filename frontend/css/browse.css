@@ -480,7 +480,7 @@ body {
 /* Progress bar for Continue Watching items */
 .item-progress {
     position: absolute;
-    bottom: 45px;
+    bottom: 65px;
     left: 0;
     width: 100%;
     height: 8px;
@@ -520,6 +520,42 @@ body {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+/* Episode title styling for Continue Watching */
+.series-name {
+    font-size: 20px;
+    font-weight: 600;
+    color: #ffffff;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-bottom: 4px;
+}
+
+.episode-info {
+    font-size: 16px;
+    font-weight: 400;
+    color: #b3b3b3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+}
+
+/* Scrolling text animation on hover/focus */
+.item-card:hover .episode-info,
+.item-card.focused .episode-info {
+    animation: scroll-text 8s linear infinite;
+}
+
+@keyframes scroll-text {
+    0%, 10% {
+        transform: translateX(0);
+    }
+    90%, 100% {
+        transform: translateX(calc(-100% + 240px));
+    }
 }
 
 /* Phase 3: Library Tiles Styling */

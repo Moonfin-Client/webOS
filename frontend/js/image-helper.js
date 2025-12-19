@@ -5,13 +5,16 @@
 var ImageHelper = (function() {
     'use strict';
 
-    var imageType = 'Primary'; // 'Primary', 'Thumb', or 'Banner'
+    /**
+     * Current image type preference ('Primary' or 'Thumb')
+     * @type {string}
+     */
+    var imageType = 'Primary';
     var posterSize = 300;
-    var preferParentThumb = false;
 
     /**
      * Set the image type preference
-     * @param {string} type - 'Primary', 'Thumb', or 'Banner'
+     * @param {string} type - 'Primary' or 'Thumb'
      */
     function setImageType(type) {
         imageType = type;
@@ -23,14 +26,6 @@ var ImageHelper = (function() {
      */
     function setPosterSize(size) {
         posterSize = size;
-    }
-
-    /**
-     * Set whether to prefer parent thumbnails for episodes
-     * @param {boolean} prefer - True to use series artwork for episodes
-     */
-    function setPreferParentThumb(prefer) {
-        preferParentThumb = prefer;
     }
 
     /**
@@ -52,14 +47,12 @@ var ImageHelper = (function() {
 
         var itemId = item.Id;
         var imageTag = null;
-        var useParent = false;
 
-        // For episodes, check if we should use parent (series) artwork
-        if (item.Type === 'Episode' && preferParentThumb) {
+        // For episodes: use series poster when imageType is Primary, episode thumbnail when Thumb
+        if (item.Type === 'Episode' && imageType === 'Primary') {
             if (item.SeriesId && item.SeriesPrimaryImageTag) {
                 itemId = item.SeriesId;
                 imageTag = item.SeriesPrimaryImageTag;
-                useParent = true;
             }
         }
 
@@ -94,12 +87,24 @@ var ImageHelper = (function() {
 
         if (!imageTag) return '';
 
-        // Build URL with appropriate size parameters
+        // Build URL with appropriate size parameters based on aspect ratio
         var params = 'quality=90';
-        if (imgType === 'Primary' || imgType === 'Thumb') {
+        var aspect = getAspectRatio(item, imgType);
+        
+        if (imgType === 'Primary') {
+            // Portrait poster - height-based (2:3 aspect)
+            params += '&maxHeight=' + posterSize;
+            params += '&maxWidth=' + Math.round(posterSize * aspect);
+        } else if (imgType === 'Thumb') {
+            // Landscape thumbnail - width-based (16:9 aspect)
+            var thumbWidth = Math.round(posterSize * aspect);
+            params += '&maxWidth=' + thumbWidth;
             params += '&maxHeight=' + posterSize;
         } else if (imgType === 'Banner') {
-            params += '&maxWidth=' + (posterSize * 2);
+            // Wide banner - width-based
+            var bannerWidth = Math.round(posterSize * aspect * 1.5);
+            params += '&maxWidth=' + bannerWidth;
+            params += '&maxHeight=' + posterSize;
         }
         params += '&tag=' + imageTag;
 
@@ -131,6 +136,11 @@ var ImageHelper = (function() {
      * @returns {number} Aspect ratio (width/height)
      */
     function getAspectRatio(item, type) {
+        // For episodes in Primary mode, use series poster aspect ratio
+        if (item.Type === 'Episode' && type === 'Primary' && imageType === 'Primary') {
+            return item.SeriesPrimaryImageAspectRatio || 0.667;
+        }
+        
         // Use PrimaryImageAspectRatio if available
         if (item.PrimaryImageAspectRatio && type === 'Primary') {
             return item.PrimaryImageAspectRatio;
@@ -163,10 +173,36 @@ var ImageHelper = (function() {
         return 'https://image.tmdb.org/t/p/' + imageSize + cleanPath;
     }
 
+    /**
+     * Load settings from storage and apply them
+     * @private
+     */
+    function loadSettingsFromStorage() {
+        if (typeof storage === 'undefined') return;
+        
+        var stored = storage.get('jellyfin_settings');
+        if (stored) {
+            try {
+                var settings = JSON.parse(stored);
+                
+                if (settings.imageType) {
+                    imageType = settings.imageType;
+                }
+                if (settings.posterSize !== undefined) {
+                    posterSize = settings.posterSize;
+                }
+            } catch (e) {
+                console.error('Failed to load ImageHelper settings:', e);
+            }
+        }
+    }
+
+    // Auto-initialize from storage when module loads
+    loadSettingsFromStorage();
+
     return {
         setImageType: setImageType,
         setPosterSize: setPosterSize,
-        setPreferParentThumb: setPreferParentThumb,
         getImageType: getImageType,
         getImageUrl: getImageUrl,
         getPlaceholderUrl: getPlaceholderUrl,
