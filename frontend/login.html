@@ -8,7 +8,9 @@
     <link rel="stylesheet" href="css/login.css">
     <script src="webOSTVjs-1.2.11/webOSTV.js" charset="utf-8"></script>
     <script src="webOSTVjs-1.2.11/webOSTV-dev.js" charset="utf-8"></script>
+    <script src="js/polyfills.js" charset="utf-8"></script>
     <script src="js/storage.js" charset="utf-8"></script>
+    <script src="js/multi-server.js" charset="utf-8"></script>
     <script src="js/accent-color.js" charset="utf-8"></script>
     <script src="js/ajax.js" charset="utf-8"></script>
     <script src="js/keycodes.js" charset="utf-8"></script>
@@ -26,6 +28,19 @@
         <div id="errorMessage" class="error-message" style="display: none;"></div>
 
         <div class="content-wrapper">
+            
+            <!-- Saved Servers Section -->
+            <div class="section" id="savedServersSection" style="display: none;">
+                <h2>Select Server</h2>
+                <div class="user-row-container">
+                    <div id="savedServerRow" class="user-row">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+                <div class="button-group" style="justify-content: center; margin-top: 20px;">
+                    <button id="addNewServerBtn" class="btn btn-secondary" tabindex="0">Add New Server</button>
+                </div>
+            </div>
             
             <div class="section" id="discoveredServersSection" style="display: none;">
                 <h2>Discovered Servers</h2>
@@ -47,7 +62,7 @@
                     >
                     <div class="button-group">
                         <button id="connectBtn" class="btn btn-primary" tabindex="0">Connect</button>
-                        <button id="discoverBtn" class="btn btn-secondary" tabindex="0">Discover Servers</button>
+                        <button id="backToServerListBtn" class="btn btn-secondary" tabindex="0">Return to Server List</button>
                     </div>
                 </div>
             </div>
@@ -61,6 +76,7 @@
                 </div>
                 <div class="button-group" style="justify-content: center; margin-top: 20px;">
                     <button id="showManualLoginBtn" class="btn btn-secondary" tabindex="0">Manual Login</button>
+                    <button id="deleteServerBtn" class="btn btn-danger" tabindex="0">Delete Server</button>
                     <button id="backToServerBtn" class="btn btn-secondary" tabindex="0">Back to Server Selection</button>
                 </div>
             </div>
@@ -169,7 +185,138 @@
         </div>
     </div>
 
+    <!-- Confirmation Modal -->
+    <div id="confirmationModal" class="modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); align-items: center; justify-content: center; z-index: 1000;">
+        <div style="background: #1a1a1a; padding: 50px 60px; border-radius: 12px; max-width: 700px; border: 3px solid var(--accent-color); box-shadow: 0 10px 40px rgba(0,0,0,0.5);">
+            <h2 id="confirmTitle" style="margin-top: 0; color: #fff; font-size: 32px; margin-bottom: 25px; font-weight: 600;">Confirm Action</h2>
+            <p id="confirmMessage" style="color: rgba(255,255,255,0.9); font-size: 22px; margin-bottom: 40px; line-height: 1.6;"></p>
+            <div style="display: flex; gap: 20px; justify-content: flex-end;">
+                <button id="confirmCancel" class="btn btn-secondary" tabindex="0" style="min-width: 160px; font-size: 20px; padding: 15px 30px; border: 3px solid transparent;">Cancel</button>
+                <button id="confirmOk" class="btn btn-danger" tabindex="0" style="min-width: 160px; font-size: 20px; padding: 15px 30px; border: 3px solid transparent;">Delete</button>
+            </div>
+        </div>
+    </div>
+
     <script>
+        // Confirmation modal helper
+        var confirmationState = {
+            modal: null,
+            callback: null,
+            isOpen: false
+        };
+
+        function showConfirmation(title, message, onConfirm) {
+            var modal = document.getElementById('confirmationModal');
+            var titleEl = document.getElementById('confirmTitle');
+            var messageEl = document.getElementById('confirmMessage');
+            var cancelBtn = document.getElementById('confirmCancel');
+            var okBtn = document.getElementById('confirmOk');
+
+            titleEl.textContent = title;
+            messageEl.textContent = message;
+            confirmationState.callback = onConfirm;
+            confirmationState.isOpen = true;
+
+            modal.style.display = 'flex';
+
+            // Create handler functions with proper closure
+            var handleCancel = function() {
+                if (!confirmationState.isOpen) return;
+                confirmationState.isOpen = false;
+                modal.style.display = 'none';
+                if (confirmationState.callback) {
+                    confirmationState.callback(false);
+                }
+            };
+
+            var handleOk = function() {
+                if (!confirmationState.isOpen) return;
+                confirmationState.isOpen = false;
+                modal.style.display = 'none';
+                if (confirmationState.callback) {
+                    confirmationState.callback(true);
+                }
+            };
+
+            // Remove any previous event listeners
+            var newCancelBtn = cancelBtn.cloneNode(true);
+            cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+            cancelBtn = newCancelBtn;
+            document.getElementById('confirmCancel').addEventListener('click', handleCancel);
+
+            var newOkBtn = okBtn.cloneNode(true);
+            okBtn.parentNode.replaceChild(newOkBtn, okBtn);
+            okBtn = newOkBtn;
+            document.getElementById('confirmOk').addEventListener('click', handleOk);
+
+            // Remove old keyboard handler
+            document.removeEventListener('keydown', confirmationState.keyHandler);
+
+            // Create new keyboard handler
+            confirmationState.keyHandler = function(e) {
+                if (!confirmationState.isOpen) return;
+
+                var currentCancelBtn = document.getElementById('confirmCancel');
+                var currentOkBtn = document.getElementById('confirmOk');
+
+                // BACK (461), Backspace (8), or ESC (27)
+                if (e.keyCode === 461 || e.keyCode === 8 || e.keyCode === 27) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleCancel();
+                    return;
+                }
+
+                // ENTER (13)
+                if (e.keyCode === 13) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (document.activeElement === currentOkBtn) {
+                        handleOk();
+                    } else if (document.activeElement === currentCancelBtn) {
+                        handleCancel();
+                    } else {
+                        // If nothing focused, default to Cancel for safety
+                        handleCancel();
+                    }
+                    return;
+                }
+
+                // LEFT (37) / RIGHT (39) to move between buttons
+                if (e.keyCode === 37 || e.keyCode === 39) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (document.activeElement === currentOkBtn) {
+                        currentCancelBtn.focus();
+                        currentCancelBtn.style.borderColor = 'var(--accent-color)';
+                        currentOkBtn.style.borderColor = 'transparent';
+                    } else {
+                        currentOkBtn.focus();
+                        currentOkBtn.style.borderColor = 'var(--accent-color)';
+                        currentCancelBtn.style.borderColor = 'transparent';
+                    }
+                    return;
+                }
+            };
+
+            document.addEventListener('keydown', confirmationState.keyHandler);
+
+            // Focus the Cancel button by default (safer for destructive actions)
+            setTimeout(function() {
+                var cancelBtn = document.getElementById('confirmCancel');
+                cancelBtn.focus();
+                cancelBtn.style.borderColor = 'var(--accent-color)';
+            }, 100);
+        }
+
+        function closeConfirmation() {
+            var modal = document.getElementById('confirmationModal');
+            confirmationState.isOpen = false;
+            modal.style.display = 'none';
+            if (confirmationState.callback) {
+                confirmationState.callback(false);
+            }
+        }
         // Handle input focus to scroll into view when keyboard appears
         document.addEventListener('DOMContentLoaded', function() {
             var inputs = document.querySelectorAll('.input-field');

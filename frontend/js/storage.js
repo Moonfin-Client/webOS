@@ -320,6 +320,140 @@ STORAGE.prototype.exists = function(name) {
 	return false;
 };
 
+// ==================== Per-User Preferences Support (Phase 1) ====================
+
+/**
+ * Get the current logged-in user's ID
+ * @returns {string|null} User ID or null if not logged in
+ */
+STORAGE.prototype.getCurrentUserId = function() {
+	var auth = this.get('jellyfin_auth');
+	if (auth && auth.userId) {
+		return auth.userId;
+	}
+	return null;
+};
+
+/**
+ * Generate a user-scoped storage key
+ * @param {string} baseKey - The base key name (e.g., 'home_rows_settings')
+ * @param {string} userId - User ID (optional, defaults to current user)
+ * @returns {string} User-scoped key (e.g., 'home_rows_settings_user_abc123')
+ */
+STORAGE.prototype.getUserKey = function(baseKey, userId) {
+	if (!userId) {
+		userId = this.getCurrentUserId();
+	}
+	
+	if (!userId) {
+		// No user logged in, return global key as fallback
+		return baseKey;
+	}
+	
+	return baseKey + '_user_' + userId;
+};
+
+/**
+ * Get user-scoped preference value
+ * @param {string} baseKey - Base key name
+ * @param {*} defaultValue - Default value if not found
+ * @param {string} userId - User ID (optional, defaults to current user)
+ * @returns {*} Stored value or default
+ */
+STORAGE.prototype.getUserPreference = function(baseKey, defaultValue, userId) {
+	var userKey = this.getUserKey(baseKey, userId);
+	var value = this.get(userKey);
+	
+	if (value === undefined || value === null) {
+		// Try global fallback for backward compatibility
+		var globalValue = this.get(baseKey);
+		if (globalValue !== undefined && globalValue !== null) {
+			// Found global value - migrate it to user-scoped
+			this.setUserPreference(baseKey, globalValue, userId);
+			return globalValue;
+		}
+		return defaultValue;
+	}
+	
+	return value;
+};
+
+/**
+ * Set user-scoped preference value
+ * @param {string} baseKey - Base key name
+ * @param {*} value - Value to store
+ * @param {string} userId - User ID (optional, defaults to current user)
+ * @returns {*} The stored value
+ */
+STORAGE.prototype.setUserPreference = function(baseKey, value, userId) {
+	var userKey = this.getUserKey(baseKey, userId);
+	return this.set(userKey, value);
+};
+
+/**
+ * Remove user-scoped preference
+ * @param {string} baseKey - Base key name
+ * @param {string} userId - User ID (optional, defaults to current user)
+ */
+STORAGE.prototype.removeUserPreference = function(baseKey, userId) {
+	var userKey = this.getUserKey(baseKey, userId);
+	this.remove(userKey);
+};
+
+/**
+ * Migrate global preference to user-scoped (for all users)
+ * This is a helper for migration during Phase 1 rollout
+ * @param {string} baseKey - Base key to migrate
+ */
+STORAGE.prototype.migrateToUserPreference = function(baseKey) {
+	var globalValue = this.get(baseKey);
+	
+	if (globalValue === undefined || globalValue === null) {
+		return; // Nothing to migrate
+	}
+	
+	var currentUserId = this.getCurrentUserId();
+	if (currentUserId) {
+		// Migrate for current user
+		var userKey = this.getUserKey(baseKey, currentUserId);
+		if (!this.exists(userKey)) {
+			this.set(userKey, globalValue);
+			if (typeof JellyfinAPI !== 'undefined') {
+				JellyfinAPI.Logger.info('[STORAGE] Migrated ' + baseKey + ' to user-scoped for user ' + currentUserId);
+			}
+		}
+	}
+	
+	// Note: We don't remove the global key to maintain backward compatibility
+	// It will serve as fallback for users not yet migrated
+};
+
+/**
+ * Check if a user has user-scoped preferences stored
+ * @param {string} userId - User ID to check
+ * @returns {boolean} True if user has any user-scoped preferences
+ */
+STORAGE.prototype.hasUserPreferences = function(userId) {
+	if (!userId) {
+		userId = this.getCurrentUserId();
+	}
+	
+	if (!userId) {
+		return false;
+	}
+	
+	// Check for common user-scoped keys
+	var commonKeys = ['home_rows_settings', 'jellyfin_settings'];
+	for (var i = 0; i < commonKeys.length; i++) {
+		var userKey = this.getUserKey(commonKeys[i], userId);
+		if (this.exists(userKey)) {
+			return true;
+		}
+	}
+	
+	return false;
+};
+
 /**
  * Apply backdrop blur to an element based on settings
  * @param {HTMLElement} element - The backdrop image element

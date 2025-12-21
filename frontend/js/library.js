@@ -19,6 +19,7 @@ const LibraryController = {
     },
     inNavBar: false,
     navBarIndex: 0,
+    currentAuth: null,  // Store auth for current library's server
     elements: {
         loading: null,
         itemGrid: null,
@@ -33,6 +34,7 @@ const LibraryController = {
     init() {
         const urlParams = new URLSearchParams(window.location.search);
         this.libraryId = urlParams.get('id');
+        this.serverId = urlParams.get('serverId'); // Get server ID from URL if present
         
         if (!this.libraryId) {
             this.showError('No library ID provided');
@@ -150,11 +152,18 @@ const LibraryController = {
         const self = this;
         self.showLoading();
 
-        const auth = JellyfinAPI.getStoredAuth();
+        // Get auth for the specific server if serverId is provided
+        let auth = typeof MultiServerManager !== 'undefined' 
+            ? MultiServerManager.getAuthForPage() 
+            : JellyfinAPI.getStoredAuth();
+        
         if (!auth) {
             self.showError('Not authenticated');
             return;
         }
+        
+        // Store auth for use in createGridItem
+        self.currentAuth = auth;
 
         JellyfinAPI.getUserViews(auth.serverAddress, auth.userId, auth.accessToken, function(err, response) {
             if (err) {
@@ -167,7 +176,7 @@ const LibraryController = {
                 return;
             }
 
-            const library = response.Items.find(item => item.Id === self.libraryId);
+            const library = response.Items.find(function(item) { return item.Id === self.libraryId; });
             if (library) {
                 self.libraryType = library.CollectionType;
                 if (library.Name) {
@@ -307,7 +316,7 @@ const LibraryController = {
      * @private
      */
     createGridItem(item, index) {
-        const auth = JellyfinAPI.getStoredAuth();
+        const auth = this.currentAuth || JellyfinAPI.getStoredAuth();
         const div = document.createElement('div');
         div.className = 'grid-item';
         div.setAttribute('data-index', index);
@@ -398,7 +407,7 @@ const LibraryController = {
         if (item.Type === 'Episode' && item.IndexNumber) {
             const subtitle = document.createElement('div');
             subtitle.className = 'item-subtitle';
-            subtitle.textContent = `Episode ${item.IndexNumber}`;
+            subtitle.textContent = 'Episode ' + item.IndexNumber;
             info.appendChild(subtitle);
         } else if (item.ProductionYear) {
             const subtitle = document.createElement('div');
@@ -515,8 +524,12 @@ const LibraryController = {
         const item = this.items[index];
         if (!item) return;
 
-        // Navigate to details page
-        window.location.href = `details.html?id=${item.Id}`;
+        // Navigate to details page, include serverId if present
+        let url = 'details.html?id=' + item.Id;
+        if (this.serverId) {
+            url += '&serverId=' + this.serverId;
+        }
+        window.location.href = url;
     },
 
     /**
@@ -571,7 +584,7 @@ const LibraryController = {
         const sortBtn = document.getElementById('sort-btn');
         if (sortBtn) {
             const label = sortBtn.querySelector('.filter-label');
-            if (label) label.textContent = `Sort: ${nextSort.label}`;
+            if (label) label.textContent = 'Sort: ' + nextSort.label;
         }
         
         // Reload library with new sort
@@ -639,16 +652,16 @@ const LibraryController = {
             const label = filterBtn.querySelector('.filter-label');
             // Find the label from the current state
             const currentState = this.libraryType === 'music' ? 
-                filterStates.find(f => 
-                    f.isPlayed === this.filters.isPlayed && 
+                filterStates.find(function(f) {
+                    return f.isPlayed === this.filters.isPlayed && 
                     f.isFavorite === this.filters.isFavorite &&
-                    f.itemType === this.filters.itemType
-                ) :
-                filterStates.find(f => 
-                    f.isPlayed === this.filters.isPlayed && 
-                    f.isFavorite === this.filters.isFavorite
-                );
-            if (label && currentState) label.textContent = `Filter: ${currentState.label}`;
+                    f.itemType === this.filters.itemType;
+                }.bind(this)) :
+                filterStates.find(function(f) {
+                    return f.isPlayed === this.filters.isPlayed && 
+                    f.isFavorite === this.filters.isFavorite;
+                }.bind(this));
+            if (label && currentState) label.textContent = 'Filter: ' + currentState.label;
         }
         
         // Reload library with new filter
@@ -775,7 +788,9 @@ const LibraryController = {
      * @private
      */
     getNavButtons() {
-        return Array.from(document.querySelectorAll('.nav-left .nav-btn, .nav-center .nav-btn'));
+        return Array.from(document.querySelectorAll('.nav-left .nav-btn, .nav-center .nav-btn')).filter(function(btn) {
+            return btn.offsetParent !== null; // Only include visible buttons
+        });
     },
 
     /**     * Focus to the filter bar

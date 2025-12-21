@@ -443,3 +443,128 @@ body {
 .url-input::placeholder {
     color: rgba(255, 255, 255, 0.4);
 }
+
+/* Server Manager Modal */
+.server-manager-modal {
+    max-width: 900px;
+    max-height: 80vh;
+}
+
+.server-list {
+    max-height: 400px;
+    overflow-y: auto;
+    margin: 20px 0;
+}
+
+.server-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    margin-bottom: 15px;
+    transition: all 0.2s ease;
+}
+
+.server-item:focus {
+    outline: none;
+    border-color: var(--accent-color);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.server-item.active {
+    border-color: var(--accent-color);
+    background: rgba(var(--accent-color-rgb), 0.15);
+}
+
+.server-info {
+    flex: 1;
+}
+
+.server-name {
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 5px;
+    color: #fff;
+}
+
+.server-url {
+    font-size: 18px;
+    color: rgba(255, 255, 255, 0.6);
+    margin-bottom: 5px;
+}
+
+.server-user {
+    font-size: 16px;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.server-status {
+    display: inline-block;
+    padding: 5px 12px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    margin-top: 8px;
+}
+
+.server-status.connected {
+    background: rgba(0, 200, 0, 0.2);
+    color: #00ff00;
+}
+
+.server-status.active {
+    background: rgba(var(--accent-color-rgb), 0.3);
+    color: var(--accent-color);
+}
+
+.server-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.server-action-btn {
+    padding: 12px 20px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    color: #fff;
+    font-size: 18px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.server-action-btn:hover,
+.server-action-btn:focus {
+    background: var(--accent-color);
+    border-color: var(--accent-color);
+    transform: scale(1.05);
+}
+
+.server-action-btn.danger:hover,
+.server-action-btn.danger:focus {
+    background: #dc3545;
+    border-color: #dc3545;
+}
+
+.empty-servers {
+    text-align: center;
+    padding: 60px 20px;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.empty-servers-icon {
+    font-size: 64px;
+    margin-bottom: 20px;
+}
+
+.empty-servers-text {
+    font-size: 24px;
+    margin-bottom: 10px;
+}
+
+.empty-servers-hint {
+    font-size: 18px;
+}

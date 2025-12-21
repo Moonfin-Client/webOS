@@ -8,6 +8,7 @@ var DetailsController = (function() {
 
     let auth = null;
     let itemId = null;
+    let serverId = null;
     let itemData = null;
     const focusManager = {
         currentSection: 'buttons',
@@ -28,14 +29,21 @@ var DetailsController = (function() {
      */
     function init() {
         
-        auth = JellyfinAPI.getStoredAuth();
+        // Check for serverId in URL params
+        var params = new URLSearchParams(window.location.search);
+        serverId = params.get('serverId');
+        
+        // Get auth for the specific server if serverId is provided
+        auth = typeof MultiServerManager !== 'undefined' 
+            ? MultiServerManager.getAuthForPage() 
+            : JellyfinAPI.getStoredAuth();
+        
         if (!auth) {
             window.location.href = 'login.html';
             return;
         }
 
         // Check if this is a Jellyseerr item
-        var params = new URLSearchParams(window.location.search);
         var source = params.get('source');
         var type = params.get('type');
         var id = params.get('id');
@@ -591,6 +599,9 @@ var DetailsController = (function() {
                 elements.playedText.textContent = 'Mark Unplayed';
             }
             
+            console.log('[Details] UserData:', itemData.UserData);
+            console.log('[Details] PlaybackPositionTicks:', itemData.UserData.PlaybackPositionTicks);
+            
             if (itemData.UserData.PlaybackPositionTicks > 0) {
                 var minutes = Math.round(itemData.UserData.PlaybackPositionTicks / 600000000);
                 var hours = Math.floor(minutes / 60);
@@ -1042,7 +1053,9 @@ var DetailsController = (function() {
             }
             
             card.addEventListener('click', function() {
-                window.location.href = 'details.html?id=' + episode.Id;
+                var url = 'details.html?id=' + episode.Id;
+                if (serverId) url += '&serverId=' + serverId;
+                window.location.href = url;
             });
             
             elements.nextUpList.appendChild(card);
@@ -1092,7 +1105,9 @@ var DetailsController = (function() {
             seasonCard.appendChild(episodes);
             
             seasonCard.addEventListener('click', function() {
-                window.location.href = 'details.html?id=' + season.Id;
+                var url = 'details.html?id=' + season.Id;
+                if (serverId) url += '&serverId=' + serverId;
+                window.location.href = url;
             });
             
             elements.seasonsList.appendChild(seasonCard);
@@ -1170,13 +1185,17 @@ var DetailsController = (function() {
             }
             
             card.addEventListener('click', function() {
-                window.location.href = 'details.html?id=' + episode.Id;
+                var url = 'details.html?id=' + episode.Id;
+                if (serverId) url += '&serverId=' + serverId;
+                window.location.href = url;
             });
             
             card.addEventListener('keydown', function(evt) {
                 if (evt.keyCode === KeyCodes.ENTER) {
                     evt.preventDefault();
-                    window.location.href = 'details.html?id=' + episode.Id;
+                    var url = 'details.html?id=' + episode.Id;
+                    if (serverId) url += '&serverId=' + serverId;
+                    window.location.href = url;
                 }
             });
             
@@ -1258,13 +1277,17 @@ var DetailsController = (function() {
             card.appendChild(overview);
             
             card.addEventListener('click', function() {
-                window.location.href = 'details.html?id=' + episode.Id;
+                var url = 'details.html?id=' + episode.Id;
+                if (serverId) url += '&serverId=' + serverId;
+                window.location.href = url;
             });
             
             card.addEventListener('keydown', function(evt) {
                 if (evt.keyCode === KeyCodes.ENTER) {
                     evt.preventDefault();
-                    window.location.href = 'details.html?id=' + episode.Id;
+                    var url = 'details.html?id=' + episode.Id;
+                    if (serverId) url += '&serverId=' + serverId;
+                    window.location.href = url;
                 }
             });
             
@@ -1343,7 +1366,9 @@ var DetailsController = (function() {
                 if (!err && data && data.Items && data.Items.length > 0) {
                     // Play the next episode
                     var nextEpisode = data.Items[0];
-                    window.location.href = 'player.html?id=' + nextEpisode.Id;
+                    var playUrl = 'player.html?id=' + nextEpisode.Id;
+                    if (serverId) playUrl += '&serverId=' + serverId;
+                    window.location.href = playUrl;
                 } else {
                     // No next up episode, just navigate to the series (might be fully watched)
                     alert('No episodes available to play');
@@ -1358,11 +1383,14 @@ var DetailsController = (function() {
         if (itemData.UserData && itemData.UserData.PlaybackPositionTicks > 0) {
             url += '&position=0';
         }
+        if (serverId) url += '&serverId=' + serverId;
         window.location.href = url;
     }
 
     function handleResume() {
-        window.location.href = 'player.html?id=' + itemData.Id;
+        var url = 'player.html?id=' + itemData.Id;
+        if (serverId) url += '&serverId=' + serverId;
+        window.location.href = url;
     }
 
     function handleTrailer() {

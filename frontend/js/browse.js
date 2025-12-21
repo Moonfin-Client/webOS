@@ -44,11 +44,13 @@ var BrowseController = (function() {
     function init() {
         
         auth = JellyfinAPI.getStoredAuth();
-        if (!auth) {
+        if (!auth || !auth.serverAddress || !auth.userId) {
             window.location.href = 'login.html';
             return;
         }
 
+        // Migrate global settings to user-scoped (Phase 1)
+        storage.migrateToUserPreference('jellyfin_settings');
         
         hasImageHelper = typeof ImageHelper !== 'undefined';
         
@@ -125,6 +127,12 @@ var BrowseController = (function() {
      * @private
      */
     function loadUserLibraries() {
+        if (!auth || !auth.serverAddress || !auth.userId) {
+            console.error('[browse] Cannot load libraries: auth is invalid');
+            window.location.href = 'login.html';
+            return;
+        }
+        
         JellyfinAPI.getUserViews(auth.serverAddress, auth.userId, auth.accessToken, function(err, response) {
             if (err) {
                 return;
@@ -374,7 +382,11 @@ var BrowseController = (function() {
                         // Save focus position before navigating
                         saveFocusPosition();
                         
-                        window.location.href = 'details.html?id=' + currentItem.Id;
+                        var url = 'details.html?id=' + currentItem.Id;
+                        if (currentItem.MultiServerId) {
+                            url += '&serverId=' + currentItem.MultiServerId;
+                        }
+                        window.location.href = url;
                     }
                 }
                 break;
@@ -387,7 +399,12 @@ var BrowseController = (function() {
      * @private
      */
     function handleNavBarNavigation(evt) {
-        const navButtons = Array.from(document.querySelectorAll('.nav-left .nav-btn, .nav-center .nav-btn'));
+        const navButtons = Array.from(document.querySelectorAll('.nav-left .nav-btn, .nav-center .nav-btn')).filter(function(btn) {
+            return btn.offsetParent !== null; // Only include visible buttons
+        });
+        
+        console.log('[browse] handleNavBarNavigation - Visible buttons:', navButtons.map(function(b) { return b.id || b.textContent.trim(); }));
+        console.log('[browse] Current navBarIndex:', focusManager.navBarIndex);
         
         navButtons.forEach(function(btn) {
             btn.classList.remove('focused');
@@ -433,8 +450,12 @@ var BrowseController = (function() {
             case KeyCodes.ENTER:
                 evt.preventDefault();
                 const currentBtn = navButtons[focusManager.navBarIndex];
-                if (currentBtn) {
+                console.log('[browse] ENTER pressed - currentBtn:', currentBtn ? (currentBtn.id || currentBtn.textContent.trim()) : 'null', 'display:', currentBtn ? currentBtn.style.display : 'N/A');
+                if (currentBtn && currentBtn.style.display !== 'none') {
+                    console.log('[browse] Clicking button:', currentBtn.id || currentBtn.textContent.trim());
                     currentBtn.click();
+                } else {
+                    console.log('[browse] Button is null or hidden, not clicking');
                 }
                 break;
         }
@@ -447,7 +468,9 @@ var BrowseController = (function() {
     function focusToNavBar() {
         focusManager.inNavBar = true;
         focusManager.inFeaturedBanner = false;
-        const navButtons = Array.from(document.querySelectorAll('.nav-left .nav-btn, .nav-center .nav-btn'));
+        const navButtons = Array.from(document.querySelectorAll('.nav-left .nav-btn, .nav-center .nav-btn')).filter(function(btn) {
+            return btn.offsetParent !== null; // Only include visible buttons
+        });
         
         // Start at home button (index 1), not user avatar (index 0)
         focusManager.navBarIndex = navButtons.length > 1 ? 1 : 0;
@@ -558,7 +581,9 @@ var BrowseController = (function() {
         if (!element) return;
         
         if (itemData && itemData.backdropImageTag) {
-            var backdropUrl = auth.serverAddress + '/Items/' + itemData.id + 
+            // In multi-server mode, use item's serverUrl; otherwise use active server
+            var serverUrl = itemData.serverUrl || auth.serverAddress;
+            var backdropUrl = serverUrl + '/Items/' + itemData.id + 
                 '/Images/Backdrop?tag=' + itemData.backdropImageTag + 
                 '&maxWidth=1920&quality=90';
             element.src = backdropUrl;
@@ -925,13 +950,19 @@ var BrowseController = (function() {
      * @private
      */
     function loadHomeContent() {
-        console.log('[browse] ===== loadHomeContent() called =====');
         console.trace('[browse] Stack trace');
+        
+        // Validate auth before attempting to load content
+        if (!auth || !auth.serverAddress || !auth.userId) {
+            console.error('[browse] Cannot load home content: auth is invalid');
+            window.location.href = 'login.html';
+            return;
+        }
+        
         showLoading();
         
         // Add timeout to prevent hanging on getUserViews
         var userViewsTimeout = setTimeout(function() {
-            console.error('[browse] getUserViews timed out after 10 seconds');
             showError('Failed to load libraries - request timed out');
         }, 10000);
         
@@ -939,19 +970,16 @@ var BrowseController = (function() {
             clearTimeout(userViewsTimeout);
             
             if (err) {
-                console.error('[browse] getUserViews error:', err);
                 showError('Failed to load libraries');
                 return;
             }
             
             if (!views || !views.Items) {
-                console.error('[browse] getUserViews returned invalid data');
                 showError('Failed to load libraries');
                 return;
             }
             
             if (views.Items.length === 0) {
-                console.warn('[browse] No media libraries available');
                 showError('No media libraries available');
                 return;
             }
@@ -986,6 +1014,15 @@ var BrowseController = (function() {
             // Load home rows settings
             var homeRowsSettings = getHomeRowsSettings();
             
+            // Check if multi-server mode is active
+            var isMultiServer = typeof MultiServerManager !== 'undefined' && MultiServerManager.getServerCount() > 1;
+            
+            // Augment settings with per-server rows if in multi-server mode
+            if (isMultiServer) {
+                homeRowsSettings = augmentHomeRowsForMultiServer(homeRowsSettings);
+            }
+            console.log('[browse] Home rows settings after augmentation:', homeRowsSettings.map(function(r) { return r.id + ' (order: ' + r.order + ', enabled: ' + r.enabled + ')'; }).join(', '));
+            
             var rowsToLoad = [];
             
             // Check which library types are available
@@ -1004,7 +1041,7 @@ var BrowseController = (function() {
             // Helper function to check if a row type is enabled
             /**
              * Check if a specific home row type is enabled in settings
-             * @param {string} rowId - Row identifier (e.g., 'resume', 'nextup')
+             * @param {string} rowId - Row identifier (e.g., 'resume', 'nextup', or 'server-X-resume')
              * @returns {boolean} True if row is enabled, defaults to true if not found
              * @private
              */
@@ -1025,41 +1062,87 @@ var BrowseController = (function() {
                 }
             }
             
-            // Add Continue Watching - merged or separate based on setting
-            if (mergeContinueWatching && isRowEnabled('resume')) {
-                // Merged row: combines Resume and Next Up
-                rowsToLoad.push({ 
-                    title: 'Continue Watching', 
-                    type: 'merged-continue-watching',
-                    settingId: 'resume',
-                    order: Math.min(getRowOrder('resume', homeRowsSettings), getRowOrder('nextup', homeRowsSettings))
+            // Check if multi-server mode is active
+            var isMultiServer = typeof MultiServerManager !== 'undefined' && MultiServerManager.getServerCount() > 1;
+            
+            if (isMultiServer) {
+                // Multi-server mode: Create separate rows for each server
+                var allServers = MultiServerManager.getAllServersArray();
+                
+                allServers.forEach(function(server) {
+                    var serverRowPrefix = 'server-' + server.id + '-';
+                    
+                    if (mergeContinueWatching && isRowEnabled(serverRowPrefix + 'resume')) {
+                        // Merged row per server
+                        rowsToLoad.push({
+                            title: 'Continue Watching (' + server.name + ')',
+                            type: 'merged-continue-watching',
+                            settingId: serverRowPrefix + 'resume',
+                            serverId: server.id,
+                            userId: server.userId,
+                            order: getRowOrder(serverRowPrefix + 'resume', homeRowsSettings)
+                        });
+                    } else {
+                        // Separate rows per server
+                        if (isRowEnabled(serverRowPrefix + 'resume')) {
+                            rowsToLoad.push({
+                                title: 'Continue Watching (' + server.name + ')',
+                                type: 'resume',
+                                settingId: serverRowPrefix + 'resume',
+                                serverId: server.id,
+                                userId: server.userId,
+                                order: getRowOrder(serverRowPrefix + 'resume', homeRowsSettings)
+                            });
+                        }
+                        
+                        if (isRowEnabled(serverRowPrefix + 'nextup') && hasTVShows) {
+                            rowsToLoad.push({
+                                title: 'Next Up (' + server.name + ')',
+                                type: 'nextup',
+                                settingId: serverRowPrefix + 'nextup',
+                                serverId: server.id,
+                                userId: server.userId,
+                                order: getRowOrder(serverRowPrefix + 'nextup', homeRowsSettings)
+                            });
+                        }
+                    }
                 });
             } else {
-                // Separate rows
-                if (isRowEnabled('resume')) {
+                // Single server mode: Original behavior
+                if (mergeContinueWatching && isRowEnabled('resume')) {
+                    // Merged row: combines Resume and Next Up
                     rowsToLoad.push({ 
                         title: 'Continue Watching', 
-                        type: 'resume',
+                        type: 'merged-continue-watching',
                         settingId: 'resume',
-                        order: getRowOrder('resume', homeRowsSettings)
+                        order: Math.min(getRowOrder('resume', homeRowsSettings), getRowOrder('nextup', homeRowsSettings))
                     });
-                }
-                
-                // Add Next Up if enabled and TV shows exist
-                if (isRowEnabled('nextup') && hasTVShows) {
-                    rowsToLoad.push({ 
-                        title: 'Next Up', 
-                        type: 'nextup',
-                        settingId: 'nextup',
-                        order: getRowOrder('nextup', homeRowsSettings)
-                    });
+                } else {
+                    // Separate rows
+                    if (isRowEnabled('resume')) {
+                        rowsToLoad.push({ 
+                            title: 'Continue Watching', 
+                            type: 'resume',
+                            settingId: 'resume',
+                            order: getRowOrder('resume', homeRowsSettings)
+                        });
+                    }
+                    
+                    // Add Next Up if enabled and TV shows exist
+                    if (isRowEnabled('nextup') && hasTVShows) {
+                        rowsToLoad.push({ 
+                            title: 'Next Up', 
+                            type: 'nextup',
+                            settingId: 'nextup',
+                            order: getRowOrder('nextup', homeRowsSettings)
+                        });
+                    }
                 }
             }
             
             // Live TV Support: Check for Live TV availability
             // Add timeout to prevent hanging
             var liveTVTimeout = setTimeout(function() {
-                console.warn('[browse] Live TV check timed out, continuing without it');
                 continueLoadingRows();
             }, 5000);
             
@@ -1067,28 +1150,31 @@ var BrowseController = (function() {
                 function(liveTVErr, liveTVInfo) {
                 clearTimeout(liveTVTimeout);
                 
-                if (!liveTVErr && liveTVInfo && liveTVInfo.available && isRowEnabled('livetv')) {
+                if (!liveTVErr && liveTVInfo && liveTVInfo.available) {
                     
                     // Add Live TV Channels row
-                    rowsToLoad.push({ 
-                        title: 'Live TV Channels', 
-                        type: 'livetv-channels',
-                        viewId: liveTVInfo.viewId,
-                        settingId: 'livetv',
-                        order: getRowOrder('livetv', homeRowsSettings)
-                    });
+                    if (isRowEnabled('livetv-channels')) {
+                        rowsToLoad.push({ 
+                            title: 'Live TV Channels', 
+                            type: 'livetv-channels',
+                            viewId: liveTVInfo.viewId,
+                            settingId: 'livetv-channels',
+                            order: getRowOrder('livetv-channels', homeRowsSettings)
+                        });
+                    }
                     
                     // Add Live TV Recordings row
-                    rowsToLoad.push({ 
-                        title: 'Recordings', 
-                        type: 'livetv-recordings',
-                        viewId: liveTVInfo.viewId,
-                        settingId: 'livetv',
-                        order: getRowOrder('livetv', homeRowsSettings) + 0.5
-                    });
+                    if (isRowEnabled('livetv-recordings')) {
+                        rowsToLoad.push({ 
+                            title: 'Recordings', 
+                            type: 'livetv-recordings',
+                            viewId: liveTVInfo.viewId,
+                            settingId: 'livetv-recordings',
+                            order: getRowOrder('livetv-recordings', homeRowsSettings)
+                        });
+                    }
                 } else {
                     if (liveTVErr) {
-                        console.warn('[browse] Live TV check failed:', liveTVErr);
                     }
                 }
                 
@@ -1104,7 +1190,6 @@ var BrowseController = (function() {
                 // Add Collections row if enabled
                 if (isRowEnabled('collections')) {
                     var collectionsTimeout = setTimeout(function() {
-                        console.warn('[browse] Collections check timed out, continuing without it');
                         continueWithLibraries();
                     }, 5000);
                     
@@ -1121,7 +1206,6 @@ var BrowseController = (function() {
                             });
                         } else {
                             if (collErr) {
-                                console.warn('[browse] Collections check failed:', collErr);
                             }
                         }
                         
@@ -1133,9 +1217,123 @@ var BrowseController = (function() {
             }
             
             function continueWithLibraries() {
+                // Check if multi-server mode is active
+                var isMultiServer = typeof MultiServerManager !== 'undefined' && MultiServerManager.getServerCount() > 1;
+                
+                if (isMultiServer) {
+                    // Multi-server mode: Get libraries from all servers
+                    if (typeof ConnectionPool !== 'undefined') {
+                        ConnectionPool.getAllLibraries(function(err, allLibraries) {
+                            if (err || !allLibraries) {
+                                loadRows(rowsToLoad);
+                                return;
+                            }
+                            
+                            // Filter out LiveTV
+                            var librariesForRows = allLibraries.filter(function(lib) {
+                                var collectionType = lib.CollectionType ? lib.CollectionType.toLowerCase() : '';
+                                return collectionType !== 'livetv';
+                            });
+                            
+                            // Add Library Tiles row (includes all servers)
+                            if (librariesForRows.length > 0 && isRowEnabled('library-tiles')) {
+                                rowsToLoad.push({
+                                    title: 'My Media',
+                                    type: 'library-tiles',
+                                    libraries: librariesForRows,
+                                    settingId: 'library-tiles',
+                                    order: getRowOrder('library-tiles', homeRowsSettings)
+                                });
+                            }
+                            
+                            // Add library-specific rows for each library (with server context)
+                            librariesForRows.forEach(function(lib) {
+                                var collectionType = lib.CollectionType ? lib.CollectionType.toLowerCase() : '';
+                                var serverSuffix = ' (' + lib.ServerName + ')';
+                                var serverRowPrefix = 'server-' + lib.ServerId + '-';
+                                
+                                if (collectionType === 'movies' && isRowEnabled(serverRowPrefix + 'latest-movies')) {
+                                    rowsToLoad.push({ 
+                                        title: 'Recently added in ' + lib.Name + serverSuffix, 
+                                        type: 'latest',
+                                        parentId: lib.Id,
+                                        itemType: 'Movie',
+                                        libraryName: lib.Name,
+                                        collectionType: collectionType,
+                                        serverId: lib.ServerId,
+                                        userId: lib.UserId,
+                                        serverUrl: lib.ServerUrl,
+                                        settingId: serverRowPrefix + 'latest-movies',
+                                        order: getRowOrder(serverRowPrefix + 'latest-movies', homeRowsSettings)
+                                    });
+                                } else if (collectionType === 'tvshows' && isRowEnabled(serverRowPrefix + 'latest-shows')) {
+                                    rowsToLoad.push({ 
+                                        title: 'Recently added in ' + lib.Name + serverSuffix, 
+                                        type: 'latest',
+                                        parentId: lib.Id,
+                                        itemType: 'Episode',
+                                        libraryName: lib.Name,
+                                        collectionType: collectionType,
+                                        serverId: lib.ServerId,
+                                        userId: lib.UserId,
+                                        serverUrl: lib.ServerUrl,
+                                        settingId: serverRowPrefix + 'latest-shows',
+                                        order: getRowOrder(serverRowPrefix + 'latest-shows', homeRowsSettings)
+                                    });
+                                } else if (collectionType === 'music' && isRowEnabled(serverRowPrefix + 'latest-music')) {
+                                    rowsToLoad.push({
+                                        title: 'Recently added ' + lib.Name + serverSuffix,
+                                        type: 'latest',
+                                        parentId: lib.Id,
+                                        itemType: 'Audio',
+                                        libraryName: lib.Name,
+                                        collectionType: collectionType,
+                                        serverId: lib.ServerId,
+                                        userId: lib.UserId,
+                                        serverUrl: lib.ServerUrl,
+                                        settingId: serverRowPrefix + 'latest-music',
+                                        order: getRowOrder(serverRowPrefix + 'latest-music', homeRowsSettings)
+                                    });
+                                } else if (collectionType) {
+                                    // Generic library type (collections, playlists, etc)
+                                    rowsToLoad.push({
+                                        title: 'Recently added in ' + lib.Name + serverSuffix,
+                                        type: 'latest',
+                                        parentId: lib.Id,
+                                        libraryName: lib.Name,
+                                        collectionType: collectionType,
+                                        serverId: lib.ServerId,
+                                        userId: lib.UserId,
+                                        serverUrl: lib.ServerUrl,
+                                        settingId: 'generic-' + collectionType,
+                                        order: 999 // Put generic rows at the end
+                                    });
+                                }
+                            });
+                            
+                            // Sort rows by order setting, then alphabetically by title
+                            rowsToLoad.sort(function(a, b) {
+                                if (a.order !== b.order) return a.order - b.order;
+                                return a.title.localeCompare(b.title);
+                            });
+                            console.log('[browse] Rows to load (multi-server):', rowsToLoad.map(function(r) { return r.title + ' (type: ' + r.type + ', order: ' + r.order + ', settingId: ' + r.settingId + ')'; }).join(', '));
+                            
+                            // Load each row
+                            loadRows(rowsToLoad);
+                        });
+                    } else {
+                        // ConnectionPool not available, fall back to single server
+                        loadSingleServerLibraries(views.Items);
+                    }
+                } else {
+                    // Single server mode: Use views from current server
+                    loadSingleServerLibraries(views.Items);
+                }
+            }
+            
+            function loadSingleServerLibraries(viewItems) {
                 // Libraries already filtered in API layer, just exclude LiveTV here
-                // Note: views.Items already validated in parent function
-                var librariesForRows = views.Items.filter(function(view) {
+                var librariesForRows = viewItems.filter(function(view) {
                     var collectionType = view.CollectionType ? view.CollectionType.toLowerCase() : '';
                     return collectionType !== 'livetv';
                 });
@@ -1151,60 +1349,63 @@ var BrowseController = (function() {
                     });
                 }
                     
-                    // Organize rows by library with proper ordering
-                    librariesForRows.forEach(function(view) {
-                        var collectionType = view.CollectionType ? view.CollectionType.toLowerCase() : '';
-                        
-                        if (collectionType === 'movies' && isRowEnabled('latest-movies')) {
-                            rowsToLoad.push({ 
-                                title: 'Recently added in ' + view.Name, 
-                                type: 'latest',
-                                parentId: view.Id,
-                                itemType: 'Movie',
-                                libraryName: view.Name,
-                                collectionType: collectionType,
-                                settingId: 'latest-movies',
-                                order: getRowOrder('latest-movies', homeRowsSettings)
-                            });
-                        } else if (collectionType === 'tvshows' && isRowEnabled('latest-shows')) {
-                            rowsToLoad.push({ 
-                                title: 'Recently added in ' + view.Name, 
-                                type: 'latest',
-                                parentId: view.Id,
-                                itemType: 'Episode',
-                                libraryName: view.Name,
-                                collectionType: collectionType,
-                                settingId: 'latest-shows',
-                                order: getRowOrder('latest-shows', homeRowsSettings)
-                            });
-                        } else if (collectionType === 'music' && isRowEnabled('latest-music')) {
-                            rowsToLoad.push({
-                                title: 'Recently added ' + view.Name,
-                                type: 'latest',
-                                parentId: view.Id,
-                                itemType: 'Audio',
-                                libraryName: view.Name,
-                                collectionType: collectionType,
-                                settingId: 'latest-music',
-                                order: getRowOrder('latest-music', homeRowsSettings)
-                            });
-                        } else {
-                            // Generic library type
-                            rowsToLoad.push({
-                                title: 'Recently added in ' + view.Name,
-                                type: 'latest',
-                                parentId: view.Id,
-                                libraryName: view.Name,
-                                collectionType: collectionType,
-                                order: 999 // Put generic rows at the end
-                            });
-                        }
-                    });
-                
-                // Sort rows by order setting
-                rowsToLoad.sort(function(a, b) {
-                    return a.order - b.order;
+                // Organize rows by library with proper ordering
+                librariesForRows.forEach(function(view) {
+                    var collectionType = view.CollectionType ? view.CollectionType.toLowerCase() : '';
+                    
+                    if (collectionType === 'movies' && isRowEnabled('latest-movies')) {
+                        rowsToLoad.push({ 
+                            title: 'Recently added in ' + view.Name, 
+                            type: 'latest',
+                            parentId: view.Id,
+                            itemType: 'Movie',
+                            libraryName: view.Name,
+                            collectionType: collectionType,
+                            settingId: 'latest-movies',
+                            order: getRowOrder('latest-movies', homeRowsSettings)
+                        });
+                    } else if (collectionType === 'tvshows' && isRowEnabled('latest-shows')) {
+                        rowsToLoad.push({ 
+                            title: 'Recently added in ' + view.Name, 
+                            type: 'latest',
+                            parentId: view.Id,
+                            itemType: 'Episode',
+                            libraryName: view.Name,
+                            collectionType: collectionType,
+                            settingId: 'latest-shows',
+                            order: getRowOrder('latest-shows', homeRowsSettings)
+                        });
+                    } else if (collectionType === 'music' && isRowEnabled('latest-music')) {
+                        rowsToLoad.push({
+                            title: 'Recently added ' + view.Name,
+                            type: 'latest',
+                            parentId: view.Id,
+                            itemType: 'Audio',
+                            libraryName: view.Name,
+                            collectionType: collectionType,
+                            settingId: 'latest-music',
+                            order: getRowOrder('latest-music', homeRowsSettings)
+                        });
+                    } else {
+                        // Generic library type (collections, playlists, etc)
+                        rowsToLoad.push({
+                            title: 'Recently added in ' + view.Name,
+                            type: 'latest',
+                            parentId: view.Id,
+                            libraryName: view.Name,
+                            collectionType: collectionType,
+                            settingId: 'generic-' + collectionType,
+                            order: 999 // Put generic rows at the end
+                        });
+                    }
                 });
+                
+                // Sort rows by order setting, then alphabetically by title
+                rowsToLoad.sort(function(a, b) {
+                    if (a.order !== b.order) return a.order - b.order;
+                    return a.title.localeCompare(b.title);
+                });
+                console.log('[browse] Rows to load (single-server):', rowsToLoad.map(function(r) { return r.title + ' (type: ' + r.type + ', order: ' + r.order + ', settingId: ' + (r.settingId || 'none') + ')'; }).join(', '));
                 
                 // Load each row
                 loadRows(rowsToLoad);
@@ -1376,14 +1577,50 @@ var BrowseController = (function() {
         loadRows(rowsToLoad);
     }
 
+    /**
+     * Sort content rows by their data-row-order attribute
+     * @private
+     */
+    function sortRowsByOrder() {
+        if (!elements.contentRows) return;
+        
+        var rowsArray = [].slice.call(elements.contentRows.children);
+        console.log('[browse] Before sort:', rowsArray.map(function(r) { 
+            return r.getAttribute('data-row-title') + ' (order: ' + r.getAttribute('data-row-order') + ')'; 
+        }).join(', '));
+        
+        rowsArray.sort(function(a, b) {
+            var orderA = parseInt(a.getAttribute('data-row-order'));
+            var orderB = parseInt(b.getAttribute('data-row-order'));
+            if (isNaN(orderA)) orderA = 999;
+            if (isNaN(orderB)) orderB = 999;
+            if (orderA !== orderB) return orderA - orderB;
+            // Secondary sort by title for same order
+            var titleA = a.getAttribute('data-row-title') || '';
+            var titleB = b.getAttribute('data-row-title') || '';
+            return titleA.localeCompare(titleB);
+        });
+        
+        console.log('[browse] After sort:', rowsArray.map(function(r) { 
+            return r.getAttribute('data-row-title') + ' (order: ' + r.getAttribute('data-row-order') + ')'; 
+        }).join(', '));
+        
+        // Re-append in sorted order
+        rowsArray.forEach(function(row) {
+            elements.contentRows.appendChild(row);
+        });
+        
+        console.log('[browse] Rows sorted, final order:', rowsArray.map(function(r) { 
+            return r.getAttribute('data-row-title') + ' (order: ' + r.getAttribute('data-row-order') + ')'; 
+        }).join(', '));
+    }
+
     function loadRows(rowDefinitions) {
-        console.log('[browse] loadRows called with', rowDefinitions.length, 'rows:', rowDefinitions);
         var completed = 0;
         var hasContent = false;
         
         // Add failsafe timeout to always hide loading indicator
         var loadingFailsafe = setTimeout(function() {
-            console.warn('[browse] loadRows failsafe triggered - forcing hideLoading after 15 seconds');
             hideLoading();
             if (!hasContent) {
                 showError('Loading timed out. Some content may not have loaded.');
@@ -1399,13 +1636,16 @@ var BrowseController = (function() {
         }
         
         rowDefinitions.forEach(function(rowDef) {
-            console.log('[browse] Loading row:', rowDef.title, 'type:', rowDef.type);
             loadRow(rowDef, function(success) {
                 completed++;
                 if (success) hasContent = true;
                 
                 if (completed === rowDefinitions.length) {
                     clearTimeout(loadingFailsafe);
+                    
+                    // Sort rows by their order attribute
+                    sortRowsByOrder();
+                    
                     hideLoading();
                     if (!hasContent) {
                         showError('No content available in your library');
@@ -1417,13 +1657,11 @@ var BrowseController = (function() {
     }
 
     function loadRow(rowDef, callback) {
-        console.log('[browse] loadRow called for:', rowDef.title, 'type:', rowDef.type);
         
         // Add per-row timeout to ensure callback is always called
         var rowCallbackCalled = false;
         var rowTimeout = setTimeout(function() {
             if (!rowCallbackCalled) {
-                console.warn('[browse] Row loading timed out after 8 seconds:', rowDef.title);
                 rowCallbackCalled = true;
                 if (callback) callback(false);
             }
@@ -1434,15 +1672,13 @@ var BrowseController = (function() {
             if (rowCallbackCalled) return;
             rowCallbackCalled = true;
             clearTimeout(rowTimeout);
-            console.log('[browse] Row completed:', rowDef.title, 'success:', success);
             if (callback) callback(success);
         };
         
         // Handle library tiles row (special case - no API call needed)
         if (rowDef.type === 'library-tiles') {
-            console.log('[browse] Rendering library tiles, count:', rowDef.libraries ? rowDef.libraries.length : 0);
             if (rowDef.libraries && rowDef.libraries.length > 0) {
-                renderRow(rowDef.title, rowDef.libraries, rowDef.type);
+                renderRow(rowDef.title, rowDef.libraries, rowDef.type, rowDef.order);
                 safeCallback(true);
             } else {
                 safeCallback(false);
@@ -1452,88 +1688,181 @@ var BrowseController = (function() {
         
         // Use specialized API functions for specific row types
         if (rowDef.type === 'resume') {
-            console.log('[browse] Fetching resume items...');
-            // Continue Watching - use dedicated resume endpoint
-            JellyfinAPI.getResumeItems(auth.serverAddress, auth.userId, auth.accessToken, function(err, data) {
-                console.log('[browse] Resume items response:', err ? 'ERROR: ' + err : 'Success', 'data:', data);
-                if (err || !data || !data.Items || data.Items.length === 0) {
-                    console.log('[browse] No resume items to display');
+            
+            // Check if this is a multi-server row (has serverId)
+            if (rowDef.serverId && typeof MultiServerManager !== 'undefined') {
+                var server = MultiServerManager.getServer(rowDef.serverId, rowDef.userId);
+                if (!server) {
                     safeCallback(false);
                     return;
                 }
                 
-                console.log('[browse] Rendering', data.Items.length, 'resume items');
-                renderRow(rowDef.title, data.Items, rowDef.type);
-                safeCallback(true);
-            });
+                // Use server-specific API call
+                JellyfinAPI.getResumeItems(server.url, server.userId, server.accessToken, function(err, data) {
+                    if (err || !data || !data.Items || data.Items.length === 0) {
+                        safeCallback(false);
+                        return;
+                    }
+                    
+                    // Attach serverUrl and serverId to each item for multi-server routing
+                    data.Items.forEach(function(item) {
+                        item.ServerUrl = server.url;
+                        item.MultiServerId = server.id;
+                    });
+                    
+                    renderRow(rowDef.title, data.Items, rowDef.type, rowDef.order);
+                    safeCallback(true);
+                });
+            } else {
+                // Single server mode - use current auth
+                JellyfinAPI.getResumeItems(auth.serverAddress, auth.userId, auth.accessToken, function(err, data) {
+                    if (err || !data || !data.Items || data.Items.length === 0) {
+                        safeCallback(false);
+                        return;
+                    }
+                    
+                    renderRow(rowDef.title, data.Items, rowDef.type, rowDef.order);
+                    safeCallback(true);
+                });
+            }
             return;
         }
         
         if (rowDef.type === 'merged-continue-watching') {
-            // Merged Continue Watching - combines Resume and Next Up
-            JellyfinAPI.getMergedContinueWatching(auth.serverAddress, auth.userId, auth.accessToken, function(err, data) {
-                if (err || !data || !data.Items || data.Items.length === 0) {
+            // Check if this is a multi-server row (has serverId)
+            if (rowDef.serverId && typeof MultiServerManager !== 'undefined') {
+                var server = MultiServerManager.getServer(rowDef.serverId, rowDef.userId);
+                if (!server) {
                     safeCallback(false);
                     return;
                 }
                 
-                renderRow(rowDef.title, data.Items, 'resume');
-                safeCallback(true);
-            });
+                // Use server-specific API call
+                JellyfinAPI.getMergedContinueWatching(server.url, server.userId, server.accessToken, function(err, data) {
+                    if (err || !data || !data.Items || data.Items.length === 0) {
+                        safeCallback(false);
+                        return;
+                    }
+                    
+                    // Attach serverUrl and serverId to each item for multi-server routing
+                    data.Items.forEach(function(item) {
+                        item.ServerUrl = server.url;
+                        item.MultiServerId = server.id;
+                    });
+                    
+                    renderRow(rowDef.title, data.Items, 'resume', rowDef.order);
+                    safeCallback(true);
+                });
+            } else {
+                // Single server mode - use current auth
+                JellyfinAPI.getMergedContinueWatching(auth.serverAddress, auth.userId, auth.accessToken, function(err, data) {
+                    if (err || !data || !data.Items || data.Items.length === 0) {
+                        safeCallback(false);
+                        return;
+                    }
+                    
+                    renderRow(rowDef.title, data.Items, 'resume', rowDef.order);
+                    safeCallback(true);
+                });
+            }
             return;
         }
         
         if (rowDef.type === 'nextup') {
-            console.log('[browse] Fetching next up items...');
-            // Next Up - use dedicated next up endpoint
-            JellyfinAPI.getNextUpItems(auth.serverAddress, auth.userId, auth.accessToken, function(err, data) {
-                console.log('[browse] Next up response:', err ? 'ERROR: ' + err : 'Success', 'data:', data);
-                if (err || !data || !data.Items || data.Items.length === 0) {
-                    console.log('[browse] No next up items to display');
+            
+            // Check if this is a multi-server row (has serverId)
+            if (rowDef.serverId && typeof MultiServerManager !== 'undefined') {
+                var server = MultiServerManager.getServer(rowDef.serverId, rowDef.userId);
+                if (!server) {
                     safeCallback(false);
                     return;
                 }
                 
-                console.log('[browse] Rendering', data.Items.length, 'next up items');
-                renderRow(rowDef.title, data.Items, rowDef.type);
-                safeCallback(true);
-            });
+                // Use server-specific API call
+                JellyfinAPI.getNextUpItems(server.url, server.userId, server.accessToken, function(err, data) {
+                    if (err || !data || !data.Items || data.Items.length === 0) {
+                        safeCallback(false);
+                        return;
+                    }
+                    
+                    // Attach serverUrl and serverId to each item for multi-server routing
+                    data.Items.forEach(function(item) {
+                        item.ServerUrl = server.url;
+                        item.MultiServerId = server.id;
+                    });
+                    
+                    renderRow(rowDef.title, data.Items, rowDef.type, rowDef.order);
+                    safeCallback(true);
+                });
+            } else {
+                // Single server mode - use current auth
+                JellyfinAPI.getNextUpItems(auth.serverAddress, auth.userId, auth.accessToken, function(err, data) {
+                    if (err || !data || !data.Items || data.Items.length === 0) {
+                        safeCallback(false);
+                        return;
+                    }
+                    
+                    renderRow(rowDef.title, data.Items, rowDef.type, rowDef.order);
+                    safeCallback(true);
+                });
+            }
             return;
         }
         
         if (rowDef.type === 'latest' && rowDef.parentId) {
-            console.log('[browse] Fetching latest media for parentId:', rowDef.parentId, 'itemType:', rowDef.itemType);
-            // Latest Media - use dedicated latest endpoint
-            var includeTypes = rowDef.itemType || null;
-            JellyfinAPI.getLatestMedia(auth.serverAddress, auth.userId, auth.accessToken,
-                rowDef.parentId, includeTypes, function(err, data) {
-                console.log('[browse] Latest media response:', err ? 'ERROR: ' + err : 'Success', 'data:', data);
-                if (err || !data || !data.Items || data.Items.length === 0) {
-                    console.log('[browse] No latest items to display');
+            
+            // Check if this is a multi-server row (has serverId)
+            if (rowDef.serverId && typeof MultiServerManager !== 'undefined') {
+                var server = MultiServerManager.getServer(rowDef.serverId, rowDef.userId);
+                if (!server) {
                     safeCallback(false);
                     return;
                 }
                 
-                console.log('[browse] Rendering', data.Items.length, 'latest items');
-                renderRow(rowDef.title, data.Items, rowDef.type);
-                safeCallback(true);
-            });
+                // Latest Media - use server-specific API call
+                var includeTypes = rowDef.itemType || null;
+                JellyfinAPI.getLatestMedia(server.url, server.userId, server.accessToken,
+                    rowDef.parentId, includeTypes, function(err, data) {
+                    if (err || !data || !data.Items || data.Items.length === 0) {
+                        safeCallback(false);
+                        return;
+                    }
+                    
+                    // Attach serverUrl and serverId to each item for multi-server routing
+                    data.Items.forEach(function(item) {
+                        item.ServerUrl = server.url;
+                        item.MultiServerId = server.id;
+                    });
+                    
+                    renderRow(rowDef.title, data.Items, rowDef.type, rowDef.order);
+                    safeCallback(true);
+                });
+            } else {
+                // Single server mode - use current auth
+                var includeTypes = rowDef.itemType || null;
+                JellyfinAPI.getLatestMedia(auth.serverAddress, auth.userId, auth.accessToken,
+                    rowDef.parentId, includeTypes, function(err, data) {
+                    if (err || !data || !data.Items || data.Items.length === 0) {
+                        safeCallback(false);
+                        return;
+                    }
+                    
+                    renderRow(rowDef.title, data.Items, rowDef.type, rowDef.order);
+                    safeCallback(true);
+                });
+            }
             return;
         }
         
         // Live TV Support: Handle Live TV channels (favorites only)
         if (rowDef.type === 'livetv-channels') {
-            console.log('[browse] Fetching favorite Live TV channels...');
             JellyfinAPI.getChannels(null, 0, 50, true, function(err, data) {
-                console.log('[browse] Favorite Live TV channels response:', err ? 'ERROR: ' + err : 'Success', 'data:', data);
                 if (err || !data || data.length === 0) {
-                    console.log('[browse] No favorite Live TV channels to display');
                     safeCallback(false);
                     return;
                 }
                 
-                console.log('[browse] Rendering', data.length, 'favorite Live TV channels');
-                renderRow(rowDef.title, data, rowDef.type);
+                renderRow(rowDef.title, data, rowDef.type, rowDef.order);
                 safeCallback(true);
             });
             return;
@@ -1541,17 +1870,13 @@ var BrowseController = (function() {
         
         // Live TV Support: Handle Live TV recordings
         if (rowDef.type === 'livetv-recordings') {
-            console.log('[browse] Fetching Live TV recordings...');
             JellyfinAPI.getLiveTVRecordings(function(err, data) {
-                console.log('[browse] Live TV recordings response:', err ? 'ERROR: ' + err : 'Success', 'data:', data);
                 if (err || !data || !data.Items || data.Items.length === 0) {
-                    console.log('[browse] No Live TV recordings to display');
                     safeCallback(false);
                     return;
                 }
                 
-                console.log('[browse] Rendering', data.Items.length, 'Live TV recordings');
-                renderRow(rowDef.title, data.Items, rowDef.type);
+                renderRow(rowDef.title, data.Items, rowDef.type, rowDef.order);
                 safeCallback(true);
             });
             return;
@@ -1559,17 +1884,13 @@ var BrowseController = (function() {
         
         // Collections Support: Handle Collections (Box Sets)
         if (rowDef.type === 'collections') {
-            console.log('[browse] Fetching collections...');
             JellyfinAPI.getCollections(auth.serverAddress, auth.userId, auth.accessToken, function(err, data) {
-                console.log('[browse] Collections response:', err ? 'ERROR: ' + err : 'Success', 'data:', data);
                 if (err || !data || !data.Items || data.Items.length === 0) {
-                    console.log('[browse] No collections to display');
                     safeCallback(false);
                     return;
                 }
                 
-                console.log('[browse] Rendering', data.Items.length, 'collections');
-                renderRow(rowDef.title, data.Items, rowDef.type);
+                renderRow(rowDef.title, data.Items, rowDef.type, rowDef.order);
                 safeCallback(true);
             });
             return;
@@ -1640,17 +1961,13 @@ var BrowseController = (function() {
             params.limit = 100;
         }
         
-        console.log('[browse] Fetching generic items, endpoint:', endpoint, 'params:', params);
         JellyfinAPI.getItems(auth.serverAddress, auth.accessToken, endpoint, params, function(err, data) {
-            console.log('[browse] Generic items response:', err ? 'ERROR: ' + err : 'Success', 'data:', data);
             if (err || !data || !data.Items || data.Items.length === 0) {
-                console.log('[browse] No generic items to display');
                 safeCallback(false);
                 return;
             }
             
-            console.log('[browse] Rendering', data.Items.length, 'generic items');
-            renderRow(rowDef.title, data.Items, rowDef.type);
+            renderRow(rowDef.title, data.Items, rowDef.type, rowDef.order);
             safeCallback(true);
         });
     }
@@ -1664,14 +1981,12 @@ var BrowseController = (function() {
         var featuredMediaFilter = 'both'; // default
         try {
             var settings = storage.get('jellyfin_settings');
-            console.log('[browse] Featured media - raw settings:', settings);
             if (settings) {
                 var parsedSettings = JSON.parse(settings);
                 featuredMediaFilter = parsedSettings.featuredMediaFilter || 'both';
-                console.log('[browse] Featured media filter setting:', featuredMediaFilter);
             }
         } catch (e) {
-            console.error('Error reading featured media filter setting:', e);
+            // Settings parsing failed, use default
         }
         
         var includeItemTypes = 'Movie,Series';
@@ -1680,8 +1995,6 @@ var BrowseController = (function() {
         } else if (featuredMediaFilter === 'tv') {
             includeItemTypes = 'Series';
         }
-        
-        console.log('[browse] Featured media - includeItemTypes:', includeItemTypes);
         
         var params = {
             userId: auth.userId,
@@ -1699,24 +2012,63 @@ var BrowseController = (function() {
             params.filters = 'IsNotFolder';
         }
         
-        console.log('[browse] Featured media - API params:', params);
+        // Check if multi-server mode is active
+        var isMultiServer = typeof MultiServerManager !== 'undefined' && MultiServerManager.getServerCount() > 1;
         
-        JellyfinAPI.getItems(auth.serverAddress, auth.accessToken,
-            '/Users/' + auth.userId + '/Items', params, function(err, data) {
-            console.log('[browse] Featured media - API response:', err ? 'ERROR: ' + err : 'Success', 'items:', data && data.Items ? data.Items.length : 0);
-            if (err) {
-                console.error('[browse] Featured media error:', err);
-            }
-            if (!err && data && data.Items && data.Items.length > 0) {
-                console.log('[browse] Featured media - loaded', data.Items.length, 'items:', data.Items.map(i => i.Name + ' (' + i.Type + ')'));
-                featuredCarousel.items = data.Items;
-                displayFeaturedItem(0);
-                createCarouselIndicators();
-                startCarouselAutoPlay();
-            } else {
-                console.log('[browse] Featured media - no items found or error');
-            }
-        });
+        if (isMultiServer && typeof ConnectionPool !== 'undefined') {
+            // Multi-server mode: fetch from all servers and combine
+            var allServers = MultiServerManager.getAllServersArray();
+            var completed = 0;
+            var allItems = [];
+            
+            allServers.forEach(function(server) {
+                var serverParams = JSON.parse(JSON.stringify(params));
+                serverParams.userId = server.userId;
+                
+                JellyfinAPI.getItems(server.url, server.accessToken,
+                    '/Users/' + server.userId + '/Items', serverParams, function(err, data) {
+                    completed++;
+                    
+                    if (!err && data && data.Items && data.Items.length > 0) {
+                        // Attach server URL and serverId to each item for multi-server routing
+                        data.Items.forEach(function(item) {
+                            item.ServerUrl = server.url;
+                            item.MultiServerId = server.id;
+                        });
+                        allItems = allItems.concat(data.Items);
+                    }
+                    
+                    // When all servers have responded
+                    if (completed === allServers.length) {
+                        if (allItems.length > 0) {
+                            // Shuffle combined items
+                            for (var i = allItems.length - 1; i > 0; i--) {
+                                var j = Math.floor(Math.random() * (i + 1));
+                                var temp = allItems[i];
+                                allItems[i] = allItems[j];
+                                allItems[j] = temp;
+                            }
+                            // Take first 10 after shuffle
+                            featuredCarousel.items = allItems.slice(0, 10);
+                            displayFeaturedItem(0);
+                            createCarouselIndicators();
+                            startCarouselAutoPlay();
+                        }
+                    }
+                });
+            });
+        } else {
+            // Single server mode: use current auth
+            JellyfinAPI.getItems(auth.serverAddress, auth.accessToken,
+                '/Users/' + auth.userId + '/Items', params, function(err, data) {
+                if (!err && data && data.Items && data.Items.length > 0) {
+                    featuredCarousel.items = data.Items;
+                    displayFeaturedItem(0);
+                    createCarouselIndicators();
+                    startCarouselAutoPlay();
+                }
+            });
+        }
     }
     
     function displayFeaturedItem(index) {
@@ -1739,9 +2091,12 @@ var BrowseController = (function() {
         elements.featuredBackdropContainer.style.opacity = '0';
         
         setTimeout(function() {
+            // Get server URL from item (multi-server) or use auth (single-server)
+            var serverUrl = item.ServerUrl || auth.serverAddress;
+            
             elements.featuredTitle.textContent = item.Name;
             if (item.ImageTags && item.ImageTags.Logo) {
-                var logoUrl = auth.serverAddress + '/Items/' + item.Id + '/Images/Logo?quality=90&maxWidth=500';
+                var logoUrl = serverUrl + '/Items/' + item.Id + '/Images/Logo?quality=90&maxWidth=500';
                 elements.featuredLogo.src = logoUrl;
                 elements.featuredLogo.style.display = 'block';
                 elements.featuredTitle.style.display = 'none';
@@ -1778,11 +2133,11 @@ var BrowseController = (function() {
             }
             
             if (item.BackdropImageTags && item.BackdropImageTags.length > 0) {
-                var backdropUrl = auth.serverAddress + '/Items/' + item.Id +
+                var backdropUrl = serverUrl + '/Items/' + item.Id +
                     '/Images/Backdrop/0?quality=90&maxWidth=1920';
                 elements.featuredBackdrop.src = backdropUrl;
             } else if (item.ImageTags && item.ImageTags.Primary) {
-                var primaryUrl = auth.serverAddress + '/Items/' + item.Id + '/Images/Primary?quality=90&maxWidth=1920';
+                var primaryUrl = serverUrl + '/Items/' + item.Id + '/Images/Primary?quality=90&maxWidth=1920';
                 elements.featuredBackdrop.src = primaryUrl;
             }
             
@@ -1862,10 +2217,11 @@ var BrowseController = (function() {
         startCarouselAutoPlay();
     }
 
-    function renderRow(title, items, type) {
-        console.log('[browse] renderRow called:', title, 'items:', items.length, 'type:', type);
+    function renderRow(title, items, type, order) {
         var rowDiv = document.createElement('div');
         rowDiv.className = 'content-row';
+        rowDiv.setAttribute('data-row-order', order !== undefined ? order : 999);
+        rowDiv.setAttribute('data-row-title', title);
         
         if (type === 'resume') {
             rowDiv.classList.add('continue-watching-row');
@@ -1920,11 +2276,13 @@ var BrowseController = (function() {
         img.className = 'item-image';
         
         // Use library Thumb (wide) image or Primary as fallback
+        // In multi-server mode, use the library's ServerUrl; otherwise use active server
+        var serverUrl = library.ServerUrl || auth.serverAddress;
         var imageUrl = '';
         if (library.ImageTags && library.ImageTags.Thumb) {
-            imageUrl = auth.serverAddress + '/Items/' + library.Id + '/Images/Thumb?quality=90&maxWidth=500';
+            imageUrl = serverUrl + '/Items/' + library.Id + '/Images/Thumb?quality=90&maxWidth=500';
         } else if (library.ImageTags && library.ImageTags.Primary) {
-            imageUrl = auth.serverAddress + '/Items/' + library.Id + '/Images/Primary?quality=90&maxWidth=500';
+            imageUrl = serverUrl + '/Items/' + library.Id + '/Images/Primary?quality=90&maxWidth=500';
         } else {
             // Use a placeholder based on collection type
             var collectionType = library.CollectionType ? library.CollectionType.toLowerCase() : '';
@@ -2004,6 +2362,11 @@ var BrowseController = (function() {
         card.dataset.overview = item.Overview || '';
         card.dataset.id = item.Id || '';
         
+        // Store server URL for multi-server support
+        if (item.ServerUrl) {
+            card.dataset.serverUrl = item.ServerUrl;
+        }
+        
         // Store backdrop image tag if available
         if (item.BackdropImageTags && item.BackdropImageTags.length > 0) {
             card.dataset.backdropImageTag = item.BackdropImageTags[0];
@@ -2031,9 +2394,12 @@ var BrowseController = (function() {
         // For episodes, always use the series poster instead of episode thumbnail
         var isEpisode = item.Type === 'Episode';
         
+        // In multi-server mode, use item's ServerUrl; otherwise use active server
+        var serverUrl = item.ServerUrl || auth.serverAddress;
+        
         // Use ImageHelper for smart image selection
         if (hasImageHelper) {
-            imageUrl = ImageHelper.getImageUrl(auth.serverAddress, item);
+            imageUrl = ImageHelper.getImageUrl(serverUrl, item);
             
             // Apply aspect ratio class based on selected image type
             var aspect = ImageHelper.getAspectRatio(item, ImageHelper.getImageType());
@@ -2050,16 +2416,16 @@ var BrowseController = (function() {
             if (isLiveTVChannel) {
                 // Use channel logo/primary image
                 if (item.ImageTags && item.ImageTags.Primary) {
-                    imageUrl = auth.serverAddress + '/Items/' + item.Id + '/Images/Primary?quality=90&maxWidth=400';
+                    imageUrl = serverUrl + '/Items/' + item.Id + '/Images/Primary?quality=90&maxWidth=400';
                 }
             } else if (isEpisode && item.SeriesId && item.SeriesPrimaryImageTag) {
                 // For episodes, always use series poster
-                imageUrl = auth.serverAddress + '/Items/' + item.SeriesId +
+                imageUrl = serverUrl + '/Items/' + item.SeriesId +
                     '/Images/Primary?quality=90&maxHeight=400&tag=' + item.SeriesPrimaryImageTag;
             } else if (item.ImageTags && item.ImageTags.Primary) {
-                imageUrl = auth.serverAddress + '/Items/' + item.Id + '/Images/Primary?quality=90&maxHeight=400';
+                imageUrl = serverUrl + '/Items/' + item.Id + '/Images/Primary?quality=90&maxHeight=400';
             } else if (item.SeriesId && item.SeriesPrimaryImageTag) {
-                imageUrl = auth.serverAddress + '/Items/' + item.SeriesId +
+                imageUrl = serverUrl + '/Items/' + item.SeriesId +
                     '/Images/Primary?quality=90&maxHeight=400&tag=' + item.SeriesPrimaryImageTag;
             }
         }
@@ -2176,20 +2542,32 @@ var BrowseController = (function() {
         
         // Live TV Support: Handle Live TV channel playback
         if (item.Type === 'TvChannel') {
-            window.location.href = 'player.html?id=' + item.Id + '&mediaType=livetv';
+            var url = 'player.html?id=' + item.Id + '&mediaType=livetv';
+            if (item.MultiServerId) {
+                url += '&serverId=' + item.MultiServerId;
+            }
+            window.location.href = url;
             return;
         }
         
         // Live TV Support: Handle recording playback
         if (item.Type === 'Recording') {
-            window.location.href = 'player.html?id=' + item.Id + '&mediaType=recording';
+            var url = 'player.html?id=' + item.Id + '&mediaType=recording';
+            if (item.MultiServerId) {
+                url += '&serverId=' + item.MultiServerId;
+            }
+            window.location.href = url;
             return;
         }
         
         // Save current focus position before navigating away
         saveFocusPosition();
         
-        window.location.href = 'details.html?id=' + item.Id;
+        var url = 'details.html?id=' + item.Id;
+        if (item.MultiServerId) {
+            url += '&serverId=' + item.MultiServerId;
+        }
+        window.location.href = url;
     }
 
     function saveFocusPosition() {
@@ -2360,18 +2738,46 @@ var BrowseController = (function() {
     }
 
     /**
-     * Get home rows settings from storage or return defaults
+     * Get home rows settings from storage or return defaults (user-scoped)
      * Retrieves user-configured home row preferences including enabled state and display order
      * @returns {Array<Object>} Array of home row configuration objects with id, name, enabled, and order properties
      * @private
      */
     function getHomeRowsSettings() {
-        var stored = storage.get('jellyfin_settings');
+        var defaults = [
+            { id: 'resume', name: 'Continue Watching', enabled: true, order: 0 },
+            { id: 'nextup', name: 'Next Up', enabled: true, order: 1 },
+            { id: 'latest-movies', name: 'Latest Movies', enabled: true, order: 2 },
+            { id: 'latest-shows', name: 'Latest TV Shows', enabled: true, order: 2 },
+            { id: 'latest-music', name: 'Latest Music', enabled: true, order: 2 },
+            { id: 'livetv-channels', name: 'Live TV Channels', enabled: true, order: 3 },
+            { id: 'livetv-recordings', name: 'Recordings', enabled: true, order: 3 },
+            { id: 'library-tiles', name: 'My Media', enabled: false, order: 4 },
+            { id: 'collections', name: 'Collections', enabled: false, order: 5 }
+        ];
+        
+        var stored = storage.getUserPreference('jellyfin_settings', null);
         if (stored) {
             try {
                 var parsedSettings = JSON.parse(stored);
                 if (parsedSettings.homeRows) {
-                    return parsedSettings.homeRows;
+                    // Merge saved settings with defaults - saved values take precedence
+                    var merged = JSON.parse(JSON.stringify(defaults));
+                    parsedSettings.homeRows.forEach(function(savedRow) {
+                        var defaultRow = merged.find(function(r) { return r.id === savedRow.id; });
+                        if (defaultRow) {
+                            // Update existing default with saved values
+                            defaultRow.enabled = savedRow.enabled;
+                            // Use default order for latest-* rows so they group together alphabetically
+                            if (savedRow.id.indexOf('latest-') !== 0) {
+                                defaultRow.order = savedRow.order;
+                            }
+                        } else {
+                            // Add saved row that's not in defaults
+                            merged.push(savedRow);
+                        }
+                    });
+                    return merged;
                 }
             } catch (e) {
                 // Settings parsing failed, return defaults
@@ -2379,16 +2785,74 @@ var BrowseController = (function() {
         }
         
         // Return default settings
-        return [
-            { id: 'resume', name: 'Continue Watching', enabled: true, order: 0 },
-            { id: 'nextup', name: 'Next Up', enabled: true, order: 1 },
-            { id: 'livetv', name: 'Live TV', enabled: true, order: 2 },
-            { id: 'library-tiles', name: 'My Media', enabled: true, order: 3 },
-            { id: 'collections', name: 'Collections', enabled: true, order: 4 },
-            { id: 'latest-movies', name: 'Latest Movies', enabled: true, order: 5 },
-            { id: 'latest-shows', name: 'Latest TV Shows', enabled: true, order: 6 },
-            { id: 'latest-music', name: 'Latest Music', enabled: true, order: 7 }
-        ];
+        return defaults;
+    }
+
+    /**
+     * Augment home rows with per-server variants when in multi-server mode
+     * This mirrors the logic in settings.js for consistent behavior
+     * @param {Array} baseRows - Base home rows configuration
+     * @returns {Array} Augmented rows with per-server variants
+     * @private
+     */
+    function augmentHomeRowsForMultiServer(baseRows) {
+        if (typeof MultiServerManager === 'undefined') {
+            return baseRows;
+        }
+        
+        var servers = MultiServerManager.getAllServersArray();
+        if (!servers || servers.length <= 1) {
+            return baseRows;
+        }
+        
+        var augmentedRows = [];
+        var rowTypesToSplit = ['resume', 'nextup', 'latest-movies', 'latest-shows', 'latest-music'];
+        
+        // Add base rows that don't split per-server
+        baseRows.forEach(function(row) {
+            if (rowTypesToSplit.indexOf(row.id) === -1) {
+                augmentedRows.push(JSON.parse(JSON.stringify(row)));
+            }
+        });
+        
+        // Add per-server variants for splittable row types
+        var perServerRows = [];
+        servers.forEach(function(server) {
+            rowTypesToSplit.forEach(function(baseId) {
+                var baseRow = baseRows.find(function(r) { return r.id === baseId; });
+                if (!baseRow) return;
+                
+                var serverId = 'server-' + server.id + '-' + baseId;
+                var serverRow = {
+                    id: serverId,
+                    baseId: baseId,
+                    serverId: server.id,
+                    serverName: server.name,
+                    name: baseRow.name + ' (' + server.name + ')',
+                    enabled: baseRow.enabled,
+                    order: baseRow.order
+                };
+                perServerRows.push(serverRow);
+            });
+        });
+        
+        // Sort per-server rows: first by base order, then alphabetically by server name, then by base row name
+        perServerRows.sort(function(a, b) {
+            if (a.order !== b.order) return a.order - b.order;
+            var serverCompare = a.serverName.localeCompare(b.serverName);
+            if (serverCompare !== 0) return serverCompare;
+            return a.name.localeCompare(b.name);
+        });
+        
+        // Add sorted per-server rows to result
+        augmentedRows = augmentedRows.concat(perServerRows);
+        
+        // Final sort by order (for non-splittable rows mixed with per-server rows)
+        augmentedRows.sort(function(a, b) {
+            return a.order - b.order;
+        });
+        
+        return augmentedRows;
     }
 
     /**

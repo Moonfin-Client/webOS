@@ -639,7 +639,7 @@
         // Update popup content
         let title = recording.Name || 'Unknown';
         if (recording.ParentIndexNumber && recording.IndexNumber) {
-            title += ` - S${recording.ParentIndexNumber}E${recording.IndexNumber}`;
+            title += ' - S' + recording.ParentIndexNumber + 'E' + recording.IndexNumber;
         }
         document.getElementById('popupTitle').textContent = title;
 
@@ -792,7 +792,7 @@
     function handlePlayRecording() {
         const recordingId = document.getElementById('popupPlayBtn').dataset.recordingId;
         if (recordingId) {
-            window.location.href = `player.html?id=${recordingId}&mediaType=video`;
+            window.location.href = 'player.html?id=' + recordingId + '&mediaType=video';
         }
     }
 

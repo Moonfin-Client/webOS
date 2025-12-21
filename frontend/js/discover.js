@@ -1031,7 +1031,11 @@ var DiscoverController = (function() {
                 .then(function(jellyfinItem) {
                     if (jellyfinItem) {
                         // Found in library, navigate to Jellyfin details
-                        window.location.href = 'details.html?id=' + jellyfinItem.Id;
+                        var url = 'details.html?id=' + jellyfinItem.Id;
+                        if (jellyfinItem.MultiServerId) {
+                            url += '&serverId=' + jellyfinItem.MultiServerId;
+                        }
+                        window.location.href = url;
                     } else {
                         // Not found, show Jellyseerr details (fallback to original behavior)
                         showJellyseerrDetails(item);
@@ -1438,7 +1442,9 @@ var DiscoverController = (function() {
      * Handle navbar navigation
      */
     function handleNavBarNavigation(evt) {
-        var navButtons = Array.from(document.querySelectorAll('.nav-left .nav-btn, .nav-center .nav-btn'));
+        var navButtons = Array.from(document.querySelectorAll('.nav-left .nav-btn, .nav-center .nav-btn')).filter(function(btn) {
+            return btn.offsetParent !== null; // Only include visible buttons
+        });
         
         switch (evt.keyCode) {
             case KeyCodes.LEFT:

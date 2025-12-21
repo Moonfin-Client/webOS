@@ -22,12 +22,56 @@
     let hasMoreChannels = true;
     /** @type {('grid'|'controls')} Navigation mode */
     let focusMode = 'grid';
+    let auth = null; // Store auth at module level
     
     // Configuration constants
     const CHANNELS_PER_BATCH = 50;
     const HOURS_TO_DISPLAY = 6;
     const PIXELS_PER_HOUR = 600;
     const MINUTES_PER_PIXEL = 60 / PIXELS_PER_HOUR;
+    
+    /**
+     * Get authentication for the current page
+     * Checks URL for serverId parameter and uses appropriate credentials
+     */
+    function getAuth() {
+        if (auth) return auth; // Return cached auth
+        
+        // Check for serverId in URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const serverId = urlParams.get('serverId');
+        
+        if (serverId && typeof MultiServerManager !== 'undefined') {
+            // Check if this is the active server
+            const activeServer = MultiServerManager.getActiveServer();
+            if (activeServer && activeServer.serverId === serverId) {
+                auth = {
+                    serverAddress: activeServer.url,
+                    userId: activeServer.userId,
+                    accessToken: activeServer.accessToken
+                };
+            } else {
+                // Get first user from specified server
+                const users = MultiServerManager.getServerUsers(serverId);
+                if (users && users.length > 0) {
+                    const user = users[0];
+                    const server = MultiServerManager.getServer(serverId);
+                    auth = {
+                        serverAddress: server.url,
+                        userId: user.userId,
+                        accessToken: user.accessToken
+                    };
+                }
+            }
+        }
+        
+        // Fall back to stored auth
+        if (!auth) {
+            auth = JellyfinAPI.getStoredAuth();
+        }
+        
+        return auth;
+    }
     
     /**
      * Build Jellyfin image URL with quality parameters
@@ -39,7 +83,7 @@
      * @returns {string} Complete image URL
      */
     function buildImageUrl(itemId, imageType, options) {
-        const auth = JellyfinAPI.getStoredAuth();
+        const auth = getAuth();
         if (!auth || !itemId) return '';
         
         let params = 'quality=90';
@@ -56,6 +100,18 @@
     // Initialize
     document.addEventListener('DOMContentLoaded', function() {
         console.log('Live TV Guide initializing...');
+        
+        // Get and store auth for this page
+        const pageAuth = getAuth();
+        if (!pageAuth || !pageAuth.serverAddress || !pageAuth.userId) {
+            console.error('[LIVE-TV] No valid auth found');
+            window.location.href = 'login.html';
+            return;
+        }
+        
+        // Update stored auth so JellyfinAPI calls use correct server
+        storage.set('jellyfin_auth', JSON.stringify(pageAuth));
+        
         initializeDateDisplay();
         setupEventListeners();
         loadGuideData();
@@ -968,7 +1024,7 @@
             
             // Add episode info if available
             if (program.ParentIndexNumber && program.IndexNumber) {
-                title += ` - S${program.ParentIndexNumber}E${program.IndexNumber}`;
+                title += ' - S' + program.ParentIndexNumber + 'E' + program.IndexNumber;
             }
             
             document.getElementById('popupTitle').textContent = title;
@@ -1165,7 +1221,7 @@
     function handleWatchProgram() {
         const channelId = document.getElementById('popupWatchBtn').dataset.channelId;
         if (channelId) {
-            window.location.href = `player.html?id=${channelId}&mediaType=livetv`;
+            window.location.href = 'player.html?id=' + channelId + '&mediaType=livetv';
         }
     }
     

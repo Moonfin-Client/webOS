@@ -213,23 +213,52 @@ var JellyfinAPI = (function() {
         return address;
     }
 
-    function getSystemInfo(address, accessToken, callback) {
+    /**
+     * Get system information from Jellyfin server
+     * @param {string} address - Server address
+     * @param {string|Function} accessTokenOrCallback - Access token for authenticated endpoint, or callback for public endpoint
+     * @param {Function} [callback] - Callback function (error, data) - optional if accessTokenOrCallback is a function
+     */
+    function getSystemInfo(address, accessTokenOrCallback, callback) {
         address = normalizeServerAddress(address);
         
-        ajax.request(address + '/System/Info', {
+        // Determine if we're using authenticated or public endpoint
+        var isPublic = typeof accessTokenOrCallback === 'function';
+        var accessToken = isPublic ? null : accessTokenOrCallback;
+        var finalCallback = isPublic ? accessTokenOrCallback : callback;
+        
+        var endpoint = isPublic ? '/System/Info/Public' : '/System/Info';
+        var requestOptions = {
             method: 'GET',
-            headers: {
-                'X-Emby-Authorization': getAuthHeader(accessToken),
-                'X-MediaBrowser-Token': accessToken
-            },
+            timeout: 10000,
             success: function(response) {
-                if (callback) callback(null, response);
+                if (finalCallback) finalCallback(null, response);
             },
             error: function(err) {
                 Logger.error('Failed to get system info:', err);
-                if (callback) callback(err, null);
+                if (finalCallback) finalCallback(err, null);
             }
-        });
+        };
+        
+        // Add auth headers if using authenticated endpoint
+        if (!isPublic && accessToken) {
+            requestOptions.headers = {
+                'X-Emby-Authorization': getAuthHeader(accessToken),
+                'X-MediaBrowser-Token': accessToken
+            };
+        }
+        
+        ajax.request(address + endpoint, requestOptions);
+    }
+
+    /**
+     * Get public system information (no authentication required)
+     * @param {string} address - Server address
+     * @param {Function} callback - Callback function (error, data)
+     * @deprecated Use getSystemInfo(address, callback) instead. This alias will be removed in a future version.
+     */
+    function getPublicSystemInfo(address, callback) {
+        return getSystemInfo(address, callback);
     }
 
     function testServer(address, callback) {
@@ -313,7 +342,84 @@ var JellyfinAPI = (function() {
                 
                 Logger.info('=== STORING AUTHENTICATION ===');
                 Logger.info('Auth data to store:', authData);
-                storage.set('jellyfin_auth', authData);
+                
+                // Check if MultiServerManager is available and add/update server
+                var isAddingServer = storage.get('adding_server_flow');
+                console.log('[AUTH] adding_server_flow:', isAddingServer);
+                console.log('[AUTH] MultiServerManager available:', typeof MultiServerManager !== 'undefined');
+                
+                if (typeof MultiServerManager !== 'undefined') {
+                    var pendingServer = storage.get('pending_server');
+                    var serverName = pendingServer ? pendingServer.name : (authData.serverName || 'Jellyfin Server');
+                    
+                    console.log('[AUTH] Pending server:', pendingServer);
+                    console.log('[AUTH] Server name:', serverName);
+                    console.log('[AUTH] Server address:', serverAddress);
+                    
+                    // Check if this server/user combination already exists
+                    var existingServer = null;
+                    var existingUserId = null;
+                    var allServersArray = MultiServerManager.getAllServersArray();
+                    console.log('[AUTH] Current servers in MultiServerManager:', allServersArray);
+                    
+                    for (var i = 0; i < allServersArray.length; i++) {
+                        if (allServersArray[i].url === serverAddress) {
+                            existingServer = allServersArray[i];
+                            if (allServersArray[i].userId === authData.userId) {
+                                existingUserId = authData.userId;
+                            }
+                            break;
+                        }
+                    }
+                    
+                    if (existingServer && existingUserId) {
+                        console.log('[AUTH] Updating existing server/user:', existingServer);
+                        // Update existing user on server
+                        MultiServerManager.updateServer(existingServer.serverId, null, authData.userId, {
+                            username: authData.username,
+                            accessToken: authData.accessToken,
+                            connected: true
+                        });
+                        // Only set as active if not in adding server flow
+                        if (!isAddingServer) {
+                            MultiServerManager.setActiveServer(existingServer.serverId, authData.userId);
+                        }
+                        Logger.info('Updated existing user on server:', existingServer.serverId);
+                    } else {
+                        console.log('[AUTH] Adding new user to server (or creating new server)');
+                        // Add new user to server (or create new server)
+                        var serverResult = MultiServerManager.addServer(
+                            serverAddress,
+                            serverName,
+                            authData.userId,
+                            authData.username,
+                            authData.accessToken
+                        );
+                        console.log('[AUTH] Server/user added:', serverResult);
+                        
+                        // Only set as active if not in adding server flow
+                        if (!isAddingServer) {
+                            console.log('[AUTH] Setting server/user as active');
+                            MultiServerManager.setActiveServer(serverResult.serverId, serverResult.userId);
+                        } else {
+                            console.log('[AUTH] NOT setting as active (in adding_server_flow mode)');
+                        }
+                        Logger.info('Added user to server:', serverResult.serverId);
+                    }
+                    
+                    // Clear pending server if it exists
+                    if (pendingServer) {
+                        console.log('[AUTH] Clearing pending_server from storage');
+                        storage.remove('pending_server');
+                    }
+                    
+                    console.log('[AUTH] Final servers in MultiServerManager:', MultiServerManager.getAllServersArray());
+                }
+                
+                // Only store in legacy format if not in adding server flow (to preserve current auth)
+                if (!isAddingServer) {
+                    storage.set('jellyfin_auth', authData);
+                }
                 
                 var verification = storage.get('jellyfin_auth');
                 if (verification && verification.accessToken === authData.accessToken) {
@@ -628,7 +734,11 @@ var JellyfinAPI = (function() {
                     serverName: response.ServerName || 'Jellyfin Server'
                 };
                 
-                storage.set('jellyfin_auth', authData);
+                // Only store in legacy format if not in adding server flow (to preserve current auth)
+                var isAddingServer = storage.get('adding_server_flow');
+                if (!isAddingServer) {
+                    storage.set('jellyfin_auth', authData);
+                }
                 
                 if (callback) callback(null, response);
             },
@@ -1406,6 +1516,7 @@ var JellyfinAPI = (function() {
         getDefaultTimer: getDefaultTimer,
         getRecordingTimers: getRecordingTimers,
         getSeriesTimers: getSeriesTimers,
+        getPublicSystemInfo: getPublicSystemInfo,
         deleteRecording: deleteRecording,
         getCollections: getCollections,
         getSystemInfo: getSystemInfo,

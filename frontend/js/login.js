@@ -17,16 +17,80 @@ var LoginController = (function() {
     const LOGIN_SUCCESS_DELAY_MS = 1000;
 
     function init() {
+        console.log('[LOGIN] init() called');
+        
+        // Set up navigation detection for debugging
+        if (storage.get('adding_server_flow')) {
+            console.log('[LOGIN] Setting up popstate listener to detect navigation');
+            window.addEventListener('beforeunload', function() {
+                console.error('[LOGIN] Page is about to unload!');
+                console.trace();
+            });
+        }
+        
         JellyfinAPI.init();
         cacheElements();
         setupEventListeners();
         
+        // Check if we're coming from server manager with a pending server
+        var pendingServer = storage.get('pending_server');
+        console.log('[LOGIN] Checking pending_server:', pendingServer);
+        if (pendingServer && pendingServer.url) {
+            console.log('[LOGIN] Found pending server:', pendingServer);
+            // Set flag to indicate we're adding (not replacing) a server
+            storage.set('adding_server_flow', true);
+            // Clear the pending server flag
+            storage.remove('pending_server');
+            
+            // Pre-fill the server URL and connect directly
+            if (elements.serverUrlInput) {
+                elements.serverUrlInput.value = pendingServer.url;
+            }
+            showStatus('Connecting to ' + pendingServer.name + '...', 'info');
+            
+            // Get server info first, then load users
+            setTimeout(function() {
+                console.log('[LOGIN] setTimeout callback executing, fetching system info for:', pendingServer.url);
+                JellyfinAPI.getPublicSystemInfo(pendingServer.url, function(err, systemInfo) {
+                    console.log('[LOGIN] getPublicSystemInfo callback - err:', err, 'systemInfo:', systemInfo);
+                    if (err || !systemInfo) {
+                        showError('Failed to connect to server');
+                        return;
+                    }
+                    
+                    // Set connected server info
+                    connectedServer = {
+                        address: pendingServer.url,
+                        name: systemInfo.ServerName || pendingServer.name,
+                        id: systemInfo.Id,
+                        version: systemInfo.Version
+                    };
+                    console.log('[LOGIN] Set connectedServer:', connectedServer);
+                    
+                    // Store the server info for returning after logout
+                    storage.set('last_server', {
+                        name: connectedServer.name,
+                        address: connectedServer.address,
+                        id: connectedServer.id,
+                        version: connectedServer.version
+                    }, true);
+                    
+                    showStatus('Connected to ' + connectedServer.name + '! Loading users...', 'success');
+                    console.log('[LOGIN] About to call loadPublicUsers for:', connectedServer.address);
+                    loadPublicUsers(connectedServer.address);
+                });
+            }, 500);
+            console.log('[LOGIN] Returning early - pending server flow');
+            return; // Stop here - don't check for existing auth or do discovery
+        }
+        
+        console.log('[LOGIN] No pending server, checking stored auth');
         // Check if user has valid auth
         var hasAuth = checkStoredAuth();
         
-        // If no valid auth, check for last server connection to show user selection
+        // If no valid auth, check for saved servers or show server selection
         if (!hasAuth) {
-            checkLastServer();
+            showSavedServersOrServerInput();
         }
         
         startServerDiscovery();
@@ -36,8 +100,12 @@ var LoginController = (function() {
         elements = {
             serverUrlInput: document.getElementById('serverUrl'),
             connectBtn: document.getElementById('connectBtn'),
-            discoverBtn: document.getElementById('discoverBtn'),
+            backToServerListBtn: document.getElementById('backToServerListBtn'),
             serverList: document.getElementById('serverList'),
+            
+            savedServersSection: document.getElementById('savedServersSection'),
+            savedServerRow: document.getElementById('savedServerRow'),
+            addNewServerBtn: document.getElementById('addNewServerBtn'),
             
             userSelection: document.getElementById('userSelection'),
             userRow: document.getElementById('userRow'),
@@ -61,6 +129,7 @@ var LoginController = (function() {
             cancelQuickConnectBtn: document.getElementById('cancelQuickConnectBtn'),
             
             showManualLoginBtn: document.getElementById('showManualLoginBtn'),
+            deleteServerBtn: document.getElementById('deleteServerBtn'),
             backToServerBtn: document.getElementById('backToServerBtn'),
             
             manualLoginSection: document.getElementById('manualLoginSection'),
@@ -86,14 +155,52 @@ var LoginController = (function() {
     function setupEventListeners() {
         if (elements.connectBtn) {
             elements.connectBtn.addEventListener('click', handleConnect);
+            elements.connectBtn.addEventListener('keydown', function(e) {
+                if (e.keyCode === KeyCodes.UP) {
+                    e.preventDefault();
+                    if (elements.serverUrlInput) {
+                        elements.serverUrlInput.focus();
+                    }
+                } else if (e.keyCode === KeyCodes.RIGHT) {
+                    e.preventDefault();
+                    if (elements.backToServerListBtn) {
+                        elements.backToServerListBtn.focus();
+                    }
+                }
+            });
         }
-        if (elements.discoverBtn) {
-            elements.discoverBtn.addEventListener('click', startServerDiscovery);
+        if (elements.backToServerListBtn) {
+            elements.backToServerListBtn.addEventListener('click', backToServerSelection);
+            elements.backToServerListBtn.addEventListener('keydown', function(e) {
+                if (e.keyCode === KeyCodes.UP) {
+                    e.preventDefault();
+                    if (elements.serverUrlInput) {
+                        elements.serverUrlInput.focus();
+                    }
+                } else if (e.keyCode === KeyCodes.LEFT) {
+                    e.preventDefault();
+                    if (elements.connectBtn) {
+                        elements.connectBtn.focus();
+                    }
+                }
+            });
         }
         if (elements.serverUrlInput) {
             elements.serverUrlInput.addEventListener('keydown', function(e) {
-                if (e.keyCode === KeyCodes.ENTER) handleConnect();
+                if (e.keyCode === KeyCodes.ENTER) {
+                    handleConnect();
+                } else if (e.keyCode === KeyCodes.DOWN) {
+                    e.preventDefault();
+                    if (elements.connectBtn) {
+                        elements.connectBtn.focus();
+                    }
+                }
             });
+        }
+        
+        // Add New Server button
+        if (elements.addNewServerBtn) {
+            elements.addNewServerBtn.addEventListener('click', showAddServerForm);
         }
         
         // Manual Login button
@@ -180,6 +287,9 @@ var LoginController = (function() {
                 }
             });
         }
+        if (elements.deleteServerBtn) {
+            elements.deleteServerBtn.addEventListener('click', deleteConnectedServer);
+        }
         if (elements.backToServerBtn) {
             elements.backToServerBtn.addEventListener('click', backToServerSelection);
         }
@@ -191,13 +301,26 @@ var LoginController = (function() {
     }
 
     function checkStoredAuth() {
+        // Don't auto-redirect if we're adding a server
+        var isAddingServer = storage.get('adding_server_flow');
+        if (isAddingServer) {
+            console.log('[LOGIN] Skipping auto-redirect - in adding_server_flow mode');
+            return false;
+        }
+        
         var auth = JellyfinAPI.getStoredAuth();
-        if (auth) {
+        if (auth && auth.serverAddress && auth.userId) {
             showStatus('Resuming session as ' + auth.username + '...', 'info');
             setTimeout(function() {
                 window.location.href = 'browse.html';
             }, UI_TRANSITION_DELAY_MS);
             return true;
+        }
+        
+        // If auth is invalid, clear it
+        if (auth && (!auth.serverAddress || !auth.userId)) {
+            console.log('[LOGIN] Clearing invalid auth');
+            storage.remove('jellyfin_auth');
         }
         
         // Check for auto-login setting
@@ -222,7 +345,7 @@ var LoginController = (function() {
                 showError('Auto-login failed: cannot connect to server');
                 clearAutoLoginData();
                 setTimeout(function() {
-                    checkLastServer();
+                    showSavedServersOrServerInput();
                 }, 1000);
                 return;
             }
@@ -239,7 +362,7 @@ var LoginController = (function() {
                     showError('Auto-login failed: cannot get users');
                     clearAutoLoginData();
                     setTimeout(function() {
-                        checkLastServer();
+                        showSavedServersOrServerInput();
                     }, 1000);
                     return;
                 }
@@ -253,7 +376,7 @@ var LoginController = (function() {
                     showError('Auto-login failed: user not found');
                     clearAutoLoginData();
                     setTimeout(function() {
-                        checkLastServer();
+                        showSavedServersOrServerInput();
                     }, 1000);
                     return;
                 }
@@ -295,23 +418,212 @@ var LoginController = (function() {
         // Clear auto-login data if it fails
         storage.remove('last_login');
     }
-
-    function checkLastServer() {
-        // Check if there's a stored server connection (for returning from logout)
-        var lastServer = storage.get('last_server', true);
+    
+    /**
+     * Show saved servers if any exist, otherwise show server input form
+     */
+    function showSavedServersOrServerInput() {
+        if (typeof MultiServerManager === 'undefined') {
+            // No multi-server support, show manual input
+            showManualServerInput();
+            return;
+        }
         
-        if (lastServer && lastServer.address) {
+        var uniqueServers = MultiServerManager.getUniqueServers();
+        
+        if (uniqueServers && uniqueServers.length > 0) {
+            // Show saved servers
+            renderSavedServers(uniqueServers);
+            if (elements.savedServersSection) {
+                elements.savedServersSection.style.display = 'block';
+            }
+            if (elements.manualServerSection) {
+                elements.manualServerSection.style.display = 'none';
+            }
+        } else {
+            // No saved servers, show manual input
+            showManualServerInput();
+        }
+    }
+    
+    /**
+     * Render saved servers as clickable cards
+     */
+    function renderSavedServers(servers) {
+        if (!elements.savedServerRow) return;
+        
+        elements.savedServerRow.innerHTML = '';
+        
+        servers.forEach(function(server, index) {
+            var serverCard = document.createElement('div');
+            serverCard.className = 'user-card';
+            serverCard.setAttribute('tabindex', '0');
+            serverCard.setAttribute('data-server-index', index);
             
-            // Set the server URL
-            if (elements.serverUrlInput) {
-                elements.serverUrlInput.value = lastServer.address;
+            var avatar = document.createElement('div');
+            avatar.className = 'user-avatar';
+            avatar.textContent = server.name.charAt(0).toUpperCase();
+            
+            var name = document.createElement('div');
+            name.className = 'user-name';
+            name.textContent = server.name;
+            
+            serverCard.appendChild(avatar);
+            serverCard.appendChild(name);
+            
+            // Click handler
+            serverCard.addEventListener('click', function() {
+                handleSavedServerClick(server);
+            });
+            
+            // Keyboard handler
+            serverCard.addEventListener('keydown', function(e) {
+                var currentIndex = parseInt(this.getAttribute('data-server-index'));
+                var cards = elements.savedServerRow.querySelectorAll('.user-card');
+                
+                if (e.keyCode === KeyCodes.ENTER) {
+                    e.preventDefault();
+                    handleSavedServerClick(server);
+                } else if (e.keyCode === KeyCodes.RIGHT && currentIndex < cards.length - 1) {
+                    e.preventDefault();
+                    cards[currentIndex + 1].focus();
+                } else if (e.keyCode === KeyCodes.LEFT && currentIndex > 0) {
+                    e.preventDefault();
+                    cards[currentIndex - 1].focus();
+                } else if (e.keyCode === KeyCodes.DOWN) {
+                    e.preventDefault();
+                    // Move to Add New Server button
+                    if (elements.addNewServerBtn) {
+                        elements.addNewServerBtn.focus();
+                    }
+                }
+            });
+            
+            elements.savedServerRow.appendChild(serverCard);
+        });
+        
+        // Add keyboard navigation for Add New Server button
+        if (elements.addNewServerBtn) {
+            var buttonHandler = function(e) {
+                if (e.keyCode === KeyCodes.UP) {
+                    e.preventDefault();
+                    var cards = elements.savedServerRow.querySelectorAll('.user-card');
+                    if (cards.length > 0) {
+                        cards[cards.length - 1].focus();
+                    }
+                }
+            };
+            // Remove old handler if exists
+            elements.addNewServerBtn.removeEventListener('keydown', buttonHandler);
+            elements.addNewServerBtn.addEventListener('keydown', buttonHandler);
+        }
+        
+        // Focus first server card
+        setTimeout(function() {
+            var firstCard = elements.savedServerRow.querySelector('.user-card');
+            if (firstCard) firstCard.focus();
+        }, FOCUS_DELAY_MS);
+    }
+    
+    /**
+     * Handle click on a saved server
+     */
+    function handleSavedServerClick(server) {
+        showStatus('Loading users for ' + server.name + '...', 'info');
+        clearError();
+        
+        // Set connected server
+        connectedServer = {
+            address: server.url,
+            name: server.name,
+            id: server.id
+        };
+        
+        // Get saved users for this server
+        var savedUsers = MultiServerManager.getServerUsers(server.id);
+        
+        // Also get public users from server
+        JellyfinAPI.getPublicUsers(server.url, function(err, pubUsers) {
+            // Hide saved servers section
+            if (elements.savedServersSection) {
+                elements.savedServersSection.style.display = 'none';
             }
             
-            // Automatically connect and show user selection
-            setTimeout(function() {
-                handleConnect();
-            }, FOCUS_DELAY_MS);
+            if (err || !pubUsers) {
+                showError('Failed to load users from server');
+                return;
+            }
+            
+            // Merge saved users with public users (prioritize saved credentials, but keep all public user data)
+            var userMap = {};
+            
+            // Add public users first (they have full user data including images)
+            pubUsers.forEach(function(pubUser) {
+                userMap[pubUser.Id] = pubUser;
+            });
+            
+            // Mark saved users (they have credentials)
+            savedUsers.forEach(function(savedUser) {
+                if (userMap[savedUser.userId]) {
+                    userMap[savedUser.userId].isSaved = true;
+                } else {
+                    // User exists in saved but not in public list (account might be hidden)
+                    userMap[savedUser.userId] = {
+                        Id: savedUser.userId,
+                        Name: savedUser.username,
+                        HasPassword: true,
+                        isSaved: true
+                    };
+                }
+            });
+            
+            // Convert back to array
+            var mergedUsers = [];
+            for (var userId in userMap) {
+                if (userMap.hasOwnProperty(userId)) {
+                    mergedUsers.push(userMap[userId]);
+                }
+            }
+            
+            publicUsers = mergedUsers;
+            
+            // Show user selection
+            renderUserRow(mergedUsers);
+            if (elements.userSelection) {
+                elements.userSelection.style.display = 'block';
+            }
+            
+            clearStatus();
+        });
+    }
+    
+    /**
+     * Show the add new server form
+     */
+    function showAddServerForm() {
+        if (elements.savedServersSection) {
+            elements.savedServersSection.style.display = 'none';
         }
+        showManualServerInput();
+    }
+    
+    /**
+     * Show manual server input form
+     */
+    function showManualServerInput() {
+        if (elements.manualServerSection) {
+            elements.manualServerSection.style.display = 'block';
+        }
+        if (elements.savedServersSection) {
+            elements.savedServersSection.style.display = 'none';
+        }
+        
+        // Focus on server URL input
+        setTimeout(function() {
+            if (elements.serverUrlInput) {
+                elements.serverUrlInput.focus();
+            }
+        }, FOCUS_DELAY_MS);
     }
 
     function startServerDiscovery() {
@@ -526,7 +838,9 @@ var LoginController = (function() {
     }
 
     function loadPublicUsers(serverAddress) {
+        console.log('[LOGIN] loadPublicUsers called with serverAddress:', serverAddress);
         JellyfinAPI.getPublicUsers(serverAddress, function(err, users) {
+            console.log('[LOGIN] getPublicUsers callback - err:', err, 'users count:', users ? users.length : 0);
             if (err) {
                 showError('Connected to server but failed to load users');
                 return;
@@ -544,6 +858,7 @@ var LoginController = (function() {
                 publicUsers = users;
             }
             
+            console.log('[LOGIN] About to hide server selection and show user selection');
             // Hide server selection
             if (elements.manualServerSection) {
                 elements.manualServerSection.style.display = 'none';
@@ -553,12 +868,29 @@ var LoginController = (function() {
             }
             
             // Show user selection (even if empty)
+            console.log('[LOGIN] Calling renderUserRow with', publicUsers.length, 'users');
             renderUserRow(publicUsers);
             if (elements.userSelection) {
                 elements.userSelection.style.display = 'block';
             }
             
+            console.log('[LOGIN] loadPublic Users complete - about to clear status');
             clearStatus();
+            console.log('[LOGIN] clearStatus done - loadPublicUsers callback completed');
+            
+            // Add a listener to catch any unexpected navigation
+            if (storage.get('adding_server_flow')) {
+                console.log('[LOGIN] Adding navigation listener to catch unexpected redirects');
+                var originalLocation = window.location.href;
+                setTimeout(function() {
+                    if (window.location.href !== originalLocation) {
+                        console.error('[LOGIN] UNEXPECTED NAVIGATION DETECTED!');
+                        console.error('[LOGIN] From:', originalLocation);
+                        console.error('[LOGIN] To:', window.location.href);
+                        console.trace();
+                    }
+                }, 100);
+            }
         });
     }
 
@@ -609,12 +941,127 @@ var LoginController = (function() {
             
             userCard.addEventListener('keydown', function(e) {
                 if (e.keyCode === KeyCodes.ENTER) {
+                    e.preventDefault();
+                    e.stopPropagation();
                     selectUser(index);
+                } else if (e.keyCode === KeyCodes.RIGHT) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    var nextSibling = this.nextElementSibling;
+                    if (nextSibling && nextSibling.classList.contains('user-card')) {
+                        nextSibling.focus();
+                    }
+                } else if (e.keyCode === KeyCodes.LEFT) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    var prevSibling = this.previousElementSibling;
+                    if (prevSibling && prevSibling.classList.contains('user-card')) {
+                        prevSibling.focus();
+                    }
+                } else if (e.keyCode === KeyCodes.UP) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    var prevSibling = this.previousElementSibling;
+                    if (prevSibling && prevSibling.classList.contains('user-card')) {
+                        prevSibling.focus();
+                    }
+                } else if (e.keyCode === KeyCodes.DOWN) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    // First check if there's a next sibling card
+                    var nextSibling = this.nextElementSibling;
+                    if (nextSibling && nextSibling.classList.contains('user-card')) {
+                        nextSibling.focus();
+                    } else {
+                        // Move to Manual Login button if we're at the last card
+                        if (elements.showManualLoginBtn) {
+                            elements.showManualLoginBtn.focus();
+                        }
+                    }
                 }
             });
             
             elements.userRow.appendChild(userCard);
         });
+        
+        // Add keyboard navigation for buttons
+        // Button order: Manual Login -> Delete Server -> Back to Server Selection
+        if (elements.showManualLoginBtn) {
+            var manualLoginHandler = function(e) {
+                if (e.keyCode === KeyCodes.UP) {
+                    e.preventDefault();
+                    var cards = elements.userRow.querySelectorAll('.user-card');
+                    if (cards.length > 0) {
+                        cards[cards.length - 1].focus();
+                    }
+                } else if (e.keyCode === KeyCodes.RIGHT) {
+                    e.preventDefault();
+                    if (elements.deleteServerBtn) {
+                        elements.deleteServerBtn.focus();
+                    } else if (elements.backToServerBtn) {
+                        elements.backToServerBtn.focus();
+                    }
+                } else if (e.keyCode === KeyCodes.LEFT) {
+                    e.preventDefault();
+                    var cards = elements.userRow.querySelectorAll('.user-card');
+                    if (cards.length > 0) {
+                        cards[cards.length - 1].focus();
+                    }
+                }
+            };
+            elements.showManualLoginBtn.removeEventListener('keydown', manualLoginHandler);
+            elements.showManualLoginBtn.addEventListener('keydown', manualLoginHandler);
+        }
+        
+        if (elements.deleteServerBtn) {
+            var deleteServerHandler = function(e) {
+                if (e.keyCode === KeyCodes.UP) {
+                    e.preventDefault();
+                    var cards = elements.userRow.querySelectorAll('.user-card');
+                    if (cards.length > 0) {
+                        cards[cards.length - 1].focus();
+                    }
+                } else if (e.keyCode === KeyCodes.RIGHT) {
+                    e.preventDefault();
+                    if (elements.backToServerBtn) {
+                        elements.backToServerBtn.focus();
+                    }
+                } else if (e.keyCode === KeyCodes.LEFT) {
+                    e.preventDefault();
+                    if (elements.showManualLoginBtn) {
+                        elements.showManualLoginBtn.focus();
+                    }
+                }
+            };
+            elements.deleteServerBtn.removeEventListener('keydown', deleteServerHandler);
+            elements.deleteServerBtn.addEventListener('keydown', deleteServerHandler);
+        }
+        
+        if (elements.backToServerBtn) {
+            var backToServerHandler = function(e) {
+                if (e.keyCode === KeyCodes.UP) {
+                    e.preventDefault();
+                    var cards = elements.userRow.querySelectorAll('.user-card');
+                    if (cards.length > 0) {
+                        cards[cards.length - 1].focus();
+                    }
+                } else if (e.keyCode === KeyCodes.LEFT) {
+                    e.preventDefault();
+                    if (elements.deleteServerBtn) {
+                        elements.deleteServerBtn.focus();
+                    } else if (elements.showManualLoginBtn) {
+                        elements.showManualLoginBtn.focus();
+                    }
+                } else if (e.keyCode === KeyCodes.RIGHT) {
+                    e.preventDefault();
+                    if (elements.showManualLoginBtn) {
+                        elements.showManualLoginBtn.focus();
+                    }
+                }
+            };
+            elements.backToServerBtn.removeEventListener('keydown', backToServerHandler);
+            elements.backToServerBtn.addEventListener('keydown', backToServerHandler);
+        }
         
         // Focus the first user card
         if (users.length > 0) {
@@ -640,9 +1087,50 @@ var LoginController = (function() {
             }
         });
         
-        
-        // Show login options
-        showLoginOptions();
+        // Auto-login for saved users
+        if (selectedUser.isSaved && connectedServer) {
+            console.log('[LOGIN] Auto-logging in saved user:', selectedUser.Name);
+            showStatus('Logging in as ' + selectedUser.Name + '...', 'info');
+            
+            // Get saved credentials from MultiServerManager
+            var savedUsers = MultiServerManager.getServerUsers(connectedServer.id);
+            var savedUser = savedUsers.find(function(u) { return u.userId === selectedUser.Id; });
+            
+            if (savedUser && savedUser.accessToken) {
+                // Store authentication data
+                var authData = {
+                    serverAddress: connectedServer.address,
+                    userId: savedUser.userId,
+                    accessToken: savedUser.accessToken,
+                    username: savedUser.username,
+                    serverId: connectedServer.id,
+                    serverName: connectedServer.name
+                };
+                storage.set('jellyfin_auth', authData);
+                
+                // Set as active server
+                MultiServerManager.setActiveServer(connectedServer.id, savedUser.userId);
+                
+                // Verify authentication and redirect
+                JellyfinAPI.getUserInfo(connectedServer.address, savedUser.userId, savedUser.accessToken, function(err, userInfo) {
+                    if (err) {
+                        console.log('[LOGIN] Saved credentials failed, showing login form:', err);
+                        showError('Saved credentials expired. Please sign in again.');
+                        showLoginOptions();
+                    } else {
+                        console.log('[LOGIN] Auto-login successful for:', userInfo.Name);
+                        clearStatus();
+                        window.location.href = 'browse.html';
+                    }
+                });
+            } else {
+                console.log('[LOGIN] Saved user has no access token');
+                showLoginOptions();
+            }
+        } else {
+            // Show login options for non-saved users
+            showLoginOptions();
+        }
     }
 
     function showLoginOptions() {
@@ -858,6 +1346,32 @@ var LoginController = (function() {
                 
                 // Note: Auth is already stored by authenticateQuickConnect in jellyfin-api.js
                 
+                // Check if we're adding a server (not replacing)
+                var isAddingServer = storage.get('adding_server_flow');
+                if (isAddingServer) {
+                    storage.remove('adding_server_flow');
+                    
+                    // Add to multi-server system
+                    if (typeof MultiServerManager !== 'undefined') {
+                        // Use server name from connectedServer (fetched from /System/Info/Public)
+                        var serverName = connectedServer.name || 'Jellyfin Server';
+                        MultiServerManager.addServer(
+                            connectedServer.address,
+                            serverName,
+                            authData.User.Id,
+                            authData.User.Name,
+                            authData.AccessToken
+                        );
+                        
+                        showStatus('Server added successfully!', 'success');
+                        
+                        setTimeout(function() {
+                            window.location.href = 'settings.html';
+                        }, LOGIN_SUCCESS_DELAY_MS);
+                        return;
+                    }
+                }
+                
                 // Store server info for last login
                 storage.set('jellyfin_last_server', {
                     address: connectedServer.address,
@@ -975,6 +1489,32 @@ var LoginController = (function() {
                 
                 // Note: authData from authenticateByName already stores auth, no need to call storeAuth again
                 
+                // Check if we're adding a server (not replacing)
+                var isAddingServer = storage.get('adding_server_flow');
+                if (isAddingServer) {
+                    storage.remove('adding_server_flow');
+                    
+                    // Add to multi-server system
+                    if (typeof MultiServerManager !== 'undefined') {
+                        // Use server name from connectedServer (fetched from /System/Info/Public)
+                        var serverName = connectedServer.name || 'Jellyfin Server';
+                        MultiServerManager.addServer(
+                            connectedServer.address,
+                            serverName,
+                            authData.userId,
+                            authData.username,
+                            authData.accessToken
+                        );
+                        
+                        showStatus('Server added successfully!', 'success');
+                        
+                        setTimeout(function() {
+                            window.location.href = 'settings.html';
+                        }, LOGIN_SUCCESS_DELAY_MS);
+                        return;
+                    }
+                }
+                
                 // Store server info for last login
                 storage.set('jellyfin_last_server', {
                     address: connectedServer.address,
@@ -1085,6 +1625,39 @@ var LoginController = (function() {
         selectedUser = null;
     }
     
+    function deleteConnectedServer() {
+        if (!connectedServer) {
+            showError('No server connected');
+            return;
+        }
+        
+        showConfirmation(
+            'Delete Server',
+            'Are you sure you want to delete "' + connectedServer.name + '" from this device? You can re-add it later.',
+            function(confirmed) {
+                if (confirmed) {
+                    // Remove from MultiServerManager
+                    if (typeof MultiServerManager !== 'undefined') {
+                        // Get all users for this server
+                        var usersForServer = MultiServerManager.getServerUsers(connectedServer.id);
+                        
+                        // Remove each user from the server
+                        usersForServer.forEach(function(user) {
+                            MultiServerManager.removeServer(connectedServer.id, user.userId);
+                        });
+                        
+                        showStatus('Server deleted successfully', 'success');
+                    }
+                    
+                    // Go back to server selection
+                    setTimeout(function() {
+                        backToServerSelection();
+                    }, 1000);
+                }
+            }
+        );
+    }
+
     function backToServerSelection() {
         // Clear all connection state
         connectedServer = null;
@@ -1103,17 +1676,15 @@ var LoginController = (function() {
         if (elements.manualLoginForm) {
             elements.manualLoginForm.style.display = 'none';
         }
-        
-        // Show manual server section
         if (elements.manualServerSection) {
-            elements.manualServerSection.style.display = 'block';
-        }
-        if (elements.serverUrlInput) {
-            elements.serverUrlInput.focus();
+            elements.manualServerSection.style.display = 'none';
         }
         
         clearError();
         clearStatus();
+        
+        // Show saved servers or manual input
+        showSavedServersOrServerInput();
     }
 
     function handlePasswordLogin() {
@@ -1155,6 +1726,29 @@ var LoginController = (function() {
             }
             
             showStatus('Login successful! Welcome, ' + authData.username + '!', 'success');
+            
+            // Clear adding_server_flow flag if we're logging into an existing server
+            // (not adding a new one from settings)
+            var isAddingServer = storage.get('adding_server_flow');
+            if (isAddingServer) {
+                // Check if this server already existed in MultiServerManager by URL (not name)
+                var existingServers = MultiServerManager ? MultiServerManager.getUniqueServers() : [];
+                var serverExists = existingServers.some(function(s) {
+                    // Normalize URLs for comparison (remove trailing slashes, standardize)
+                    var normalizeUrl = function(url) {
+                        return url.replace(/\/+$/, '').toLowerCase();
+                    };
+                    return normalizeUrl(s.url) === normalizeUrl(connectedServer.address);
+                });
+                
+                // If server already existed, we're just logging in, not adding
+                if (serverExists) {
+                    console.log('[LOGIN] Clearing adding_server_flow - logging into existing server');
+                    storage.remove('adding_server_flow');
+                } else {
+                    console.log('[LOGIN] Keeping adding_server_flow - this is a new server');
+                }
+            }
             
             // Save login info for auto-login (only for passwordless users)
             if (!password || password === '') {
@@ -1203,6 +1797,13 @@ var LoginController = (function() {
         var username = elements.manualUsername ? elements.manualUsername.value.trim() : '';
         var password = elements.manualPassword ? elements.manualPassword.value : '';
         
+        // Don't auto-login if we're adding a server and no credentials entered
+        var isAddingServer = storage.get('adding_server_flow');
+        if (isAddingServer && !username) {
+            console.log('[LOGIN] handleManualLogin called but skipping - in adding_server_flow mode with no username entered');
+            return;
+        }
+        
         if (!username) {
             showError('Please enter a username');
             if (elements.manualUsername) {
@@ -1218,6 +1819,15 @@ var LoginController = (function() {
         
         showStatus('Logging in as ' + username + '...', 'info');
         clearError();
+        
+        // Store connected server info for authentication to use
+        var isAddingServer = storage.get('adding_server_flow');
+        if (isAddingServer && connectedServer) {
+            storage.set('pending_server', {
+                name: connectedServer.name,
+                url: connectedServer.address
+            });
+        }
         
         // Disable login button
         if (elements.manualLoginBtn) {
@@ -1260,8 +1870,20 @@ var LoginController = (function() {
                 
                 showStatus('Login successful! Welcome, ' + authData.username + '!', 'success');
                 
+                // Check if we're in the "adding server" flow
+                const isAddingServer = storage.get('adding_server_flow');
+                console.log('[LOGIN] After successful login, adding_server_flow:', isAddingServer);
+                
                 setTimeout(function() {
-                    window.location.href = 'browse.html';
+                    if (isAddingServer) {
+                        console.log('[LOGIN] In adding_server_flow, redirecting to settings.html');
+                        storage.remove('adding_server_flow');
+                        storage.remove('pending_server');
+                        window.location.href = 'settings.html';
+                    } else {
+                        console.log('[LOGIN] Normal login, redirecting to browse.html');
+                        window.location.href = 'browse.html';
+                    }
                 }, LOGIN_SUCCESS_DELAY_MS);
             }
         );

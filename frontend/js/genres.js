@@ -151,13 +151,21 @@
         card.appendChild(info);
         
         card.addEventListener('click', function() {
-            window.location.href = 'details.html?id=' + item.Id;
+            var url = 'details.html?id=' + item.Id;
+            if (item.MultiServerId) {
+                url += '&serverId=' + item.MultiServerId;
+            }
+            window.location.href = url;
         });
         
         card.addEventListener('keydown', function(e) {
             if (e.keyCode === KeyCodes.ENTER) {
                 e.preventDefault();
-                window.location.href = 'details.html?id=' + item.Id;
+                var url = 'details.html?id=' + item.Id;
+                if (item.MultiServerId) {
+                    url += '&serverId=' + item.MultiServerId;
+                }
+                window.location.href = url;
             }
         });
         

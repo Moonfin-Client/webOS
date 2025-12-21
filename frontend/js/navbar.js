@@ -84,7 +84,8 @@
      * Apply toolbar settings from storage to the navbar
      */
     function applyToolbarSettings() {
-        var settingsStr = storage.get('jellyfin_settings');
+        var settingsStr = storage.getUserPreference('jellyfin_settings', null);
+        console.log('[Navbar] applyToolbarSettings - settingsStr:', settingsStr);
         if (!settingsStr) return;
         
         try {
@@ -96,15 +97,45 @@
             var discoverBtn = document.getElementById('discoverBtn');
             
             if (shuffleBtn) {
-                shuffleBtn.style.display = (settings.showShuffleButton === false) ? 'none' : '';
+                if (settings.showShuffleButton === false) {
+                    console.log('[Navbar] Hiding shuffleBtn');
+                    shuffleBtn.style.display = 'none';
+                    shuffleBtn.style.pointerEvents = 'none';
+                    shuffleBtn.setAttribute('tabindex', '-1');
+                } else {
+                    console.log('[Navbar] Showing shuffleBtn');
+                    shuffleBtn.style.display = '';
+                    shuffleBtn.style.pointerEvents = '';
+                    shuffleBtn.setAttribute('tabindex', '0');
+                }
             }
             
             if (genresBtn) {
-                genresBtn.style.display = (settings.showGenresButton === false) ? 'none' : '';
+                if (settings.showGenresButton === false) {
+                    console.log('[Navbar] Hiding genresBtn');
+                    genresBtn.style.display = 'none';
+                    genresBtn.style.pointerEvents = 'none';
+                    genresBtn.setAttribute('tabindex', '-1');
+                } else {
+                    console.log('[Navbar] Showing genresBtn');
+                    genresBtn.style.display = '';
+                    genresBtn.style.pointerEvents = '';
+                    genresBtn.setAttribute('tabindex', '0');
+                }
             }
             
             if (favoritesBtn) {
-                favoritesBtn.style.display = (settings.showFavoritesButton === false) ? 'none' : '';
+                if (settings.showFavoritesButton === false) {
+                    console.log('[Navbar] Hiding favoritesBtn');
+                    favoritesBtn.style.display = 'none';
+                    favoritesBtn.style.pointerEvents = 'none';
+                    favoritesBtn.setAttribute('tabindex', '-1');
+                } else {
+                    console.log('[Navbar] Showing favoritesBtn');
+                    favoritesBtn.style.display = '';
+                    favoritesBtn.style.pointerEvents = '';
+                    favoritesBtn.setAttribute('tabindex', '0');
+                }
             }
             
             // Discover button is controlled by Jellyseerr settings
@@ -113,19 +144,33 @@
             
             if (discoverBtn) {
                 if (!jellyseerrEnabled || !jellyseerrShowDiscover) {
+                    console.log('[Navbar] Hiding discoverBtn');
                     // Hide button completely and make it unfocusable
                     discoverBtn.style.display = 'none';
+                    discoverBtn.style.pointerEvents = 'none';
                     discoverBtn.setAttribute('tabindex', '-1');
                 } else {
+                    console.log('[Navbar] Showing discoverBtn');
                     discoverBtn.style.display = '';
-                    discoverBtn.removeAttribute('tabindex');
+                    discoverBtn.style.pointerEvents = '';
+                    discoverBtn.setAttribute('tabindex', '0');
                 }
             }
             
             // Hide/show library buttons
             var libraryButtons = document.querySelectorAll('.nav-btn[data-library-id]');
             libraryButtons.forEach(function(btn) {
-                btn.style.display = (settings.showLibrariesInToolbar === false) ? 'none' : '';
+                if (settings.showLibrariesInToolbar === false) {
+                    console.log('[Navbar] Hiding library button:', btn.textContent.trim());
+                    btn.style.display = 'none';
+                    btn.style.pointerEvents = 'none';
+                    btn.setAttribute('tabindex', '-1');
+                } else {
+                    console.log('[Navbar] Showing library button:', btn.textContent.trim());
+                    btn.style.display = '';
+                    btn.style.pointerEvents = '';
+                    btn.setAttribute('tabindex', '0');
+                }
             });
         } catch (e) {
             // Settings parsing failed, continue with defaults
@@ -149,51 +194,127 @@
             return;
         }
         
-        JellyfinAPI.getUserViews(auth.serverAddress, auth.userId, auth.accessToken, function(err, response) {
-            if (err || !response || !response.Items) {
-                return;
-            }
-            
-            var libraries = response.Items.filter(function(item) {
-                return item.CollectionType === 'movies' || 
-                       item.CollectionType === 'tvshows' || 
-                       item.CollectionType === 'music' ||
-                       item.CollectionType === 'boxsets' ||
-                       item.CollectionType === 'livetv';
-            });
-            
-            var settingsBtn = document.getElementById('settingsBtn');
-            
-            if (navPill && libraries.length > 0) {
-                libraries.forEach(function(library) {
-                    var btn = document.createElement('button');
-                    btn.className = 'nav-btn';
-                    btn.setAttribute('tabindex', '0');
-                    btn.setAttribute('data-library-id', library.Id);
-                    
-                    var label = document.createElement('span');
-                    label.className = 'nav-label';
-                    label.textContent = library.Name;
-                    
-                    btn.appendChild(label);
-                    
-                    btn.addEventListener('click', function() {
-                        // Live TV goes to the guide page
-                        if (library.CollectionType === 'livetv') {
-                            window.location.href = 'live-tv.html';
-                        } else {
-                            window.location.href = 'library.html?id=' + library.Id;
-                        }
-                    });
-                    
-                    // Append after settingsBtn (libraries come at the end)
-                    navPill.appendChild(btn);
+        // Use ConnectionPool to get libraries from all servers if available
+        if (typeof ConnectionPool !== 'undefined' && MultiServerManager.getServerCount() > 0) {
+            ConnectionPool.getAllLibraries(function(err, allLibraries) {
+                if (err || !allLibraries) {
+                    console.error('Failed to load libraries from servers:', err);
+                    return;
+                }
+                
+                // Filter to supported collection types
+                var libraries = allLibraries.filter(function(item) {
+                    return item.CollectionType === 'movies' || 
+                           item.CollectionType === 'tvshows' || 
+                           item.CollectionType === 'music' ||
+                           item.CollectionType === 'boxsets' ||
+                           item.CollectionType === 'livetv';
                 });
                 
-                // Apply toolbar settings after library buttons are added
-                applyToolbarSettings();
-            }
-        });
+                renderLibraryButtons(libraries);
+            });
+        } else {
+            // Fallback to single-server mode
+            JellyfinAPI.getUserViews(auth.serverAddress, auth.userId, auth.accessToken, function(err, response) {
+                if (err || !response || !response.Items) {
+                    return;
+                }
+                
+                var libraries = response.Items.filter(function(item) {
+                    return item.CollectionType === 'movies' || 
+                           item.CollectionType === 'tvshows' || 
+                           item.CollectionType === 'music' ||
+                           item.CollectionType === 'boxsets' ||
+                           item.CollectionType === 'livetv';
+                });
+                
+                // Add server info to libraries for consistency
+                libraries.forEach(function(lib) {
+                    lib.ServerId = null; // Single server mode
+                    lib.ServerName = auth.serverName || 'Jellyfin Server';
+                    lib.ServerUrl = auth.serverAddress;
+                });
+                
+                renderLibraryButtons(libraries);
+            });
+        }
+    }
+    
+    /**
+     * Render library buttons in the navbar
+     * @private
+     * @param {Array} libraries - Array of library objects
+     */
+    function renderLibraryButtons(libraries) {
+        var navPill = document.querySelector('.nav-pill');
+        var settingsBtn = document.getElementById('settingsBtn');
+        
+        if (navPill && libraries.length > 0) {
+            libraries.forEach(function(library) {
+                var btn = document.createElement('button');
+                btn.className = 'nav-btn';
+                btn.setAttribute('tabindex', '0');
+                btn.setAttribute('data-library-id', library.Id);
+                if (library.ServerId) {
+                    btn.setAttribute('data-server-id', library.ServerId);
+                }
+                
+                var label = document.createElement('span');
+                label.className = 'nav-label';
+                
+                // If multiple servers, show server name in tooltip or badge
+                if (library.ServerName && MultiServerManager.getServerCount() > 1) {
+                    label.textContent = library.Name + ' (' + library.ServerName + ')';
+                    btn.title = library.Name + ' - ' + library.ServerName;
+                } else {
+                    label.textContent = library.Name;
+                }
+                
+                btn.appendChild(label);
+                
+                // Store the click handler so we can enable/disable it
+                btn._libraryClickHandler = function() {
+                    // Live TV goes to the guide page
+                    if (library.CollectionType === 'livetv') {
+                        // If multi-server, pass server ID
+                        if (library.ServerId) {
+                            window.location.href = 'live-tv.html?serverId=' + library.ServerId;
+                        } else {
+                            window.location.href = 'live-tv.html';
+                        }
+                    } else {
+                        // Pass both library ID and server ID if available
+                        var url = 'library.html?id=' + library.Id;
+                        if (library.ServerId) {
+                            url += '&serverId=' + library.ServerId;
+                        }
+                        window.location.href = url;
+                    }
+                };
+                
+                btn.addEventListener('click', btn._libraryClickHandler);
+                
+                btn.addEventListener('keydown', function(e) {
+                    if (e.keyCode === KeyCodes.ENTER && btn.style.display !== 'none') {
+                        e.preventDefault();
+                        btn._libraryClickHandler();
+                    }
+                });
+                
+                btn.addEventListener('focus', function() {
+                    console.log('[Navbar] Library button focused:', btn.textContent.trim(), 'display:', btn.style.display, 'tabindex:', btn.getAttribute('tabindex'));
+                });
+                
+                // Append after settingsBtn (libraries come at the end)
+                navPill.appendChild(btn);
+            });
+            
+            // Apply toolbar settings after library buttons are added
+            applyToolbarSettings();
+            
+            // Re-setup navigation to include library buttons
+            setupNavbarNavigation();
+        }
     }
     
     /**
@@ -297,6 +418,9 @@
                     window.location.href = 'browse.html';
                 }
             });
+            homeBtn.addEventListener('focus', function() {
+                console.log('[Navbar] homeBtn focused - display:', homeBtn.style.display, 'tabindex:', homeBtn.getAttribute('tabindex'));
+            });
         }
         
         if (searchBtn) {
@@ -309,41 +433,59 @@
                     window.location.href = 'search.html';
                 }
             });
+            searchBtn.addEventListener('focus', function() {
+                console.log('[Navbar] searchBtn focused - display:', searchBtn.style.display, 'tabindex:', searchBtn.getAttribute('tabindex'));
+            });
         }
         
         if (shuffleBtn) {
-            shuffleBtn.addEventListener('click', function() {
+            shuffleBtn._clickHandler = function() {
                 handleShuffleClick();
-            });
+            };
+            
+            shuffleBtn.addEventListener('click', shuffleBtn._clickHandler);
             shuffleBtn.addEventListener('keydown', function(e) {
-                if (e.keyCode === KeyCodes.ENTER) {
+                if (e.keyCode === KeyCodes.ENTER && shuffleBtn.style.display !== 'none') {
                     e.preventDefault();
                     handleShuffleClick();
                 }
             });
+            shuffleBtn.addEventListener('focus', function() {
+                console.log('[Navbar] shuffleBtn focused - display:', shuffleBtn.style.display, 'tabindex:', shuffleBtn.getAttribute('tabindex'));
+            });
         }
         
         if (genresBtn) {
-            genresBtn.addEventListener('click', function() {
+            genresBtn._clickHandler = function() {
                 window.location.href = 'genres.html';
-            });
+            };
+            
+            genresBtn.addEventListener('click', genresBtn._clickHandler);
             genresBtn.addEventListener('keydown', function(e) {
-                if (e.keyCode === KeyCodes.ENTER) {
+                if (e.keyCode === KeyCodes.ENTER && genresBtn.style.display !== 'none') {
                     e.preventDefault();
                     window.location.href = 'genres.html';
                 }
             });
+            genresBtn.addEventListener('focus', function() {
+                console.log('[Navbar] genresBtn focused - display:', genresBtn.style.display, 'tabindex:', genresBtn.getAttribute('tabindex'));
+            });
         }
         
         if (favoritesBtn) {
-            favoritesBtn.addEventListener('click', function() {
+            favoritesBtn._clickHandler = function() {
                 window.location.href = 'favorites.html';
-            });
+            };
+            
+            favoritesBtn.addEventListener('click', favoritesBtn._clickHandler);
             favoritesBtn.addEventListener('keydown', function(e) {
-                if (e.keyCode === KeyCodes.ENTER) {
+                if (e.keyCode === KeyCodes.ENTER && favoritesBtn.style.display !== 'none') {
                     e.preventDefault();
                     window.location.href = 'favorites.html';
                 }
+            });
+            favoritesBtn.addEventListener('focus', function() {
+                console.log('[Navbar] favoritesBtn focused - display:', favoritesBtn.style.display, 'tabindex:', favoritesBtn.getAttribute('tabindex'));
             });
         }
         
@@ -357,6 +499,9 @@
                     window.location.href = 'discover.html';
                 }
             });
+            discoverBtn.addEventListener('focus', function() {
+                console.log('[Navbar] discoverBtn focused - display:', discoverBtn.style.display, 'tabindex:', discoverBtn.getAttribute('tabindex'));
+            });
         }
         
         if (settingsBtn) {
@@ -368,6 +513,9 @@
                     e.preventDefault();
                     window.location.href = 'settings.html';
                 }
+            });
+            settingsBtn.addEventListener('focus', function() {
+                console.log('[Navbar] settingsBtn focused - display:', settingsBtn.style.display, 'tabindex:', settingsBtn.getAttribute('tabindex'));
             });
         }
         
@@ -392,27 +540,43 @@
         var navButtons = document.querySelectorAll('.nav-btn');
         
         navButtons.forEach(function(button, index) {
-            button.addEventListener('keydown', function(e) {
+            // Remove existing listener if it exists to avoid duplicates
+            if (button._navKeydownHandler) {
+                button.removeEventListener('keydown', button._navKeydownHandler);
+            }
+            
+            // Create and store the handler
+            button._navKeydownHandler = function(e) {
                 // Only get visible buttons for navigation
                 var allButtons = Array.from(document.querySelectorAll('.nav-btn')).filter(function(btn) {
                     return btn.offsetParent !== null; // Check if button is visible
                 });
+                
+                console.log('[Navbar] Navigation - Visible buttons:', allButtons.map(function(b) { 
+                    return b.id || b.textContent.trim(); 
+                }));
+                
                 var currentIndex = allButtons.indexOf(button);
+                console.log('[Navbar] Current button index:', currentIndex, 'id:', button.id || button.textContent.trim());
                 
                 if (e.keyCode === KeyCodes.LEFT) {
                     e.preventDefault();
                     if (currentIndex > 0) {
+                        console.log('[Navbar] Moving LEFT to:', allButtons[currentIndex - 1].id || allButtons[currentIndex - 1].textContent.trim());
                         allButtons[currentIndex - 1].focus();
                         scrollNavButtonIntoView(allButtons[currentIndex - 1]);
                     }
                 } else if (e.keyCode === KeyCodes.RIGHT) {
                     e.preventDefault();
                     if (currentIndex < allButtons.length - 1) {
+                        console.log('[Navbar] Moving RIGHT to:', allButtons[currentIndex + 1].id || allButtons[currentIndex + 1].textContent.trim());
                         allButtons[currentIndex + 1].focus();
                         scrollNavButtonIntoView(allButtons[currentIndex + 1]);
                     }
                 }
-            });
+            };
+            
+            button.addEventListener('keydown', button._navKeydownHandler);
         });
     }
     

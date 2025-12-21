@@ -66,12 +66,13 @@ var SettingsController = (function() {
     var defaultHomeRows = [
         { id: 'resume', name: 'Continue Watching', enabled: true, order: 0 },
         { id: 'nextup', name: 'Next Up', enabled: true, order: 1 },
-        { id: 'livetv', name: 'Live TV', enabled: true, order: 2 },
-        { id: 'library-tiles', name: 'My Media', enabled: false, order: 3 },
-        { id: 'latest-movies', name: 'Latest Movies', enabled: true, order: 4 },
-        { id: 'latest-shows', name: 'Latest TV Shows', enabled: true, order: 5 },
-        { id: 'latest-music', name: 'Latest Music', enabled: true, order: 6 },
-        { id: 'collections', name: 'Collections', enabled: false, order: 7 }
+        { id: 'latest-movies', name: 'Latest Movies', enabled: true, order: 2 },
+        { id: 'latest-shows', name: 'Latest TV Shows', enabled: true, order: 2 },
+        { id: 'latest-music', name: 'Latest Music', enabled: true, order: 2 },
+        { id: 'livetv-channels', name: 'Live TV Channels', enabled: true, order: 3 },
+        { id: 'livetv-recordings', name: 'Recordings', enabled: true, order: 3 },
+        { id: 'library-tiles', name: 'My Media', enabled: false, order: 4 },
+        { id: 'collections', name: 'Collections', enabled: false, order: 5 }
     ];
 
     var homeRowsModal = {
@@ -85,6 +86,19 @@ var SettingsController = (function() {
     };
 
     /**
+     * Utility function to clean up modal keyboard event handlers
+     * @param {HTMLElement} modal - Modal element
+     * @param {string} handlerProp - Property name of the handler (e.g., '_serverManagerKeyHandler')
+     * @private
+     */
+    function cleanupModalKeyHandler(modal, handlerProp) {
+        if (modal && modal[handlerProp]) {
+            modal.removeEventListener('keydown', modal[handlerProp]);
+            modal[handlerProp] = null;
+        }
+    }
+
+    /**
      * Initialize the settings controller
      * Loads settings, displays user info, and sets up navigation
      */
@@ -96,6 +110,10 @@ var SettingsController = (function() {
         }
 
         cacheElements();
+        
+        // Migrate global settings to user-scoped (Phase 1)
+        storage.migrateToUserPreference('jellyfin_settings');
+        
         loadSettings();
         displayUserInfo();
         attachEventListeners();
@@ -128,27 +146,59 @@ var SettingsController = (function() {
      * @private
      */
     function displayUserInfo() {
-        if (elements.username) {
-            elements.username.textContent = auth.username;
+        // Ensure migration has run
+        var totalUsers = typeof MultiServerManager !== 'undefined' ? MultiServerManager.getTotalUserCount() : 0;
+        if (totalUsers === 0 && auth && auth.serverAddress) {
+            // Migration didn't happen yet, trigger it manually
+            console.log('[SETTINGS] No servers found, checking for legacy auth...');
+            var legacyAuth = storage.get('jellyfin_auth', true);
+            if (legacyAuth && legacyAuth.serverAddress && legacyAuth.accessToken) {
+                console.log('[SETTINGS] Found legacy auth, adding to MultiServerManager...');
+                var serverName = legacyAuth.serverName || 'My Server';
+                MultiServerManager.addServer(
+                    legacyAuth.serverAddress,
+                    serverName,
+                    legacyAuth.userId,
+                    legacyAuth.username,
+                    legacyAuth.accessToken
+                );
+            }
         }
-        if (elements.userAvatar && auth.username) {
-            elements.userAvatar.textContent = auth.username.charAt(0).toUpperCase();
+        
+        // Try to get active server info from MultiServerManager
+        var activeServer = MultiServerManager.getActiveServer();
+        var displayUsername = activeServer ? activeServer.username : auth.username;
+        var displayServer = activeServer ? activeServer.url : auth.serverAddress;
+        var displayAccessToken = activeServer ? activeServer.accessToken : auth.accessToken;
+        
+        if (elements.username) {
+            elements.username.textContent = displayUsername;
+        }
+        if (elements.userAvatar && displayUsername) {
+            elements.userAvatar.textContent = displayUsername.charAt(0).toUpperCase();
         }
         
         var usernameValue = document.getElementById('usernameValue');
         if (usernameValue) {
-            usernameValue.textContent = auth.username;
+            usernameValue.textContent = displayUsername;
         }
         
         var serverValue = document.getElementById('serverValue');
         if (serverValue) {
-            serverValue.textContent = auth.serverAddress;
+            if (activeServer) {
+                serverValue.textContent = activeServer.name + ' (' + displayServer + ')';
+            } else {
+                serverValue.textContent = displayServer;
+            }
         }
+        
+        // Update server count display
+        updateServerCountDisplay();
         
         // Fetch and display server version
         var serverVersionValue = document.getElementById('serverVersionValue');
-        if (serverVersionValue && auth.serverAddress && auth.accessToken) {
-            JellyfinAPI.getSystemInfo(auth.serverAddress, auth.accessToken, function(err, data) {
+        if (serverVersionValue && displayServer && displayAccessToken) {
+            JellyfinAPI.getSystemInfo(displayServer, displayAccessToken, function(err, data) {
                 if (!err && data && data.Version) {
                     serverVersionValue.textContent = data.Version;
                 } else {
@@ -207,11 +257,11 @@ var SettingsController = (function() {
     }
 
     /**
-     * Load settings from persistent storage
+     * Load settings from persistent storage (user-scoped)
      * @private
      */
     function loadSettings() {
-        var stored = storage.get('jellyfin_settings');
+        var stored = storage.getUserPreference('jellyfin_settings', null);
         if (stored) {
             try {
                 settings = JSON.parse(stored);
@@ -238,11 +288,11 @@ var SettingsController = (function() {
     }
 
     /**
-     * Save current settings to persistent storage
+     * Save current settings to persistent storage (user-scoped)
      * @private
      */
     function saveSettings() {
-        storage.set('jellyfin_settings', JSON.stringify(settings));
+        storage.setUserPreference('jellyfin_settings', JSON.stringify(settings));
     }
 
     /**
@@ -686,7 +736,9 @@ var SettingsController = (function() {
      * @private
      */
     function getNavButtons() {
-        return Array.from(document.querySelectorAll('.nav-left .nav-btn, .nav-center .nav-btn'));
+        return Array.from(document.querySelectorAll('.nav-left .nav-btn, .nav-center .nav-btn')).filter(function(btn) {
+            return btn.offsetParent !== null; // Only include visible buttons
+        });
     }
 
     /**
@@ -1181,8 +1233,82 @@ var SettingsController = (function() {
                 handleLogout();
                 break;
                 
+            case 'manageServers':
+                openServerManager();
+                break;
+                
             default:
         }
+    }
+
+    /**
+     * Augment home rows with per-server variants when in multi-server mode
+     * @param {Array} baseRows - Base home rows configuration
+     * @returns {Array} Augmented rows with per-server variants
+     * @private
+     */
+    function augmentRowsForMultiServer(baseRows) {
+        if (typeof MultiServerManager === 'undefined') {
+            return baseRows;
+        }
+        
+        var servers = MultiServerManager.getAllServersArray();
+        if (!servers || servers.length <= 1) {
+            return baseRows;
+        }
+        
+        var augmentedRows = [];
+        var rowTypesToSplit = ['resume', 'nextup', 'latest-movies', 'latest-shows', 'latest-music'];
+        var baseOrder = 1000; // Start server-specific rows at high order
+        
+        // Add base rows, but skip the ones that will be split per-server
+        baseRows.forEach(function(row) {
+            if (rowTypesToSplit.indexOf(row.id) === -1) {
+                // This row type doesn't split, add it as-is
+                augmentedRows.push(JSON.parse(JSON.stringify(row)));
+            }
+        });
+        
+        // Add per-server variants for splittable row types
+        var perServerRows = [];
+        servers.forEach(function(server) {
+            rowTypesToSplit.forEach(function(baseId) {
+                // Find the base row
+                var baseRow = baseRows.find(function(r) { return r.id === baseId; });
+                if (!baseRow) return;
+                
+                // Create per-server variant
+                var serverId = 'server-' + server.id + '-' + baseId;
+                var serverRow = {
+                    id: serverId,
+                    baseId: baseId,
+                    serverId: server.id,
+                    serverName: server.name,
+                    name: baseRow.name + ' (' + server.name + ')',
+                    enabled: baseRow.enabled, // Inherit enabled state from base row
+                    order: baseRow.order
+                };
+                perServerRows.push(serverRow);
+            });
+        });
+        
+        // Sort per-server rows: first by base order, then alphabetically by server name, then by base row name
+        perServerRows.sort(function(a, b) {
+            if (a.order !== b.order) return a.order - b.order;
+            var serverCompare = a.serverName.localeCompare(b.serverName);
+            if (serverCompare !== 0) return serverCompare;
+            return a.name.localeCompare(b.name);
+        });
+        
+        // Add sorted per-server rows to result
+        augmentedRows = augmentedRows.concat(perServerRows);
+        
+        // Final sort by order
+        augmentedRows.sort(function(a, b) {
+            return a.order - b.order;
+        });
+        
+        return augmentedRows;
     }
 
     /**
@@ -1193,7 +1319,13 @@ var SettingsController = (function() {
         var modal = document.getElementById('homeRowsModal');
         if (!modal) return;
         
-        homeRowsModal.rows = JSON.parse(JSON.stringify(settings.homeRows));
+        // Load base rows from settings
+        var baseRows = JSON.parse(JSON.stringify(settings.homeRows));
+        console.log('[settings] Base home rows:', baseRows.map(function(r) { return r.id + ' (order: ' + r.order + ', enabled: ' + r.enabled + ')'; }).join(', '));
+        
+        // Augment with per-server rows if in multi-server mode
+        homeRowsModal.rows = augmentRowsForMultiServer(baseRows);
+        console.log('[settings] Augmented home rows for modal:', homeRowsModal.rows.map(function(r) { return r.id + ' (order: ' + r.order + ', enabled: ' + r.enabled + ')'; }).join(', '));
         homeRowsModal.isOpen = true;
         homeRowsModal.focusedIndex = 0;
         
@@ -1296,7 +1428,27 @@ var SettingsController = (function() {
      * @private
      */
     function toggleRowEnabled(index) {
-        homeRowsModal.rows[index].enabled = !homeRowsModal.rows[index].enabled;
+        var row = homeRowsModal.rows[index];
+        row.enabled = !row.enabled;
+        
+        // If this is a per-server row, update the corresponding base row too
+        if (row.baseId) {
+            var baseRow = homeRowsModal.rows.find(function(r) { 
+                return r.id === row.baseId && !r.serverId; 
+            });
+            if (baseRow) {
+                baseRow.enabled = row.enabled;
+            }
+        }
+        // If this is a base row with server variants, update all variants
+        else if (!row.serverId) {
+            homeRowsModal.rows.forEach(function(r) {
+                if (r.baseId === row.id) {
+                    r.enabled = row.enabled;
+                }
+            });
+        }
+        
         renderHomeRowsList();
         updateHomeRowsFocus();
     }
@@ -1366,7 +1518,47 @@ var SettingsController = (function() {
      * @private
      */
     function saveHomeRows() {
-        settings.homeRows = JSON.parse(JSON.stringify(homeRowsModal.rows));
+        // Extract only base rows (rows without serverId or baseId)
+        // Per-server rows will be regenerated at load time
+        var rowsToSave = homeRowsModal.rows.filter(function(row) {
+            // Keep rows that don't have a serverId or baseId (these are base rows)
+            return !row.serverId && !row.baseId;
+        });
+        
+        // Sort by current order to maintain relative positioning
+        rowsToSave.sort(function(a, b) {
+            return a.order - b.order;
+        });
+        
+        // DON'T renumber - preserve the order values to maintain groupings
+        // (e.g., all latest-* rows should stay at order 2 to alphabetize together)
+        
+        // Clean up any orphaned server-specific metadata
+        rowsToSave = rowsToSave.map(function(row) {
+            var cleanRow = JSON.parse(JSON.stringify(row));
+            delete cleanRow.serverName;
+            delete cleanRow.serverId;
+            delete cleanRow.baseId;
+            return cleanRow;
+        });
+        
+        // Remove rows for servers that no longer exist
+        if (typeof MultiServerManager !== 'undefined') {
+            var validServerIds = {};
+            MultiServerManager.getAllServersArray().forEach(function(server) {
+                validServerIds[server.serverId] = true;
+            });
+            
+            rowsToSave = rowsToSave.filter(function(row) {
+                if (row.serverId) {
+                    return validServerIds[row.serverId];
+                }
+                return true;
+            });
+        }
+        
+        console.log('[settings] Saving base home rows:', rowsToSave.map(function(r) { return r.id + ' (order: ' + r.order + ', enabled: ' + r.enabled + ')'; }).join(', '));
+        settings.homeRows = rowsToSave;
         saveSettings();
         closeHomeRowsModal();
         
@@ -1377,7 +1569,13 @@ var SettingsController = (function() {
      * @private
      */
     function resetHomeRows() {
-        homeRowsModal.rows = JSON.parse(JSON.stringify(defaultHomeRows));
+        // Reset to defaults and save immediately
+        settings.homeRows = JSON.parse(JSON.stringify(defaultHomeRows));
+        saveSettings();
+        console.log('[settings] Home rows reset to defaults:', settings.homeRows.map(function(r) { return r.id + ' (order: ' + r.order + ')'; }).join(', '));
+        
+        // Update modal display with augmented rows
+        homeRowsModal.rows = augmentRowsForMultiServer(JSON.parse(JSON.stringify(settings.homeRows)));
         homeRowsModal.focusedIndex = 0;
         renderHomeRowsList();
         updateHomeRowsFocus();
@@ -1522,10 +1720,21 @@ var SettingsController = (function() {
         var returnFocus = document.querySelector('[data-setting="logout"]');
         
         showConfirm(
-            'Are you sure you want to sign out? You will be redirected to the login page.',
+            'Are you sure you want to sign out? This will remove saved credentials and redirect to the login page.',
             'Sign Out',
             function() {
+                // Get current server/user before logging out
+                var activeServer = MultiServerManager.getActiveServer();
+                
+                // Clear Jellyfin credentials
                 JellyfinAPI.logout();
+                
+                // Remove saved server/user from MultiServerManager
+                if (activeServer && activeServer.serverId && activeServer.userId) {
+                    MultiServerManager.removeServer(activeServer.serverId, activeServer.userId);
+                    Logger.info('[LOGOUT] Removed saved credentials for user:', activeServer.userId);
+                }
+                
                 window.location.href = 'login.html';
             },
             function() {
@@ -1547,21 +1756,53 @@ var SettingsController = (function() {
         var libraryButtons = document.querySelectorAll('.nav-btn[data-library-id]');
         
         if (shuffleBtn) {
-            shuffleBtn.style.display = settings.showShuffleButton ? '' : 'none';
+            if (settings.showShuffleButton) {
+                shuffleBtn.style.display = '';
+                shuffleBtn.style.pointerEvents = '';
+                shuffleBtn.setAttribute('tabindex', '0');
+            } else {
+                shuffleBtn.style.display = 'none';
+                shuffleBtn.style.pointerEvents = 'none';
+                shuffleBtn.setAttribute('tabindex', '-1');
+            }
         }
         
         if (genresBtn) {
-            genresBtn.style.display = settings.showGenresButton ? '' : 'none';
+            if (settings.showGenresButton) {
+                genresBtn.style.display = '';
+                genresBtn.style.pointerEvents = '';
+                genresBtn.setAttribute('tabindex', '0');
+            } else {
+                genresBtn.style.display = 'none';
+                genresBtn.style.pointerEvents = 'none';
+                genresBtn.setAttribute('tabindex', '-1');
+            }
         }
         
         if (favoritesBtn) {
-            favoritesBtn.style.display = settings.showFavoritesButton ? '' : 'none';
+            if (settings.showFavoritesButton) {
+                favoritesBtn.style.display = '';
+                favoritesBtn.style.pointerEvents = '';
+                favoritesBtn.setAttribute('tabindex', '0');
+            } else {
+                favoritesBtn.style.display = 'none';
+                favoritesBtn.style.pointerEvents = 'none';
+                favoritesBtn.setAttribute('tabindex', '-1');
+            }
         }
         
         // Apply library buttons visibility
         if (libraryButtons && libraryButtons.length > 0) {
             libraryButtons.forEach(function(btn) {
-                btn.style.display = settings.showLibrariesInToolbar ? '' : 'none';
+                if (settings.showLibrariesInToolbar) {
+                    btn.style.display = '';
+                    btn.style.pointerEvents = '';
+                    btn.setAttribute('tabindex', '0');
+                } else {
+                    btn.style.display = 'none';
+                    btn.style.pointerEvents = 'none';
+                    btn.setAttribute('tabindex', '-1');
+                }
             });
         }
         
@@ -1569,9 +1810,24 @@ var SettingsController = (function() {
         if (!settings.jellyseerrEnabled) {
             if (discoverBtn) {
                 discoverBtn.style.display = 'none';
+                discoverBtn.style.pointerEvents = 'none';
+                discoverBtn.setAttribute('tabindex', '-1');
             }
             if (requestsBtn) {
                 requestsBtn.style.display = 'none';
+                requestsBtn.style.pointerEvents = 'none';
+                requestsBtn.setAttribute('tabindex', '-1');
+            }
+        } else {
+            if (discoverBtn) {
+                discoverBtn.style.display = '';
+                discoverBtn.style.pointerEvents = '';
+                discoverBtn.setAttribute('tabindex', '0');
+            }
+            if (requestsBtn) {
+                requestsBtn.style.display = '';
+                requestsBtn.style.pointerEvents = '';
+                requestsBtn.setAttribute('tabindex', '0');
             }
         }
     }
@@ -1592,16 +1848,32 @@ var SettingsController = (function() {
     }
 
     /**
-     * Get home rows settings for use by other pages
+     * Get home rows settings for use by other pages (user-scoped)
      * @returns {Array} Array of home row configurations
      */
     function getHomeRowsSettings() {
-        var stored = storage.get('jellyfin_settings');
+        var stored = storage.getUserPreference('jellyfin_settings', null);
         if (stored) {
             try {
                 var parsedSettings = JSON.parse(stored);
                 if (parsedSettings.homeRows) {
-                    return parsedSettings.homeRows;
+                    // Merge saved settings with defaults - saved values take precedence
+                    var merged = JSON.parse(JSON.stringify(defaultHomeRows));
+                    parsedSettings.homeRows.forEach(function(savedRow) {
+                        var defaultRow = merged.find(function(r) { return r.id === savedRow.id; });
+                        if (defaultRow) {
+                            // Update existing default with saved values
+                            defaultRow.enabled = savedRow.enabled;
+                            // Use default order for latest-* rows so they group together alphabetically
+                            if (savedRow.id.indexOf('latest-') !== 0) {
+                                defaultRow.order = savedRow.order;
+                            }
+                        } else {
+                            // Add saved row that's not in defaults
+                            merged.push(savedRow);
+                        }
+                    });
+                    return merged;
                 }
             } catch (e) {
                 // Settings parsing failed, return defaults
@@ -1947,7 +2219,6 @@ var SettingsController = (function() {
      * @private
      */
     function showJellyseerrLocalModal() {
-        console.log('[Settings] Showing local auth modal');
         
         ModalManager.show({
             modalId: 'jellyseerrLocalModal',
@@ -2304,6 +2575,729 @@ var SettingsController = (function() {
         }
         
         return false;
+    }
+
+    /**
+     * Open the Server Manager modal
+     * @private
+     */
+    function openServerManager() {
+        var modal = document.getElementById('serverManagerModal');
+        if (!modal) return;
+        
+        // Check if modal is already open to prevent duplicate setup
+        if (modal.style.display === 'flex') {
+            console.log('[SERVER MANAGER] Modal already open, skipping setup');
+            return;
+        }
+        
+        renderServerList();
+        modal.style.display = 'flex';
+        
+        // Setup event listeners
+        var addServerBtn = document.getElementById('addServerBtn');
+        var closeBtn = document.getElementById('closeServerManagerBtn');
+        
+        // Note: We rely on the keyboard handler for ENTER key, not onclick
+        // This prevents duplicate event handling and infinite loops
+        
+        // Add comprehensive keyboard navigation for modal
+        var keyHandler = function(e) {
+            if (e.keyCode === KeyCodes.BACK || e.keyCode === KeyCodes.ESC) {
+                e.preventDefault();
+                closeServerManager();
+                return;
+            }
+            
+            if (e.keyCode === KeyCodes.ENTER) {
+                var currentEl = document.activeElement;
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // Trigger appropriate action
+                if (currentEl === addServerBtn) {
+                    openAddServerModal();
+                    return;
+                } else if (currentEl === closeBtn) {
+                    closeServerManager();
+                    return;
+                }
+                
+                // Handle server items
+                if (currentEl.classList.contains('server-item')) {
+                    var serverId = currentEl.dataset.serverId;
+                    if (serverId) {
+                        var activeServer = MultiServerManager.getActiveServer();
+                        if (!activeServer || serverId !== activeServer.id) {
+                            setActiveServerHandler(serverId);
+                        }
+                    }
+                    return;
+                }
+            }
+            
+            // Get all focusable elements in the modal
+            var focusableElements = modal.querySelectorAll('.server-item, .server-action-btn, #addServerBtn, #closeServerManagerBtn');
+            var focusableArray = Array.prototype.slice.call(focusableElements);
+            var currentIndex = focusableArray.indexOf(document.activeElement);
+            
+            if (currentIndex === -1) return;
+            
+            var handled = false;
+            
+            // Handle UP/DOWN navigation
+            if (e.keyCode === KeyCodes.UP) {
+                e.preventDefault();
+                var newIndex = currentIndex - 1;
+                if (newIndex < 0) newIndex = focusableArray.length - 1;
+                focusableArray[newIndex].focus();
+                handled = true;
+            } else if (e.keyCode === KeyCodes.DOWN) {
+                e.preventDefault();
+                var newIndex = currentIndex + 1;
+                if (newIndex >= focusableArray.length) newIndex = 0;
+                focusableArray[newIndex].focus();
+                handled = true;
+            }
+            
+            // Handle LEFT/RIGHT for buttons in modal-actions or server-actions
+            else if (e.keyCode === KeyCodes.LEFT || e.keyCode === KeyCodes.RIGHT) {
+                var currentEl = document.activeElement;
+                var parentActions = currentEl.parentElement;
+                
+                // Check if we're in modal-actions or server-actions
+                if (parentActions && (parentActions.classList.contains('modal-actions') || parentActions.classList.contains('server-actions'))) {
+                    e.preventDefault();
+                    var siblings = parentActions.querySelectorAll('button');
+                    var siblingArray = Array.prototype.slice.call(siblings);
+                    var siblingIndex = siblingArray.indexOf(currentEl);
+                    
+                    if (siblingIndex !== -1) {
+                        var newSiblingIndex = e.keyCode === KeyCodes.LEFT ? siblingIndex - 1 : siblingIndex + 1;
+                        if (newSiblingIndex < 0) newSiblingIndex = siblingArray.length - 1;
+                        if (newSiblingIndex >= siblingArray.length) newSiblingIndex = 0;
+                        siblingArray[newSiblingIndex].focus();
+                        handled = true;
+                    }
+                }
+                // If we're on a server-item, RIGHT opens its first action button
+                else if (e.keyCode === KeyCodes.RIGHT && currentEl.classList.contains('server-item')) {
+                    e.preventDefault();
+                    var firstAction = currentEl.querySelector('.server-action-btn');
+                    if (firstAction) {
+                        firstAction.focus();
+                        handled = true;
+                    }
+                }
+            }
+        };
+        
+        // Remove any existing handler before adding new one
+        cleanupModalKeyHandler(modal, '_serverManagerKeyHandler');
+        
+        // Store handler reference for proper removal
+        modal._serverManagerKeyHandler = keyHandler;
+        modal.addEventListener('keydown', keyHandler);
+        modal.setAttribute('data-key-handler', 'true');
+        
+        // Focus management
+        setTimeout(function() {
+            var firstServer = modal.querySelector('.server-item');
+            if (firstServer) {
+                firstServer.focus();
+            } else if (addServerBtn) {
+                addServerBtn.focus();
+            } else if (closeBtn) {
+                closeBtn.focus();
+            }
+        }, 150);
+    }
+
+    /**
+     * Render the server list in the modal
+     * @private
+     */
+    function renderServerList() {
+        var list = document.getElementById('serverList');
+        if (!list) return;
+        
+        var servers = MultiServerManager.getAllServersArray();
+        var activeServer = MultiServerManager.getActiveServer();
+        
+        list.innerHTML = '';
+        
+        if (servers.length === 0) {
+            list.innerHTML = '<div class="empty-servers">' +
+                '<div class="empty-servers-icon">🖥️</div>' +
+                '<div class="empty-servers-text">No servers configured</div>' +
+                '<div class="empty-servers-hint">Click "Add Server" to get started</div>' +
+                '</div>';
+            return;
+        }
+        
+        servers.forEach(function(server) {
+            var serverDiv = document.createElement('div');
+            serverDiv.className = 'server-item';
+            if (activeServer && server.serverId === activeServer.serverId && server.userId === activeServer.userId) {
+                serverDiv.className += ' active';
+            }
+            serverDiv.tabIndex = 0;
+            serverDiv.dataset.serverId = server.serverId;
+            serverDiv.dataset.userId = server.userId;
+            
+            // Check server health
+            checkServerHealth(server.serverId, server.userId);
+            
+            var infoDiv = document.createElement('div');
+            infoDiv.className = 'server-info';
+            
+            var nameDiv = document.createElement('div');
+            nameDiv.className = 'server-name';
+            nameDiv.textContent = server.name;
+            
+            var urlDiv = document.createElement('div');
+            urlDiv.className = 'server-url';
+            urlDiv.textContent = server.url;
+            
+            var userDiv = document.createElement('div');
+            userDiv.className = 'server-user';
+            userDiv.textContent = server.username;
+            
+            var statusDiv = document.createElement('div');
+            statusDiv.className = 'server-status';
+            statusDiv.id = 'server-status-' + server.serverId + '-' + server.userId;
+            if (activeServer && server.serverId === activeServer.serverId && server.userId === activeServer.userId) {
+                statusDiv.className += ' active';
+                statusDiv.textContent = 'Active';
+            } else {
+                statusDiv.className += ' connected';
+                statusDiv.textContent = 'Checking...';
+            }
+            
+            infoDiv.appendChild(nameDiv);
+            infoDiv.appendChild(urlDiv);
+            infoDiv.appendChild(userDiv);
+            infoDiv.appendChild(statusDiv);
+            
+            var actionsDiv = document.createElement('div');
+            actionsDiv.className = 'server-actions';
+            
+            // Only show "Set Active" if not already active
+            if (!activeServer || server.serverId !== activeServer.serverId || server.userId !== activeServer.userId) {
+                var activateBtn = document.createElement('button');
+                activateBtn.className = 'server-action-btn';
+                activateBtn.textContent = 'Set Active';
+                activateBtn.onclick = function(e) {
+                    e.stopPropagation();
+                    setActiveServerHandler(server.serverId, server.userId);
+                };
+                actionsDiv.appendChild(activateBtn);
+            }
+            
+            var removeBtn = document.createElement('button');
+            removeBtn.className = 'server-action-btn danger';
+            removeBtn.textContent = 'Remove';
+            removeBtn.onclick = function(e) {
+                e.stopPropagation();
+                removeServerHandler(server.serverId, server.userId, server.name, server.username);
+            };
+            actionsDiv.appendChild(removeBtn);
+            
+            serverDiv.appendChild(infoDiv);
+            serverDiv.appendChild(actionsDiv);
+            
+            // Click to set active
+            serverDiv.onclick = function() {
+                if (!activeServer || server.serverId !== activeServer.serverId || server.userId !== activeServer.userId) {
+                    setActiveServerHandler(server.serverId, server.userId);
+                }
+            };
+            
+            // Keyboard handler for server item
+            serverDiv.onkeydown = function(e) {
+                if (e.keyCode === KeyCodes.ENTER) {
+                    e.preventDefault();
+                    if (!activeServer || server.serverId !== activeServer.serverId || server.userId !== activeServer.userId) {
+                        setActiveServerHandler(server.serverId, server.userId);
+                    }
+                } else if (e.keyCode === KeyCodes.RIGHT) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    var firstBtn = actionsDiv.querySelector('.server-action-btn');
+                    if (firstBtn) {
+                        firstBtn.focus();
+                    }
+                }
+            };
+            
+            // Add keyboard handlers to action buttons
+            var actionButtons = actionsDiv.querySelectorAll('.server-action-btn');
+            actionButtons.forEach(function(btn) {
+                btn.onkeydown = function(e) {
+                    if (e.keyCode === KeyCodes.LEFT) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        serverDiv.focus();
+                    }
+                };
+            });
+            
+            list.appendChild(serverDiv);
+        });
+        
+        // Update server count display
+        updateServerCountDisplay();
+    }
+
+    /**
+     * Check server health/connectivity
+     * @private
+     * @param {string} serverId - Server ID to check
+     * @param {string} userId - User ID to check
+     */
+    function checkServerHealth(serverId, userId) {
+        var server = MultiServerManager.getServer(serverId, userId);
+        if (!server) return;
+        
+        var statusEl = document.getElementById('server-status-' + serverId + '-' + userId);
+        
+        // Try to get system info from the server
+        JellyfinAPI.getSystemInfo(server.url, server.accessToken, function(err, data) {
+            if (!statusEl) return; // Element might have been removed
+            
+            if (err || !data) {
+                statusEl.className = 'server-status disconnected';
+                statusEl.textContent = 'Offline';
+                statusEl.style.background = 'rgba(200, 0, 0, 0.2)';
+                statusEl.style.color = '#ff4444';
+                
+                // Update user connection status
+                MultiServerManager.updateServer(serverId, null, userId, { connected: false });
+            } else {
+                var activeServer = MultiServerManager.getActiveServer();
+                if (activeServer && server.serverId === activeServer.serverId && server.userId === activeServer.userId) {
+                    statusEl.className = 'server-status active';
+                    statusEl.textContent = 'Active';
+                } else {
+                    statusEl.className = 'server-status connected';
+                    statusEl.textContent = 'Connected';
+                }
+                
+                // Update user connection status
+                MultiServerManager.updateServer(serverId, null, userId, { connected: true });
+            }
+        });
+    }
+
+    /**
+     * Set active server handler
+     * @private
+     * @param {string} serverId - Server ID to activate
+     * @param {string} userId - User ID to activate
+     */
+    function setActiveServerHandler(serverId, userId) {
+        var server = MultiServerManager.getServer(serverId, userId);
+        if (!server) return;
+        
+        // Check if server is online first
+        JellyfinAPI.getSystemInfo(server.url, server.accessToken, function(err, data) {
+            if (err || !data) {
+                showAlert('Server Offline', 'Cannot connect to ' + server.name + '. Please check if the server is running.');
+                return;
+            }
+            
+            if (MultiServerManager.setActiveServer(serverId, userId)) {
+                // Update global auth to point to new server/user
+                auth = MultiServerManager.getServerAuth(serverId, userId);
+                storage.set('jellyfin_auth', JSON.stringify(auth));
+                
+                // Refresh the server list
+                renderServerList();
+                
+                // Update user info display
+                displayUserInfo();
+                
+                showAlert('Server Changed', 'Now connected to ' + server.name + ' as ' + server.username + '. Reloading...');
+                
+                // Reload the page to refresh libraries and content
+                setTimeout(function() {
+                    window.location.href = 'browse.html';
+                }, 1500);
+            }
+        });
+    }
+
+    /**
+     * Remove server handler
+     * @private
+     * @param {string} serverId - Server ID to remove
+     * @param {string} userId - User ID to remove
+     * @param {string} serverName - Server name for confirmation
+     * @param {string} username - Username for confirmation
+     */
+    function removeServerHandler(serverId, userId, serverName, username) {
+        var activeServer = MultiServerManager.getActiveServer();
+        
+        if (activeServer && serverId === activeServer.serverId && userId === activeServer.userId && MultiServerManager.getTotalUserCount() === 1) {
+            showAlert('Cannot Remove', 'Cannot remove the only configured user. Add another user or server first.');
+            return;
+        }
+        
+        showConfirm(
+            'Remove User',
+            'Are you sure you want to remove "' + username + '" from server "' + serverName + '"?',
+            function() {
+                if (MultiServerManager.removeServer(serverId, userId)) {
+                    renderServerList();
+                    
+                    // If we removed the active user, check if there are any servers left
+                    if (activeServer && serverId === activeServer.serverId && userId === activeServer.userId) {
+                        var newAuth = MultiServerManager.getServerAuth();
+                        
+                        if (!newAuth) {
+                            // No servers left, redirect to login
+                            storage.remove('jellyfin_auth');
+                            showAlert('User Removed', 'No servers remaining. Redirecting to login...');
+                            setTimeout(function() {
+                                window.location.href = 'login.html';
+                            }, 1500);
+                        } else {
+                            // Switch to another server/user
+                            auth = newAuth;
+                            storage.set('jellyfin_auth', JSON.stringify(auth));
+                            displayUserInfo();
+                            showAlert('User Removed', 'Switched to another user. Reloading...');
+                            setTimeout(function() {
+                                window.location.href = 'browse.html';
+                            }, 1500);
+                        }
+                    }
+                }
+            }
+        );
+    }
+
+    /**
+     * Open add server modal
+     * @private
+     */
+    function openAddServerModal() {
+        console.log('[ADD SERVER] Opening modal...');
+        
+        var modal = document.getElementById('addServerModal');
+        if (!modal) {
+            console.error('[ADD SERVER] Modal element not found!');
+            return;
+        }
+        
+        // Check if modal is already open to prevent duplicate setup
+        if (modal.style.display === 'flex') {
+            console.log('[ADD SERVER] Modal already open, skipping setup');
+            return;
+        }
+        
+        // Hide server manager modal first
+        var serverManagerModal = document.getElementById('serverManagerModal');
+        if (serverManagerModal) {
+            serverManagerModal.style.display = 'none';
+            console.log('[ADD SERVER] Hid server manager modal');
+        }
+        
+        modal.style.display = 'flex';
+        console.log('[ADD SERVER] Modal display set to flex');
+        
+        var urlInput = document.getElementById('newServerUrlInput');
+        var connectBtn = document.getElementById('connectNewServerBtn');
+        var cancelBtn = document.getElementById('cancelAddServerBtn');
+        console.log('[ADD SERVER] Elements:', { urlInput: !!urlInput, connectBtn: !!connectBtn, cancelBtn: !!cancelBtn });
+        
+        // Clear input
+        if (urlInput) urlInput.value = '';
+        
+        // Remove any existing handler BEFORE setting up new one
+        console.log('[ADD SERVER] Removing existing key handler before adding new one');
+        cleanupModalKeyHandler(modal, '_addServerKeyHandler');
+        
+        // Note: Removed onclick handlers - keyboard handler now calls functions directly
+        // This prevents the infinite loop issue caused by .click() triggering onclick
+        
+        // Add keyboard navigation for modal
+        var lastKeyTime = 0;
+        var keyHandler = function(e) {
+            // Debounce rapid key events (webOS bug workaround)
+            var now = Date.now();
+            if (now - lastKeyTime < 50) {
+                console.log('[ADD SERVER NAV] Debounced rapid key event');
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+            lastKeyTime = now;
+            
+            var currentEl = document.activeElement;
+            console.log('[ADD SERVER NAV] Key:', e.keyCode, 'Current element:', currentEl.id || currentEl.tagName);
+            
+            // Always allow BACK/ESC to close
+            if (e.keyCode === KeyCodes.BACK || e.keyCode === KeyCodes.ESC) {
+                e.preventDefault();
+                console.log('[ADD SERVER NAV] Closing modal');
+                closeAddServerModal();
+                return;
+            }
+            
+            // ENTER: move between fields or submit
+            if (e.keyCode === KeyCodes.ENTER) {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('[ADD SERVER NAV] ENTER pressed on:', currentEl.id);
+                
+                if (currentEl === urlInput) {
+                    console.log('[ADD SERVER NAV] Moving from URL to Connect button');
+                    connectBtn.focus();
+                    return;
+                } else if (currentEl === connectBtn) {
+                    console.log('[ADD SERVER NAV] Connect button activated');
+                    var serverUrl = urlInput ? urlInput.value.trim() : '';
+                    
+                    if (!serverUrl) {
+                        showAlert('Invalid Input', 'Please enter a server URL.');
+                        return;
+                    }
+                    
+                    // Remove trailing slashes
+                    serverUrl = serverUrl.replace(/\/+$/, '');
+                    
+                    // Test connection, fetch server name, and redirect to login
+                    testAndAddServer(serverUrl);
+                    return;
+                } else if (currentEl === cancelBtn) {
+                    console.log('[ADD SERVER NAV] Cancel button activated');
+                    closeAddServerModal();
+                    return;
+                }
+            }
+            
+            var focusableElements = [urlInput, connectBtn, cancelBtn].filter(function(el) { return el; });
+            var currentIndex = focusableElements.indexOf(currentEl);
+            
+            console.log('[ADD SERVER NAV] Current index:', currentIndex, 'Total elements:', focusableElements.length);
+            console.log('[ADD SERVER NAV] Focusable elements:', focusableElements.map(function(el) { return el.id || el.tagName; }));
+            
+            if (currentIndex === -1) {
+                console.log('[ADD SERVER NAV] Current element not in focusable list, ignoring');
+                return;
+            }
+            
+            // Handle UP/DOWN navigation between all fields
+            if (e.keyCode === KeyCodes.UP) {
+                e.preventDefault();
+                var newIndex = currentIndex - 1;
+                if (newIndex < 0) newIndex = focusableElements.length - 1;
+                console.log('[ADD SERVER NAV] UP pressed, moving from index', currentIndex, 'to', newIndex);
+                focusableElements[newIndex].focus();
+                console.log('[ADD SERVER NAV] Focused element:', focusableElements[newIndex].id);
+            } else if (e.keyCode === KeyCodes.DOWN) {
+                e.preventDefault();
+                var newIndex = currentIndex + 1;
+                if (newIndex >= focusableElements.length) newIndex = 0;
+                console.log('[ADD SERVER NAV] DOWN pressed, moving from index', currentIndex, 'to', newIndex);
+                focusableElements[newIndex].focus();
+                console.log('[ADD SERVER NAV] Focused element:', focusableElements[newIndex].id);
+            }
+            // Handle LEFT/RIGHT for buttons only
+            else if ((e.keyCode === KeyCodes.LEFT || e.keyCode === KeyCodes.RIGHT) && 
+                     (currentEl === connectBtn || currentEl === cancelBtn)) {
+                e.preventDefault();
+                console.log('[ADD SERVER NAV] LEFT/RIGHT on button');
+                if (currentEl === connectBtn) {
+                    cancelBtn.focus();
+                    console.log('[ADD SERVER NAV] Moved to Cancel button');
+                } else {
+                    connectBtn.focus();
+                    console.log('[ADD SERVER NAV] Moved to Connect button');
+                }
+            }
+        };
+        
+        // Store handler reference for proper removal (already removed above)
+        modal._addServerKeyHandler = keyHandler;
+        modal.addEventListener('keydown', keyHandler);
+        modal.setAttribute('data-add-server-key-handler', 'true');
+        
+        // Focus URL input with a longer delay to ensure modal is fully rendered
+        setTimeout(function() {
+            console.log('[ADD SERVER] Setting focus. URL input:', !!urlInput, 'Connect button:', !!connectBtn);
+            if (urlInput) {
+                urlInput.focus();
+                console.log('[ADD SERVER] Focused URL input');
+            } else if (connectBtn) {
+                connectBtn.focus();
+                console.log('[ADD SERVER] Focused connect button');
+            }
+            console.log('[ADD SERVER] Active element after focus:', document.activeElement.tagName, document.activeElement.id);
+        }, 100); // Reduced from 200ms to 100ms
+    }
+
+    /**
+     * Test server connection and add if successful
+     * @private
+     * @param {string} serverName - Server display name
+     * @param {string} serverUrl - Server URL
+     */
+    /**
+     * Test server connection and add to multi-server list
+     * Automatically fetches server name from the server
+     * @private
+     */
+    function testAndAddServer(serverUrl) {
+        showAlert('Testing Connection', 'Connecting to server...');
+        
+        // Check if user provided a port
+        var hasPort = /:(\d+)$/.test(serverUrl);
+        var hasProtocol = /^https?:\/\//i.test(serverUrl);
+        
+        // If user specified a port, just try that
+        if (hasPort) {
+            var normalizedUrl = JellyfinAPI.normalizeServerAddress(serverUrl);
+            tryConnect(normalizedUrl);
+        } else {
+            // Try multiple ports: 443 (HTTPS) first, then 8096 (HTTP)
+            var baseUrl = hasProtocol ? serverUrl : serverUrl;
+            var urlsToTry = [
+                'https://' + baseUrl.replace(/^https?:\/\//i, '') + ':443',
+                'http://' + baseUrl.replace(/^https?:\/\//i, '') + ':8096'
+            ];
+            
+            tryMultiplePorts(urlsToTry, 0);
+        }
+        
+        function tryMultiplePorts(urls, index) {
+            if (index >= urls.length) {
+                showAlert('Connection Failed', 'Unable to connect to server on ports 443 or 8096. Check the address and try again.');
+                return;
+            }
+            
+            var currentUrl = urls[index];
+            
+            JellyfinAPI.getPublicSystemInfo(currentUrl, function(err, data) {
+                if (err || !data) {
+                    // Try next port
+                    tryMultiplePorts(urls, index + 1);
+                } else {
+                    // Success!
+                    var serverName = data.ServerName || 'Jellyfin Server';
+                    
+                    // Connection successful - redirect to login page for user selection
+                    closeAddServerModal();
+                    
+                    showAlert('Server Found', 'Found "' + serverName + '"! Redirecting to login...');
+                    
+                    setTimeout(function() {
+                        storage.set('pending_server', {
+                            name: serverName,
+                            url: currentUrl
+                        });
+                        storage.set('adding_server_flow', true);
+                        window.location.href = 'login.html';
+                    }, 1500);
+                }
+            });
+        }
+        
+        function tryConnect(url) {
+            JellyfinAPI.getPublicSystemInfo(url, function(err, data) {
+                if (err || !data) {
+                    showAlert('Connection Failed', 'Could not connect to the server. Please check the URL and try again.');
+                    return;
+                }
+                
+                // Get server name from system info
+                var serverName = data.ServerName || 'Jellyfin Server';
+                
+                // Connection successful - redirect to login page for user selection
+                closeAddServerModal();
+                
+                showAlert('Server Found', 'Found "' + serverName + '"! Redirecting to login...');
+                
+                setTimeout(function() {
+                    storage.set('pending_server', {
+                        name: serverName,
+                        url: url
+                    });
+                    storage.set('adding_server_flow', true);
+                    window.location.href = 'login.html';
+                }, 1500);
+            });
+        }
+    }
+
+    /**
+     * Close server manager modal
+     * @private
+     */
+    function closeServerManager() {
+        var modal = document.getElementById('serverManagerModal');
+        if (modal) {
+            modal.style.display = 'none';
+            
+            // Remove event listener properly
+            cleanupModalKeyHandler(modal, '_serverManagerKeyHandler');
+            modal.removeAttribute('data-key-handler');
+            
+            // Update server count in case it changed
+            updateServerCountDisplay();
+            
+            // Return focus to manage servers button
+            setTimeout(function() {
+                var manageServersItem = document.querySelector('[data-setting="manageServers"]');
+                if (manageServersItem) {
+                    manageServersItem.focus();
+                }
+            }, 100);
+        }
+    }
+
+    /**
+     * Close add server modal
+     * @private
+     */
+    function closeAddServerModal() {
+        var modal = document.getElementById('addServerModal');
+        if (modal) {
+            modal.style.display = 'none';
+            
+            // Remove event listener properly
+            cleanupModalKeyHandler(modal, '_addServerKeyHandler');
+            modal.removeAttribute('data-add-server-key-handler');
+            
+            // Show server manager modal again
+            var serverManagerModal = document.getElementById('serverManagerModal');
+            if (serverManagerModal) {
+                serverManagerModal.style.display = 'flex';
+                console.log('[ADD SERVER] Showing server manager modal again');
+                
+                // Return focus to add button
+                setTimeout(function() {
+                    var addServerBtn = document.getElementById('addServerBtn');
+                    if (addServerBtn) {
+                        addServerBtn.focus();
+                        console.log('[ADD SERVER] Focused add server button in manager modal');
+                    }
+                }, 100);
+            }
+        }
+    }
+
+    /**
+     * Update server count display
+     * @private
+     */
+    function updateServerCountDisplay() {
+        var serverCountValue = document.getElementById('serverCountValue');
+        if (serverCountValue) {
+            var count = MultiServerManager.getServerCount();
+            serverCountValue.textContent = count + (count === 1 ? ' server' : ' servers');
+        }
     }
 
     return {

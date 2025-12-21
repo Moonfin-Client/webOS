@@ -653,7 +653,11 @@ var SearchController = (function() {
             window.location.href = 'details.html?id=' + tmdbId + '&type=' + mediaType + '&source=jellyseerr';
         } else {
             // Jellyfin
-            window.location.href = 'details.html?id=' + item.Id;
+            var url = 'details.html?id=' + item.Id;
+            if (item.MultiServerId) {
+                url += '&serverId=' + item.MultiServerId;
+            }
+            window.location.href = url;
         }
     }
 
@@ -792,7 +796,9 @@ var SearchController = (function() {
      * @private
      */
     function getNavButtons() {
-        return Array.from(document.querySelectorAll('.nav-left .nav-btn, .nav-center .nav-btn'));
+        return Array.from(document.querySelectorAll('.nav-left .nav-btn, .nav-center .nav-btn')).filter(function(btn) {
+            return btn.offsetParent !== null; // Only include visible buttons
+        });
     }
 
     /**

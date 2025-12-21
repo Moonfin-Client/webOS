@@ -133,7 +133,11 @@ var PlayerController = (function() {
     function init() {
         console.log('[Player] Initializing player controller');
         
-        auth = JellyfinAPI.getStoredAuth();
+        // Get auth for the specific server from URL params or active server
+        auth = typeof MultiServerManager !== 'undefined' 
+            ? MultiServerManager.getAuthForPage() 
+            : JellyfinAPI.getStoredAuth();
+        
         if (!auth) {
             window.location.href = 'login.html';
             return;
@@ -947,11 +951,15 @@ var PlayerController = (function() {
     function reportPlaybackProgress() {
         if (!playSessionId) return;
 
+        console.log('[Player] Reporting progress to:', auth.serverAddress);
         makePlaybackRequest(
             auth.serverAddress + '/Sessions/Playing/Progress',
             buildPlaybackData(),
-            function() {},
+            function() {
+                console.log('[Player] Progress reported successfully');
+            },
             function(err) {
+                console.error('[Player] Failed to report progress:', err);
             }
         );
     }
@@ -962,12 +970,15 @@ var PlayerController = (function() {
     function reportPlaybackStop() {
         if (!playSessionId) return;
 
+        console.log('[Player] Reporting stop to:', auth.serverAddress);
         makePlaybackRequest(
             auth.serverAddress + '/Sessions/Playing/Stopped',
             buildPlaybackData(),
             function() {
+                console.log('[Player] Stop reported successfully');
             },
             function(err) {
+                console.error('[Player] Failed to report stop:', err);
             }
         );
     }
