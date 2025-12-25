@@ -32,7 +32,7 @@ var TrackSelector = (function() {
             trackItem.innerHTML = '<span class="track-name">' + lang + '</span>' +
                                   '<span class="track-info">' + codec + ' ' + channels + isDefault + '</span>';
             
-            if (index === currentIndex || stream.IsDefault) {
+            if (index === currentIndex) {
                 trackItem.classList.add('selected');
             }
             
@@ -91,7 +91,7 @@ var TrackSelector = (function() {
             trackItem.innerHTML = '<span class="track-name">' + lang + '</span>' +
                                   '<span class="track-info">' + codec + forced + isDefault + '</span>';
             
-            if (index === currentIndex || stream.IsDefault) {
+            if (index === currentIndex) {
                 trackItem.classList.add('selected');
             }
             
