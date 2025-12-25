@@ -42,6 +42,7 @@ var PlayerController = (function() {
     let isDolbyVisionMedia = false; // Track if current media is Dolby Vision
     let willUseDirectPlay = false; // Track if we plan to use direct play before loading
     let playbackHealthCheckTimer = null; // Timer for checking playback health
+    let forcePlayMode = null; // User override for playback mode ('direct' or 'transcode')
     const PLAYBACK_SPEEDS = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
     let bitrateUpdateInterval = null;
     
@@ -222,6 +223,9 @@ var PlayerController = (function() {
             qualityBtn: document.getElementById('qualityBtn'),
             qualityModal: document.getElementById('qualityModal'),
             qualityList: document.getElementById('qualityList'),
+            playModeBtn: document.getElementById('playModeBtn'),
+            playModeModal: document.getElementById('playModeModal'),
+            playModeList: document.getElementById('playModeList'),
             skipOverlay: document.getElementById('skipOverlay'),
             skipButton: document.getElementById('skipButton'),
             skipButtonText: document.getElementById('skipButtonText'),
@@ -242,6 +246,7 @@ var PlayerController = (function() {
             elements.forwardBtn,
             elements.audioBtn,
             elements.subtitleBtn,
+            elements.playModeBtn,
             elements.chaptersBtn,
             elements.previousItemBtn,
             elements.nextItemBtn,
@@ -305,6 +310,9 @@ var PlayerController = (function() {
         }
         if (elements.qualityBtn) {
             elements.qualityBtn.addEventListener('click', showQualitySelector);
+        }
+        if (elements.playModeBtn) {
+            elements.playModeBtn.addEventListener('click', showPlayModeSelector);
         }
 
         // Skip button
@@ -726,7 +734,7 @@ var PlayerController = (function() {
                     Codec: 'h264',
                     Conditions: [
                         { Condition: 'LessThanEqual', Property: 'Width', Value: '1920' },
-                        { Condition: 'LessThanEqual', Property: 'Height', Value: '1080' },
+                        { Condition: 'LessThanEqual', Property: 'Height', Value: '1000' },
                         { Condition: 'LessThanEqual', Property: 'VideoFramerate', Value: '60' },
                         { Condition: 'LessThanEqual', Property: 'VideoBitrate', Value: '40000000' }
                     ]
@@ -736,7 +744,7 @@ var PlayerController = (function() {
                     Codec: 'hevc',
                     Conditions: [
                         { Condition: 'LessThanEqual', Property: 'Width', Value: '3840' },
-                        { Condition: 'LessThanEqual', Property: 'Height', Value: '2160' },
+                        { Condition: 'LessThanEqual', Property: 'Height', Value: '2000' },
                         { Condition: 'LessThanEqual', Property: 'VideoFramerate', Value: '60' },
                         { Condition: 'LessThanEqual', Property: 'VideoBitrate', Value: '100000000' }
                     ]
@@ -771,6 +779,25 @@ var PlayerController = (function() {
         audioStreams = mediaSource.MediaStreams ? mediaSource.MediaStreams.filter(function(s) { return s.Type === 'Audio'; }) : [];
         subtitleStreams = mediaSource.MediaStreams ? mediaSource.MediaStreams.filter(function(s) { return s.Type === 'Subtitle'; }) : [];
         
+        // Initialize track indices to default tracks
+        currentAudioIndex = -1;
+        currentSubtitleIndex = -1;
+        for (var i = 0; i < audioStreams.length; i++) {
+            if (audioStreams[i].IsDefault) {
+                currentAudioIndex = i;
+                break;
+            }
+        }
+        if (currentAudioIndex < 0 && audioStreams.length > 0) {
+            currentAudioIndex = 0;
+        }
+        for (var i = 0; i < subtitleStreams.length; i++) {
+            if (subtitleStreams[i].IsDefault) {
+                currentSubtitleIndex = i;
+                break;
+            }
+        }
+        
         var isLiveTV = itemData && itemData.Type === 'TvChannel';
         var streamUrl;
         var mimeType;
@@ -795,7 +822,24 @@ var PlayerController = (function() {
         
         var safeVideoCodecs = ['h264', 'avc', 'hevc', 'h265', 'hev1', 'hvc1', 'dvhe', 'dvh1'];
         var safeAudioCodecs = ['aac', 'mp3', 'ac3', 'eac3', 'dts', 'truehd', 'flac'];
-        var safeContainers = ['mp4', 'mkv']; // Try direct play first, fallback to HLS if issues detected
+        var safeContainers = ['mp4', 'mkv'];
+        
+        var canDirectPlay = mediaSource.SupportsDirectPlay && 
+            mediaSource.Container && 
+            safeContainers.indexOf(mediaSource.Container.toLowerCase()) !== -1 &&
+            videoStream && videoStream.Codec && safeVideoCodecs.indexOf(videoStream.Codec.toLowerCase()) !== -1 &&
+            audioStream && audioStream.Codec && safeAudioCodecs.indexOf(audioStream.Codec.toLowerCase()) !== -1;
+        
+        var canTranscode = mediaSource.SupportsTranscoding;
+        
+        var shouldUseDirectPlay = false;
+        if (forcePlayMode === 'direct') {
+            shouldUseDirectPlay = canDirectPlay;
+        } else if (forcePlayMode === 'transcode') {
+            shouldUseDirectPlay = false;
+        } else {
+            shouldUseDirectPlay = canDirectPlay;
+        }
         
         // Check if media source has a pre-configured transcoding URL (for Live TV)
         if (mediaSource.TranscodingUrl) {
@@ -820,23 +864,15 @@ var PlayerController = (function() {
             
             mimeType = 'application/x-mpegURL';
             isTranscoding = true;
-        } else if (mediaSource.SupportsDirectPlay && 
-            mediaSource.Container && 
-            safeContainers.indexOf(mediaSource.Container.toLowerCase()) !== -1 &&
-            videoStream && videoStream.Codec && safeVideoCodecs.indexOf(videoStream.Codec.toLowerCase()) !== -1 &&
-            audioStream && audioStream.Codec && safeAudioCodecs.indexOf(audioStream.Codec.toLowerCase()) !== -1) {
-            
-            // Direct play for MP4/MKV files
-            // Signal that we'll use HTML5 video element (not Shaka) for direct files
+        } else if (shouldUseDirectPlay) {
             willUseDirectPlay = true;
-            
             streamUrl = auth.serverAddress + '/Videos/' + itemId + '/stream';
             params.append('Static', 'true');
             var container = mediaSource.Container || 'mp4';
             mimeType = 'video/' + container;
             useDirectPlay = true;
             isTranscoding = false;
-        } else if (mediaSource.SupportsTranscoding) {
+        } else if (canTranscode) {
             streamUrl = auth.serverAddress + '/Videos/' + itemId + '/master.m3u8';
             params.append('VideoCodec', 'h264');
             params.append('AudioCodec', 'aac');
@@ -1874,8 +1910,43 @@ var PlayerController = (function() {
                         }
                     }
                 }
+            } else {
+                // For non-Shaka, initialize to default track
+                initializeDefaultTrackIndices();
             }
         } catch (error) {
+        }
+    }
+    
+    function initializeDefaultTrackIndices() {
+        if (!itemData || !itemData.MediaSources || !itemData.MediaSources[0].MediaStreams) return;
+        
+        var mediaStreams = itemData.MediaSources[0].MediaStreams;
+        
+        // Initialize audio index to default track if not already set
+        if (currentAudioIndex < 0) {
+            var audioStreams = mediaStreams.filter(function(s) { return s.Type === 'Audio'; });
+            for (var i = 0; i < audioStreams.length; i++) {
+                if (audioStreams[i].IsDefault) {
+                    currentAudioIndex = i;
+                    break;
+                }
+            }
+            // If no default, use first track
+            if (currentAudioIndex < 0 && audioStreams.length > 0) {
+                currentAudioIndex = 0;
+            }
+        }
+        
+        // Initialize subtitle index to default track if not already set
+        if (currentSubtitleIndex === -1) {
+            var subtitleStreams = mediaStreams.filter(function(s) { return s.Type === 'Subtitle'; });
+            for (var i = 0; i < subtitleStreams.length; i++) {
+                if (subtitleStreams[i].IsDefault) {
+                    currentSubtitleIndex = i;
+                    break;
+                }
+            }
         }
     }
 
@@ -2691,6 +2762,70 @@ var PlayerController = (function() {
         closeModal();
     }
     
+    function showPlayModeSelector() {
+        if (!elements.playModeList || !elements.playModeModal) {
+            return;
+        }
+        
+        if (!currentMediaSource) {
+            return;
+        }
+        
+        var modes = [];
+        if (currentMediaSource.SupportsDirectPlay) {
+            modes.push({ label: 'Direct Play', value: 'direct' });
+        }
+        if (currentMediaSource.SupportsTranscoding) {
+            modes.push({ label: 'Transcode', value: 'transcode' });
+        }
+        
+        if (modes.length === 0) {
+            return;
+        }
+        
+        var listHtml = '';
+        modes.forEach(function(mode) {
+            var isSelected = forcePlayMode === mode.value;
+            listHtml += '<div class="track-item' + (isSelected ? ' selected' : '') + '" tabindex="0" data-mode="' + mode.value + '">';
+            listHtml += '<span class="track-name">' + mode.label + '</span>';
+            if (isSelected) {
+                listHtml += '<span class="selected-indicator">✓</span>';
+            }
+            listHtml += '</div>';
+        });
+        
+        elements.playModeList.innerHTML = listHtml;
+        elements.playModeModal.style.display = 'flex';
+        activeModal = 'playmode';
+        
+        modalFocusableItems = Array.from(elements.playModeList.querySelectorAll('.track-item'));
+        
+        currentModalFocusIndex = 0;
+        if (forcePlayMode) {
+            currentModalFocusIndex = modes.findIndex(function(m) { return m.value === forcePlayMode; });
+            if (currentModalFocusIndex < 0) currentModalFocusIndex = 0;
+        }
+        
+        if (modalFocusableItems.length > 0 && modalFocusableItems[currentModalFocusIndex]) {
+            modalFocusableItems[currentModalFocusIndex].focus();
+            modalFocusableItems[currentModalFocusIndex].classList.add('focused');
+        }
+        
+        modalFocusableItems.forEach(function(item) {
+            item.addEventListener('click', function(evt) {
+                evt.stopPropagation();
+                var mode = item.getAttribute('data-mode');
+                setPlayMode(mode);
+            });
+        });
+    }
+    
+    function setPlayMode(mode) {
+        forcePlayMode = mode;
+        hideControls();
+        closeModal();
+    }
+    
     /**
      * Start monitoring bitrate and update indicator
      */
@@ -2763,6 +2898,9 @@ var PlayerController = (function() {
         if (elements.qualityModal) {
             elements.qualityModal.style.display = 'none';
         }
+        if (elements.playModeModal) {
+            elements.playModeModal.style.display = 'none';
+        }
         if (elements.videoInfoModal) {
             elements.videoInfoModal.style.display = 'none';
         }
@@ -2771,6 +2909,12 @@ var PlayerController = (function() {
         }
         activeModal = null;
         modalFocusableItems = [];
+        
+        if (elements.playModeBtn && focusableButtons.indexOf(elements.playModeBtn) !== -1) {
+            setTimeout(function() {
+                elements.playModeBtn.focus();
+            }, 100);
+        }
     }
 
     /**
