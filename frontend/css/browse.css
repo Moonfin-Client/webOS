@@ -799,3 +799,172 @@ body {
 *:focus {
     outline: none;
 }
+
+/* Update Modal Styles */
+.update-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.update-modal {
+    background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+    border-radius: 16px;
+    padding: 40px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(0, 164, 220, 0.2);
+    border: 2px solid rgba(0, 164, 220, 0.3);
+    animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(30px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.update-modal-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.update-icon {
+    width: 48px;
+    height: 48px;
+    color: #00a4dc;
+    margin-right: 16px;
+    animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+.update-modal-title {
+    font-size: 28px;
+    font-weight: 600;
+    color: #ffffff;
+    margin: 0;
+}
+
+.update-modal-content {
+    margin-bottom: 32px;
+}
+
+.update-version-info {
+    font-size: 20px;
+    color: #e0e0e0;
+    margin-bottom: 20px;
+    line-height: 1.5;
+}
+
+.update-version-info strong {
+    color: #00a4dc;
+}
+
+.current-version {
+    font-size: 16px;
+    color: #888;
+}
+
+.update-release-notes {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    padding: 20px;
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.update-release-notes p {
+    font-size: 16px;
+    color: #b0b0b0;
+    line-height: 1.6;
+    margin: 0;
+}
+
+.update-release-notes strong {
+    color: #ffffff;
+}
+
+.update-modal-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+}
+
+.update-btn {
+    padding: 14px 48px;
+    font-size: 18px;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    outline: none;
+}
+
+.update-btn-primary {
+    background: linear-gradient(135deg, #00a4dc 0%, #0077b6 100%);
+    color: #ffffff;
+    box-shadow: 0 4px 15px rgba(0, 164, 220, 0.4);
+}
+
+.update-btn-primary:hover,
+.update-btn-primary:focus {
+    background: linear-gradient(135deg, #00b8f5 0%, #0088cc 100%);
+    transform: scale(1.08);
+    box-shadow: 0 6px 25px rgba(0, 164, 220, 0.6), 0 0 20px rgba(0, 164, 220, 0.4);
+}
+
+/* Custom scrollbar for release notes */
+.update-release-notes::-webkit-scrollbar {
+    width: 8px;
+}
+
+.update-release-notes::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+}
+
+.update-release-notes::-webkit-scrollbar-thumb {
+    background: rgba(0, 164, 220, 0.5);
+    border-radius: 4px;
+}
+
+.update-release-notes::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 164, 220, 0.7);
+}

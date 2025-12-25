@@ -69,6 +69,11 @@ var BrowseController = (function() {
                 
                 setTimeout(function() {
                     restoreFocusPosition();
+                    
+                    // Check for app updates silently after content loads
+                    if (typeof UpdateChecker !== 'undefined') {
+                        UpdateChecker.init();
+                    }
                 }, CONTENT_LOAD_DELAY_MS);
             }
         }, NAVBAR_CHECK_INTERVAL_MS);
@@ -210,6 +215,11 @@ var BrowseController = (function() {
      */
     function handleKeyDown(evt) {
         evt = evt || window.event;
+        
+        // If update modal is open, let it handle all key events
+        if (typeof UpdateChecker !== 'undefined' && UpdateChecker.isOpen()) {
+            return;
+        }
         
         if (evt.keyCode === KeyCodes.BACK) {
             if (focusManager.inFeaturedBanner) {
