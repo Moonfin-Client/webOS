@@ -103,7 +103,11 @@ var SettingsController = (function() {
      * Loads settings, displays user info, and sets up navigation
      */
     function init() {
-        auth = JellyfinAPI.getStoredAuth();
+        // Use MultiServerManager if available, otherwise fall back to JellyfinAPI
+        auth = typeof MultiServerManager !== 'undefined' 
+            ? MultiServerManager.getAuthForPage() 
+            : JellyfinAPI.getStoredAuth();
+        
         if (!auth) {
             window.location.href = 'login.html';
             return;
@@ -1244,71 +1248,16 @@ var SettingsController = (function() {
     /**
      * Augment home rows with per-server variants when in multi-server mode
      * @param {Array} baseRows - Base home rows configuration
-     * @returns {Array} Augmented rows with per-server variants
+     * @returns {Array} Same rows (aggregation happens at render time with Android TV pattern)
      * @private
      */
     function augmentRowsForMultiServer(baseRows) {
-        if (typeof MultiServerManager === 'undefined') {
-            return baseRows;
-        }
-        
-        var servers = MultiServerManager.getAllServersArray();
-        if (!servers || servers.length <= 1) {
-            return baseRows;
-        }
-        
-        var augmentedRows = [];
-        var rowTypesToSplit = ['resume', 'nextup', 'latest-movies', 'latest-shows', 'latest-music'];
-        var baseOrder = 1000; // Start server-specific rows at high order
-        
-        // Add base rows, but skip the ones that will be split per-server
-        baseRows.forEach(function(row) {
-            if (rowTypesToSplit.indexOf(row.id) === -1) {
-                // This row type doesn't split, add it as-is
-                augmentedRows.push(JSON.parse(JSON.stringify(row)));
-            }
-        });
-        
-        // Add per-server variants for splittable row types
-        var perServerRows = [];
-        servers.forEach(function(server) {
-            rowTypesToSplit.forEach(function(baseId) {
-                // Find the base row
-                var baseRow = baseRows.find(function(r) { return r.id === baseId; });
-                if (!baseRow) return;
-                
-                // Create per-server variant
-                var serverId = 'server-' + server.id + '-' + baseId;
-                var serverRow = {
-                    id: serverId,
-                    baseId: baseId,
-                    serverId: server.id,
-                    serverName: server.name,
-                    name: baseRow.name + ' (' + server.name + ')',
-                    enabled: baseRow.enabled, // Inherit enabled state from base row
-                    order: baseRow.order
-                };
-                perServerRows.push(serverRow);
-            });
-        });
-        
-        // Sort per-server rows: first by base order, then alphabetically by server name, then by base row name
-        perServerRows.sort(function(a, b) {
-            if (a.order !== b.order) return a.order - b.order;
-            var serverCompare = a.serverName.localeCompare(b.serverName);
-            if (serverCompare !== 0) return serverCompare;
-            return a.name.localeCompare(b.name);
-        });
-        
-        // Add sorted per-server rows to result
-        augmentedRows = augmentedRows.concat(perServerRows);
-        
-        // Final sort by order
-        augmentedRows.sort(function(a, b) {
-            return a.order - b.order;
-        });
-        
-        return augmentedRows;
+        // With the new aggregated approach (Android TV pattern),
+        // we no longer need to split rows per-server in settings UI.
+        // A single "Continue Watching" row aggregates items from ALL servers.
+        // A single "Next Up" row aggregates items from ALL servers.
+        // Latest media rows show libraries with server names appended when needed.
+        return baseRows;
     }
 
     /**

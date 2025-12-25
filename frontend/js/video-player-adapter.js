@@ -9,6 +9,24 @@
  */
 
 /**
+ * Media Error Types
+ */
+const MediaError = {
+    NETWORK_ERROR: 'NetworkError',
+    MEDIA_DECODE_ERROR: 'MediaDecodeError',
+    MEDIA_NOT_SUPPORTED: 'MediaNotSupported',
+    FATAL_HLS_ERROR: 'FatalHlsError',
+    SERVER_ERROR: 'ServerError',
+    NO_MEDIA_ERROR: 'NoMediaError'
+};
+
+/**
+ * HLS.js error recovery timing
+ */
+let recoverDecodingErrorDate;
+let recoverSwapAudioCodecDate;
+
+/**
  * Base class for video player adapters
  */
 class VideoPlayerAdapter {
@@ -562,6 +580,58 @@ class ShakaPlayerAdapter extends VideoPlayerAdapter {
         await super.destroy();
     }
 
+    /**
+     * Get playback statistics
+     * @returns {Object} Playback stats including dropped/corrupted frames
+     */
+    getStats() {
+        const stats = {
+            categories: []
+        };
+
+        if (!this.player || !this.videoElement) {
+            return stats;
+        }
+
+        const shakaStats = this.player.getStats();
+        const videoCategory = {
+            type: 'video',
+            stats: []
+        };
+
+        // Video resolution
+        if (this.videoElement.videoWidth && this.videoElement.videoHeight) {
+            videoCategory.stats.push({
+                label: 'Video Resolution',
+                value: `${this.videoElement.videoWidth}x${this.videoElement.videoHeight}`
+            });
+        }
+
+        // Dropped frames (from HTMLVideoElement API)
+        if (this.videoElement.getVideoPlaybackQuality) {
+            const quality = this.videoElement.getVideoPlaybackQuality();
+            videoCategory.stats.push({
+                label: 'Dropped Frames',
+                value: quality.droppedVideoFrames || 0
+            });
+            videoCategory.stats.push({
+                label: 'Corrupted Frames',
+                value: quality.corruptedVideoFrames || 0
+            });
+        }
+
+        // Shaka-specific stats
+        if (shakaStats.estimatedBandwidth) {
+            videoCategory.stats.push({
+                label: 'Estimated Bandwidth',
+                value: `${(shakaStats.estimatedBandwidth / 1000000).toFixed(2)} Mbps`
+            });
+        }
+
+        stats.categories.push(videoCategory);
+        return stats;
+    }
+
     getName() {
         return 'ShakaPlayer';
     }
@@ -780,12 +850,57 @@ class WebOSVideoAdapter extends VideoPlayerAdapter {
 }
 
 /**
- * HTML5 Video Adapter (Fallback)
+ * Handle HLS.js media errors with retry logic
+ * @param {Object} hlsPlayer - HLS.js player instance
+ * @returns {boolean} True if recovery attempted, false if exhausted
+ */
+function handleHlsJsMediaError(hlsPlayer) {
+    if (!hlsPlayer) return false;
+
+    const now = performance.now ? performance.now() : Date.now();
+
+    // First attempt: recover from decoding error
+    if (!recoverDecodingErrorDate || (now - recoverDecodingErrorDate) > 3000) {
+        recoverDecodingErrorDate = now;
+        console.log('[HLS Recovery] Attempting to recover from media error...');
+        hlsPlayer.recoverMediaError();
+        return true;
+    } 
+    // Second attempt: swap audio codec and recover
+    else if (!recoverSwapAudioCodecDate || (now - recoverSwapAudioCodecDate) > 3000) {
+        recoverSwapAudioCodecDate = now;
+        console.log('[HLS Recovery] Swapping audio codec and recovering...');
+        hlsPlayer.swapAudioCodec();
+        hlsPlayer.recoverMediaError();
+        return true;
+    } 
+    // Failed: cannot recover
+    else {
+        console.error('[HLS Recovery] Cannot recover, last attempts failed');
+        return false;
+    }
+}
+
+/**
+ * Get cross-origin value based on media source
+ * @param {Object} mediaSource - Media source info
+ * @returns {string|null} Cross-origin value
+ */
+function getCrossOriginValue(mediaSource) {
+    if (mediaSource && mediaSource.IsRemote) {
+        return null;
+    }
+    return 'anonymous';
+}
+
+/**
+ * HTML5 Video Element Adapter (Fallback)
  */
 class HTML5VideoAdapter extends VideoPlayerAdapter {
     constructor(videoElement) {
         super(videoElement);
         this.initialized = false;
+        this.hlsPlayer = null;
     }
 
     async initialize() {
@@ -801,8 +916,21 @@ class HTML5VideoAdapter extends VideoPlayerAdapter {
         console.log('[HTML5Adapter] Loading:', url.substring(0, 80) + '...');
 
         try {
+            // Check if HLS stream and HLS.js is available
+            const isHLS = url.includes('.m3u8') || (options.mimeType && options.mimeType.includes('mpegURL'));
+            
+            if (isHLS && typeof Hls !== 'undefined' && Hls.isSupported()) {
+                return this.loadWithHlsJs(url, options);
+            }
+
             // Clear existing sources
             this.videoElement.innerHTML = '';
+            
+            // Set cross-origin if needed
+            const crossOrigin = getCrossOriginValue(options.mediaSource);
+            if (crossOrigin) {
+                this.videoElement.crossOrigin = crossOrigin;
+            }
             
             // Create source element
             const source = document.createElement('source');
@@ -843,6 +971,76 @@ class HTML5VideoAdapter extends VideoPlayerAdapter {
             this.emit('error', error);
             throw error;
         }
+    }
+
+    /**
+     * Load HLS stream using HLS.js with error recovery
+     * @private
+     */
+    loadWithHlsJs(url, options = {}) {
+        return new Promise((resolve, reject) => {
+            // Destroy existing HLS player
+            if (this.hlsPlayer) {
+                try {
+                    this.hlsPlayer.destroy();
+                } catch (e) {
+                    console.warn('[HTML5+HLS.js] Error destroying old player:', e);
+                }
+                this.hlsPlayer = null;
+            }
+
+            const hls = new Hls({
+                manifestLoadingTimeOut: 20000,
+                startPosition: options.startPosition || 0,
+                xhrSetup: (xhr) => {
+                    xhr.withCredentials = options.withCredentials || false;
+                }
+            });
+
+            hls.loadSource(url);
+            hls.attachMedia(this.videoElement);
+
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                console.log('[HTML5+HLS.js] Manifest parsed, starting playback');
+                this.videoElement.play().then(resolve).catch(reject);
+            });
+
+            hls.on(Hls.Events.ERROR, (event, data) => {
+                console.error('[HTML5+HLS.js] Error:', data.type, data.details, 'fatal:', data.fatal);
+
+                if (data.fatal) {
+                    switch (data.type) {
+                        case Hls.ErrorTypes.NETWORK_ERROR:
+                            if (data.response && data.response.code >= 400) {
+                                hls.destroy();
+                                this.emit('error', { type: MediaError.SERVER_ERROR, details: data });
+                                reject(new Error(MediaError.SERVER_ERROR));
+                            } else {
+                                console.log('[HTML5+HLS.js] Network error, attempting recovery...');
+                                hls.startLoad();
+                            }
+                            break;
+                        case Hls.ErrorTypes.MEDIA_ERROR:
+                            if (handleHlsJsMediaError(hls)) {
+                                console.log('[HTML5+HLS.js] Media error recovery attempted');
+                            } else {
+                                hls.destroy();
+                                this.emit('error', { type: MediaError.MEDIA_DECODE_ERROR, details: data });
+                                reject(new Error(MediaError.MEDIA_DECODE_ERROR));
+                            }
+                            break;
+                        default:
+                            hls.destroy();
+                            this.emit('error', { type: MediaError.FATAL_HLS_ERROR, details: data });
+                            reject(new Error(MediaError.FATAL_HLS_ERROR));
+                            break;
+                    }
+                }
+            });
+
+            this.hlsPlayer = hls;
+            this.emit('loaded', { url });
+        });
     }
 
     selectAudioTrack(trackId) {
@@ -919,7 +1117,60 @@ class HTML5VideoAdapter extends VideoPlayerAdapter {
         return tracks;
     }
 
+    /**
+     * Get playback statistics
+     * @returns {Object} Playback stats
+     */
+    getStats() {
+        const stats = {
+            categories: []
+        };
+
+        if (!this.videoElement) {
+            return stats;
+        }
+
+        const videoCategory = {
+            type: 'video',
+            stats: []
+        };
+
+        // Video resolution
+        if (this.videoElement.videoWidth && this.videoElement.videoHeight) {
+            videoCategory.stats.push({
+                label: 'Video Resolution',
+                value: `${this.videoElement.videoWidth}x${this.videoElement.videoHeight}`
+            });
+        }
+
+        // Dropped/corrupted frames
+        if (this.videoElement.getVideoPlaybackQuality) {
+            const quality = this.videoElement.getVideoPlaybackQuality();
+            videoCategory.stats.push({
+                label: 'Dropped Frames',
+                value: quality.droppedVideoFrames || 0
+            });
+            videoCategory.stats.push({
+                label: 'Corrupted Frames',
+                value: quality.corruptedVideoFrames || 0
+            });
+        }
+
+        stats.categories.push(videoCategory);
+        return stats;
+    }
+
     async destroy() {
+        // Cleanup HLS.js player
+        if (this.hlsPlayer) {
+            try {
+                this.hlsPlayer.destroy();
+            } catch (err) {
+                console.error('[HTML5VideoAdapter] Error destroying HLS player:', err);
+            }
+            this.hlsPlayer = null;
+        }
+
         this.videoElement.innerHTML = '';
         this.initialized = false;
         await super.destroy();

@@ -39,7 +39,11 @@
      * Initialize the navbar, load user info, libraries, and set up handlers
      */
     function initNavbar() {
-        var auth = JellyfinAPI.getStoredAuth();
+        // Use MultiServerManager if available, otherwise fall back to JellyfinAPI
+        var auth = typeof MultiServerManager !== 'undefined' 
+            ? MultiServerManager.getAuthForPage() 
+            : JellyfinAPI.getStoredAuth();
+        
         if (!auth) return;
         
         var userAvatar = document.getElementById('userAvatar');
@@ -181,7 +185,11 @@
      * Load user libraries and add them to the navbar
      */
     function loadUserLibraries() {
-        var auth = JellyfinAPI.getStoredAuth();
+        // Use MultiServerManager if available, otherwise fall back to JellyfinAPI
+        var auth = typeof MultiServerManager !== 'undefined' 
+            ? MultiServerManager.getAuthForPage() 
+            : JellyfinAPI.getStoredAuth();
+        
         if (!auth) return;
         
         // Check if libraries are already loaded to prevent duplicates
@@ -262,8 +270,9 @@
                 var label = document.createElement('span');
                 label.className = 'nav-label';
                 
-                // If multiple servers, show server name in tooltip or badge
-                if (library.ServerName && MultiServerManager.getServerCount() > 1) {
+                // Only show server name if there are actually multiple servers
+                var serverCount = typeof MultiServerManager !== 'undefined' ? MultiServerManager.getServerCount() : 0;
+                if (library.ServerName && serverCount > 1) {
                     label.textContent = library.Name + ' (' + library.ServerName + ')';
                     btn.title = library.Name + ' - ' + library.ServerName;
                 } else {

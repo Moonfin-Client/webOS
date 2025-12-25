@@ -46,8 +46,8 @@ var JellyfinAPI = (function() {
 
     let deviceId = null;
     const deviceName = 'LG Smart TV';
-    const appName = 'Jellyfin for webOS';
-    const appVersion = '1.2.2';
+    const appName = 'Moonfin for webOS';
+    const appVersion = '1.0.0';
 
     const SERVER_DISCOVERY_TIMEOUT_MS = 5000;
     const LAN_SCAN_TIMEOUT_MS = 2000;
@@ -279,9 +279,20 @@ var JellyfinAPI = (function() {
                 'X-Emby-Authorization': getAuthHeader()
             },
             success: function(response) {
+                // Use ServerName if available, otherwise extract hostname from URL
+                var serverName = response.serverName;
+                if (!serverName || serverName.trim() === '') {
+                    try {
+                        var url = new URL(address);
+                        serverName = url.hostname;
+                    } catch (e) {
+                        serverName = 'Jellyfin Server';
+                    }
+                }
+                
                 if (callback) callback(null, {
                     address: address,
-                    name: response.ServerName || 'Jellyfin Server',
+                    name: serverName,
                     id: response.Id,
                     version: response.Version,
                     operatingSystem: response.OperatingSystem

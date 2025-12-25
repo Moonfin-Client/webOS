@@ -43,7 +43,11 @@ var BrowseController = (function() {
      */
     function init() {
         
-        auth = JellyfinAPI.getStoredAuth();
+        // Use MultiServerManager if available, otherwise fall back to JellyfinAPI
+        auth = typeof MultiServerManager !== 'undefined' 
+            ? MultiServerManager.getAuthForPage() 
+            : JellyfinAPI.getStoredAuth();
+        
         if (!auth || !auth.serverAddress || !auth.userId) {
             window.location.href = 'login.html';
             return;
@@ -1011,13 +1015,10 @@ var BrowseController = (function() {
                 }
             }
             
-            // Load home rows settings
             var homeRowsSettings = getHomeRowsSettings();
             
-            // Check if multi-server mode is active
             var isMultiServer = typeof MultiServerManager !== 'undefined' && MultiServerManager.getServerCount() > 1;
             
-            // Augment settings with per-server rows if in multi-server mode
             if (isMultiServer) {
                 homeRowsSettings = augmentHomeRowsForMultiServer(homeRowsSettings);
             }
@@ -1025,7 +1026,6 @@ var BrowseController = (function() {
             
             var rowsToLoad = [];
             
-            // Check which library types are available
             var hasTVShows = views.Items.some(function(view) {
                 return view.CollectionType && view.CollectionType.toLowerCase() === 'tvshows';
             });
@@ -1038,19 +1038,11 @@ var BrowseController = (function() {
                 return view.CollectionType && view.CollectionType.toLowerCase() === 'music';
             });
             
-            // Helper function to check if a row type is enabled
-            /**
-             * Check if a specific home row type is enabled in settings
-             * @param {string} rowId - Row identifier (e.g., 'resume', 'nextup', or 'server-X-resume')
-             * @returns {boolean} True if row is enabled, defaults to true if not found
-             * @private
-             */
             function isRowEnabled(rowId) {
                 var setting = homeRowsSettings.find(function(r) { return r.id === rowId; });
                 return setting ? setting.enabled : true;
             }
             
-            // Get merge setting from storage
             var storedSettings = storage.get('jellyfin_settings');
             var mergeContinueWatching = false;
             if (storedSettings) {
@@ -1066,51 +1058,35 @@ var BrowseController = (function() {
             var isMultiServer = typeof MultiServerManager !== 'undefined' && MultiServerManager.getServerCount() > 1;
             
             if (isMultiServer) {
-                // Multi-server mode: Create separate rows for each server
-                var allServers = MultiServerManager.getAllServersArray();
-                
-                allServers.forEach(function(server) {
-                    var serverRowPrefix = 'server-' + server.id + '-';
-                    
-                    if (mergeContinueWatching && isRowEnabled(serverRowPrefix + 'resume')) {
-                        // Merged row per server
-                        rowsToLoad.push({
-                            title: 'Continue Watching (' + server.name + ')',
-                            type: 'merged-continue-watching',
-                            settingId: serverRowPrefix + 'resume',
-                            serverId: server.id,
-                            userId: server.userId,
-                            order: getRowOrder(serverRowPrefix + 'resume', homeRowsSettings)
-                        });
-                    } else {
-                        // Separate rows per server
-                        if (isRowEnabled(serverRowPrefix + 'resume')) {
-                            rowsToLoad.push({
-                                title: 'Continue Watching (' + server.name + ')',
-                                type: 'resume',
-                                settingId: serverRowPrefix + 'resume',
-                                serverId: server.id,
-                                userId: server.userId,
-                                order: getRowOrder(serverRowPrefix + 'resume', homeRowsSettings)
-                            });
-                        }
-                        
-                        if (isRowEnabled(serverRowPrefix + 'nextup') && hasTVShows) {
-                            rowsToLoad.push({
-                                title: 'Next Up (' + server.name + ')',
-                                type: 'nextup',
-                                settingId: serverRowPrefix + 'nextup',
-                                serverId: server.id,
-                                userId: server.userId,
-                                order: getRowOrder(serverRowPrefix + 'nextup', homeRowsSettings)
-                            });
-                        }
-                    }
-                });
-            } else {
-                // Single server mode: Original behavior
                 if (mergeContinueWatching && isRowEnabled('resume')) {
-                    // Merged row: combines Resume and Next Up
+                    rowsToLoad.push({
+                        title: 'Continue Watching',
+                        type: 'aggregated-merged-continue-watching',
+                        settingId: 'resume',
+                        order: Math.min(getRowOrder('resume', homeRowsSettings), getRowOrder('nextup', homeRowsSettings))
+                    });
+                } else {
+                    // Separate rows
+                    if (isRowEnabled('resume')) {
+                        rowsToLoad.push({
+                            title: 'Continue Watching',
+                            type: 'aggregated-continue-watching',
+                            settingId: 'resume',
+                            order: getRowOrder('resume', homeRowsSettings)
+                        });
+                    }
+                    
+                    if (isRowEnabled('nextup') && hasTVShows) {
+                        rowsToLoad.push({
+                            title: 'Next Up',
+                            type: 'aggregated-nextup',
+                            settingId: 'nextup',
+                            order: getRowOrder('nextup', homeRowsSettings)
+                        });
+                    }
+                }
+            } else {
+                if (mergeContinueWatching && isRowEnabled('resume')) {
                     rowsToLoad.push({ 
                         title: 'Continue Watching', 
                         type: 'merged-continue-watching',
@@ -1128,7 +1104,6 @@ var BrowseController = (function() {
                         });
                     }
                     
-                    // Add Next Up if enabled and TV shows exist
                     if (isRowEnabled('nextup') && hasTVShows) {
                         rowsToLoad.push({ 
                             title: 'Next Up', 
@@ -1140,8 +1115,6 @@ var BrowseController = (function() {
                 }
             }
             
-            // Live TV Support: Check for Live TV availability
-            // Add timeout to prevent hanging
             var liveTVTimeout = setTimeout(function() {
                 continueLoadingRows();
             }, 5000);
@@ -1151,8 +1124,6 @@ var BrowseController = (function() {
                 clearTimeout(liveTVTimeout);
                 
                 if (!liveTVErr && liveTVInfo && liveTVInfo.available) {
-                    
-                    // Add Live TV Channels row
                     if (isRowEnabled('livetv-channels')) {
                         rowsToLoad.push({ 
                             title: 'Live TV Channels', 
@@ -1686,10 +1657,94 @@ var BrowseController = (function() {
             return;
         }
         
-        // Use specialized API functions for specific row types
+        if (rowDef.type === 'aggregated-continue-watching') {
+            if (typeof MultiServerRows !== 'undefined') {
+                MultiServerRows.getContinueWatching(50).then(function(items) {
+                    if (!items || items.length === 0) {
+                        safeCallback(false);
+                        return;
+                    }
+                    renderRow(rowDef.title, items, 'resume', rowDef.order);
+                    safeCallback(true);
+                }).catch(function(err) {
+                    console.error('Error loading aggregated Continue Watching:', err);
+                    safeCallback(false);
+                });
+            } else {
+                safeCallback(false);
+            }
+            return;
+        }
+        
+        if (rowDef.type === 'aggregated-merged-continue-watching') {
+            if (typeof MultiServerRows !== 'undefined') {
+                Promise.all([
+                    MultiServerRows.getContinueWatching(50),
+                    MultiServerRows.getNextUp(50)
+                ]).then(function(results) {
+                    var resumeItems = results[0] || [];
+                    var nextUpItems = results[1] || [];
+                    
+                    var seenIds = {};
+                    var allItems = [];
+                    
+                    resumeItems.forEach(function(item) {
+                        if (!seenIds[item.Id]) {
+                            seenIds[item.Id] = true;
+                            allItems.push(item);
+                        }
+                    });
+                    
+                    nextUpItems.forEach(function(item) {
+                        if (!seenIds[item.Id]) {
+                            seenIds[item.Id] = true;
+                            allItems.push(item);
+                        }
+                    });
+                    
+                    allItems.sort(function(a, b) {
+                        var dateA = (a.UserData && a.UserData.LastPlayedDate) ? new Date(a.UserData.LastPlayedDate) : new Date(0);
+                        var dateB = (b.UserData && b.UserData.LastPlayedDate) ? new Date(b.UserData.LastPlayedDate) : new Date(0);
+                        return dateB - dateA;
+                    });
+                    
+                    if (allItems.length === 0) {
+                        safeCallback(false);
+                        return;
+                    }
+                    
+                    renderRow(rowDef.title, allItems, 'resume', rowDef.order);
+                    safeCallback(true);
+                }).catch(function(err) {
+                    console.error('Error loading aggregated merged Continue Watching:', err);
+                    safeCallback(false);
+                });
+            } else {
+                safeCallback(false);
+            }
+            return;
+        }
+        
+        if (rowDef.type === 'aggregated-nextup') {
+            if (typeof MultiServerRows !== 'undefined') {
+                MultiServerRows.getNextUp(50).then(function(items) {
+                    if (!items || items.length === 0) {
+                        safeCallback(false);
+                        return;
+                    }
+                    renderRow(rowDef.title, items, 'nextup', rowDef.order);
+                    safeCallback(true);
+                }).catch(function(err) {
+                    console.error('Error loading aggregated Next Up:', err);
+                    safeCallback(false);
+                });
+            } else {
+                safeCallback(false);
+            }
+            return;
+        }
+        
         if (rowDef.type === 'resume') {
-            
-            // Check if this is a multi-server row (has serverId)
             if (rowDef.serverId && typeof MultiServerManager !== 'undefined') {
                 var server = MultiServerManager.getServer(rowDef.serverId, rowDef.userId);
                 if (!server) {
@@ -1697,7 +1752,6 @@ var BrowseController = (function() {
                     return;
                 }
                 
-                // Use server-specific API call
                 JellyfinAPI.getResumeItems(server.url, server.userId, server.accessToken, function(err, data) {
                     if (err || !data || !data.Items || data.Items.length === 0) {
                         safeCallback(false);
@@ -1714,7 +1768,6 @@ var BrowseController = (function() {
                     safeCallback(true);
                 });
             } else {
-                // Single server mode - use current auth
                 JellyfinAPI.getResumeItems(auth.serverAddress, auth.userId, auth.accessToken, function(err, data) {
                     if (err || !data || !data.Items || data.Items.length === 0) {
                         safeCallback(false);
@@ -1729,7 +1782,6 @@ var BrowseController = (function() {
         }
         
         if (rowDef.type === 'merged-continue-watching') {
-            // Check if this is a multi-server row (has serverId)
             if (rowDef.serverId && typeof MultiServerManager !== 'undefined') {
                 var server = MultiServerManager.getServer(rowDef.serverId, rowDef.userId);
                 if (!server) {
@@ -1737,14 +1789,12 @@ var BrowseController = (function() {
                     return;
                 }
                 
-                // Use server-specific API call
                 JellyfinAPI.getMergedContinueWatching(server.url, server.userId, server.accessToken, function(err, data) {
                     if (err || !data || !data.Items || data.Items.length === 0) {
                         safeCallback(false);
                         return;
                     }
                     
-                    // Attach serverUrl and serverId to each item for multi-server routing
                     data.Items.forEach(function(item) {
                         item.ServerUrl = server.url;
                         item.MultiServerId = server.id;
@@ -1754,7 +1804,6 @@ var BrowseController = (function() {
                     safeCallback(true);
                 });
             } else {
-                // Single server mode - use current auth
                 JellyfinAPI.getMergedContinueWatching(auth.serverAddress, auth.userId, auth.accessToken, function(err, data) {
                     if (err || !data || !data.Items || data.Items.length === 0) {
                         safeCallback(false);
@@ -1769,8 +1818,6 @@ var BrowseController = (function() {
         }
         
         if (rowDef.type === 'nextup') {
-            
-            // Check if this is a multi-server row (has serverId)
             if (rowDef.serverId && typeof MultiServerManager !== 'undefined') {
                 var server = MultiServerManager.getServer(rowDef.serverId, rowDef.userId);
                 if (!server) {
@@ -1778,14 +1825,12 @@ var BrowseController = (function() {
                     return;
                 }
                 
-                // Use server-specific API call
                 JellyfinAPI.getNextUpItems(server.url, server.userId, server.accessToken, function(err, data) {
                     if (err || !data || !data.Items || data.Items.length === 0) {
                         safeCallback(false);
                         return;
                     }
                     
-                    // Attach serverUrl and serverId to each item for multi-server routing
                     data.Items.forEach(function(item) {
                         item.ServerUrl = server.url;
                         item.MultiServerId = server.id;
@@ -1795,7 +1840,6 @@ var BrowseController = (function() {
                     safeCallback(true);
                 });
             } else {
-                // Single server mode - use current auth
                 JellyfinAPI.getNextUpItems(auth.serverAddress, auth.userId, auth.accessToken, function(err, data) {
                     if (err || !data || !data.Items || data.Items.length === 0) {
                         safeCallback(false);
@@ -1810,8 +1854,6 @@ var BrowseController = (function() {
         }
         
         if (rowDef.type === 'latest' && rowDef.parentId) {
-            
-            // Check if this is a multi-server row (has serverId)
             if (rowDef.serverId && typeof MultiServerManager !== 'undefined') {
                 var server = MultiServerManager.getServer(rowDef.serverId, rowDef.userId);
                 if (!server) {
@@ -1819,7 +1861,6 @@ var BrowseController = (function() {
                     return;
                 }
                 
-                // Latest Media - use server-specific API call
                 var includeTypes = rowDef.itemType || null;
                 JellyfinAPI.getLatestMedia(server.url, server.userId, server.accessToken,
                     rowDef.parentId, includeTypes, function(err, data) {
@@ -1828,7 +1869,6 @@ var BrowseController = (function() {
                         return;
                     }
                     
-                    // Attach serverUrl and serverId to each item for multi-server routing
                     data.Items.forEach(function(item) {
                         item.ServerUrl = server.url;
                         item.MultiServerId = server.id;
@@ -1838,7 +1878,6 @@ var BrowseController = (function() {
                     safeCallback(true);
                 });
             } else {
-                // Single server mode - use current auth
                 var includeTypes = rowDef.itemType || null;
                 JellyfinAPI.getLatestMedia(auth.serverAddress, auth.userId, auth.accessToken,
                     rowDef.parentId, includeTypes, function(err, data) {
@@ -2719,7 +2758,10 @@ var BrowseController = (function() {
 
     function reloadCurrentView() {
         if (!auth) {
-            auth = JellyfinAPI.getStoredAuth();
+            // Use MultiServerManager if available, otherwise fall back to JellyfinAPI
+            auth = typeof MultiServerManager !== 'undefined' 
+                ? MultiServerManager.getAuthForPage() 
+                : JellyfinAPI.getStoredAuth();
             if (!auth) return;
         }
         
@@ -2789,70 +2831,19 @@ var BrowseController = (function() {
     }
 
     /**
-     * Augment home rows with per-server variants when in multi-server mode
-     * This mirrors the logic in settings.js for consistent behavior
+     * Augment home rows for multi-server mode
+     * Now uses aggregated rows (Android TV pattern) instead of per-server rows
      * @param {Array} baseRows - Base home rows configuration
-     * @returns {Array} Augmented rows with per-server variants
+     * @returns {Array} Same rows (aggregation happens at render time)
      * @private
      */
     function augmentHomeRowsForMultiServer(baseRows) {
-        if (typeof MultiServerManager === 'undefined') {
-            return baseRows;
-        }
-        
-        var servers = MultiServerManager.getAllServersArray();
-        if (!servers || servers.length <= 1) {
-            return baseRows;
-        }
-        
-        var augmentedRows = [];
-        var rowTypesToSplit = ['resume', 'nextup', 'latest-movies', 'latest-shows', 'latest-music'];
-        
-        // Add base rows that don't split per-server
-        baseRows.forEach(function(row) {
-            if (rowTypesToSplit.indexOf(row.id) === -1) {
-                augmentedRows.push(JSON.parse(JSON.stringify(row)));
-            }
-        });
-        
-        // Add per-server variants for splittable row types
-        var perServerRows = [];
-        servers.forEach(function(server) {
-            rowTypesToSplit.forEach(function(baseId) {
-                var baseRow = baseRows.find(function(r) { return r.id === baseId; });
-                if (!baseRow) return;
-                
-                var serverId = 'server-' + server.id + '-' + baseId;
-                var serverRow = {
-                    id: serverId,
-                    baseId: baseId,
-                    serverId: server.id,
-                    serverName: server.name,
-                    name: baseRow.name + ' (' + server.name + ')',
-                    enabled: baseRow.enabled,
-                    order: baseRow.order
-                };
-                perServerRows.push(serverRow);
-            });
-        });
-        
-        // Sort per-server rows: first by base order, then alphabetically by server name, then by base row name
-        perServerRows.sort(function(a, b) {
-            if (a.order !== b.order) return a.order - b.order;
-            var serverCompare = a.serverName.localeCompare(b.serverName);
-            if (serverCompare !== 0) return serverCompare;
-            return a.name.localeCompare(b.name);
-        });
-        
-        // Add sorted per-server rows to result
-        augmentedRows = augmentedRows.concat(perServerRows);
-        
-        // Final sort by order (for non-splittable rows mixed with per-server rows)
-        augmentedRows.sort(function(a, b) {
-            return a.order - b.order;
-        });
-        
-        return augmentedRows;
+        // With the new aggregated approach (Android TV pattern),
+        // we no longer need to split rows per-server.
+        // A single "Continue Watching" row aggregates items from ALL servers.
+        // A single "Next Up" row aggregates items from ALL servers.
+        // Latest media rows are handled separately via ConnectionPool.
+        return baseRows;
     }
 
     /**

@@ -6,7 +6,11 @@
     
     function init() {
         
-        auth = JellyfinAPI.getStoredAuth();
+        // Use MultiServerManager if available, otherwise fall back to JellyfinAPI
+        auth = typeof MultiServerManager !== 'undefined' 
+            ? MultiServerManager.getAuthForPage() 
+            : JellyfinAPI.getStoredAuth();
+        
         if (!auth) {
             window.location.href = 'login.html';
             return;

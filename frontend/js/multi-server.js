@@ -590,9 +590,25 @@ var MultiServerManager = (function() {
                     return {
                         serverAddress: server.url,
                         userId: selectedUser.userId,
-                        accessToken: selectedUser.user.accessToken
+                        accessToken: selectedUser.user.accessToken,
+                        username: selectedUser.user.username,
+                        serverName: server.name
                     };
                 }
+            }
+        }
+        
+        // If no serverId in URL but multi-server is active, use active server
+        if (typeof MultiServerManager !== 'undefined' && getServerCount() > 0) {
+            var activeServer = getActiveServer();
+            if (activeServer) {
+                return {
+                    serverAddress: activeServer.url,
+                    userId: activeServer.userId,
+                    accessToken: activeServer.accessToken,
+                    username: activeServer.username,
+                    serverName: activeServer.name
+                };
             }
         }
         
