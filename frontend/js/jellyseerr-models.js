@@ -29,10 +29,10 @@ var JellyseerrModels = (function() {
 
         getIcon: function(status) {
             switch (status) {
-                case this.PENDING: return '⏳';
-                case this.APPROVED: return '✓';
-                case this.DECLINED: return '✗';
-                case this.AVAILABLE: return '✓';
+                case this.PENDING: return '<img src="assets/icons/options.png" alt="" class="emoji-icon">';
+                case this.APPROVED: return '<img src="assets/icons/check.png" alt="" class="emoji-icon">';
+                case this.DECLINED: return '<img src="assets/icons/warning.png" alt="" class="emoji-icon">';
+                case this.AVAILABLE: return '<img src="assets/icons/check.png" alt="" class="emoji-icon">';
                 default: return '?';
             }
         },

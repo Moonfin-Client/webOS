@@ -179,12 +179,12 @@ var BrowseByController = (function() {
                 
                 // If no stored session, initialize with server URL and attempt auto-login
                 console.log('[BrowseBy] No stored session, initializing with server URL');
-                var settings = storage.get('jellyfin_settings');
+                var settings = storage.getUserPreference('jellyfin_settings', null);
                 if (!settings) {
                     return Promise.reject(new Error('No Jellyfin settings found'));
                 }
                 
-                var parsedSettings = JSON.parse(settings);
+                var parsedSettings = typeof settings === 'string' ? JSON.parse(settings) : settings;
                 if (!parsedSettings.jellyseerrUrl) {
                     return Promise.reject(new Error('No Jellyseerr URL configured'));
                 }
@@ -495,7 +495,7 @@ var BrowseByController = (function() {
         } else {
             var placeholder = document.createElement('div');
             placeholder.className = 'poster-placeholder';
-            placeholder.textContent = '🎬';
+            placeholder.innerHTML = '<img src="assets/icons/movie.png" alt="" class="emoji-icon-large">';
             posterContainer.appendChild(placeholder);
         }
         
@@ -546,7 +546,7 @@ var BrowseByController = (function() {
         if (item.voteAverage) {
             var rating = document.createElement('span');
             rating.className = 'card-rating';
-            rating.textContent = '⭐ ' + item.voteAverage.toFixed(1);
+            rating.innerHTML = '<img src="assets/icons/star.png" alt="" class="emoji-icon"> ' + item.voteAverage.toFixed(1);
             meta.appendChild(rating);
         }
         

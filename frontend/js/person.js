@@ -361,7 +361,7 @@ var PersonController = (function() {
         } else {
             var placeholder = document.createElement('div');
             placeholder.className = 'credit-poster-placeholder';
-            placeholder.textContent = '🎬';
+            placeholder.innerHTML = '<img src=\"assets/icons/movie.png\" alt=\"\" class=\"emoji-icon-large\">';
             posterContainer.appendChild(placeholder);
         }
         

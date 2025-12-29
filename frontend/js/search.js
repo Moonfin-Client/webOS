@@ -107,14 +107,14 @@ var SearchController = (function() {
                 // If initializeFromPreferences returns false, it means no auth yet
                 // But we still need to initialize the API with the server URL for searches to work
                 console.log('[Search] initializeFromPreferences returned false, trying direct initialization');
-                var settings = storage.get('jellyfin_settings');
+                var settings = storage.getUserPreference('jellyfin_settings', null);
                 if (!settings) {
                     jellyseerrEnabled = false;
                     return false;
                 }
                 
                 try {
-                    var parsedSettings = JSON.parse(settings);
+                    var parsedSettings = typeof settings === 'string' ? JSON.parse(settings) : settings;
                     if (!parsedSettings.jellyseerrUrl) {
                         jellyseerrEnabled = false;
                         return false;
@@ -572,7 +572,7 @@ var SearchController = (function() {
         } else {
             const placeholder = document.createElement('div');
             placeholder.className = 'card-placeholder';
-            placeholder.textContent = type === 'person' ? '👤' : '🎬';
+            placeholder.innerHTML = type === 'person' ? '<img src=\"assets/icons/person.png\" alt=\"\" class=\"emoji-icon-large\">' : '<img src=\"assets/icons/movie.png\" alt=\"\" class=\"emoji-icon-large\">';
             imageWrapper.appendChild(placeholder);
         }
 

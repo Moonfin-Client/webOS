@@ -215,9 +215,39 @@ var LoginController = (function() {
         }
         if (elements.manualLoginBtn) {
             elements.manualLoginBtn.addEventListener('click', handleManualLogin);
+            elements.manualLoginBtn.addEventListener('keydown', function(e) {
+                if (e.keyCode === KeyCodes.UP) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (elements.manualPassword && elements.manualPassword.offsetParent !== null) {
+                        elements.manualPassword.focus();
+                    }
+                } else if (e.keyCode === KeyCodes.RIGHT) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (elements.cancelManualLoginBtn && elements.cancelManualLoginBtn.offsetParent !== null) {
+                        elements.cancelManualLoginBtn.focus();
+                    }
+                }
+            });
         }
         if (elements.cancelManualLoginBtn) {
             elements.cancelManualLoginBtn.addEventListener('click', cancelManualLogin);
+            elements.cancelManualLoginBtn.addEventListener('keydown', function(e) {
+                if (e.keyCode === KeyCodes.UP) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (elements.manualPassword && elements.manualPassword.offsetParent !== null) {
+                        elements.manualPassword.focus();
+                    }
+                } else if (e.keyCode === KeyCodes.LEFT) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (elements.manualLoginBtn && elements.manualLoginBtn.offsetParent !== null) {
+                        elements.manualLoginBtn.focus();
+                    }
+                }
+            });
         }
         if (elements.cancelManualQuickConnectBtn) {
             elements.cancelManualQuickConnectBtn.addEventListener('click', cancelManualLogin);
@@ -231,15 +261,106 @@ var LoginController = (function() {
         // Login form listeners
         if (elements.useQuickConnectBtn) {
             elements.useQuickConnectBtn.addEventListener('click', showQuickConnectForm);
+            elements.useQuickConnectBtn.addEventListener('keydown', function(e) {
+                if (e.keyCode === KeyCodes.DOWN) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    // Navigate down to password input
+                    if (elements.passwordInput && elements.passwordInput.offsetParent !== null) {
+                        elements.passwordInput.focus();
+                    }
+                } else if (e.keyCode === KeyCodes.RIGHT) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    // Navigate to Use Password button if visible
+                    if (elements.usePasswordBtn && elements.usePasswordBtn.offsetParent !== null) {
+                        elements.usePasswordBtn.focus();
+                    }
+                }
+            });
         }
         if (elements.usePasswordBtn) {
             elements.usePasswordBtn.addEventListener('click', showPasswordForm);
+            elements.usePasswordBtn.addEventListener('keydown', function(e) {
+                if (e.keyCode === KeyCodes.LEFT) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (elements.useQuickConnectBtn && elements.useQuickConnectBtn.offsetParent !== null) {
+                        elements.useQuickConnectBtn.focus();
+                    }
+                }
+            });
+        }
+        if (elements.useManualQuickConnectBtn) {
+            elements.useManualQuickConnectBtn.addEventListener('keydown', function(e) {
+                if (e.keyCode === KeyCodes.DOWN) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    // Navigate down to username input
+                    if (elements.manualUsername && elements.manualUsername.offsetParent !== null) {
+                        elements.manualUsername.focus();
+                    }
+                } else if (e.keyCode === KeyCodes.RIGHT) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (elements.useManualPasswordBtn && elements.useManualPasswordBtn.offsetParent !== null) {
+                        elements.useManualPasswordBtn.focus();
+                    }
+                }
+            });
+        }
+        if (elements.useManualPasswordBtn) {
+            elements.useManualPasswordBtn.addEventListener('keydown', function(e) {
+                if (e.keyCode === KeyCodes.DOWN) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (elements.manualUsername && elements.manualUsername.offsetParent !== null) {
+                        elements.manualUsername.focus();
+                    }
+                } else if (e.keyCode === KeyCodes.LEFT) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (elements.useManualQuickConnectBtn && elements.useManualQuickConnectBtn.offsetParent !== null) {
+                        elements.useManualQuickConnectBtn.focus();
+                    }
+                }
+            });
         }
         if (elements.loginBtn) {
             elements.loginBtn.addEventListener('click', handlePasswordLogin);
+            elements.loginBtn.addEventListener('keydown', function(e) {
+                if (e.keyCode === KeyCodes.UP) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (elements.passwordInput && elements.passwordInput.offsetParent !== null) {
+                        elements.passwordInput.focus();
+                    }
+                } else if (e.keyCode === KeyCodes.RIGHT) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (elements.cancelLoginBtn && elements.cancelLoginBtn.offsetParent !== null) {
+                        elements.cancelLoginBtn.focus();
+                    }
+                }
+            });
         }
         if (elements.cancelLoginBtn) {
             elements.cancelLoginBtn.addEventListener('click', backToUserSelection);
+            elements.cancelLoginBtn.addEventListener('keydown', function(e) {
+                if (e.keyCode === KeyCodes.UP) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (elements.passwordInput && elements.passwordInput.offsetParent !== null) {
+                        elements.passwordInput.focus();
+                    }
+                } else if (e.keyCode === KeyCodes.LEFT) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (elements.loginBtn && elements.loginBtn.offsetParent !== null) {
+                        elements.loginBtn.focus();
+                    }
+                }
+            });
         }
         if (elements.cancelQuickConnectBtn) {
             elements.cancelQuickConnectBtn.addEventListener('click', backToUserSelection);
@@ -262,6 +383,10 @@ var LoginController = (function() {
                 } else if (e.keyCode === KeyCodes.UP) {
                     e.preventDefault();
                     e.stopPropagation();
+                    // Navigate up to quick connect button
+                    if (elements.useManualQuickConnectBtn && elements.useManualQuickConnectBtn.offsetParent !== null) {
+                        elements.useManualQuickConnectBtn.focus();
+                    }
                 }
             });
         }
@@ -295,7 +420,24 @@ var LoginController = (function() {
         }
         if (elements.passwordInput) {
             elements.passwordInput.addEventListener('keydown', function(e) {
-                if (e.keyCode === KeyCodes.ENTER) handlePasswordLogin();
+                if (e.keyCode === KeyCodes.ENTER) {
+                    e.preventDefault();
+                    handlePasswordLogin();
+                } else if (e.keyCode === KeyCodes.UP) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    // Navigate up to quick connect button
+                    if (elements.useQuickConnectBtn && elements.useQuickConnectBtn.offsetParent !== null) {
+                        elements.useQuickConnectBtn.focus();
+                    }
+                } else if (e.keyCode === KeyCodes.DOWN) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    // Navigate down to login button
+                    if (elements.loginBtn && elements.loginBtn.offsetParent !== null) {
+                        elements.loginBtn.focus();
+                    }
+                }
             });
         }
     }
@@ -324,12 +466,15 @@ var LoginController = (function() {
         }
         
         // Check for auto-login setting
-        var settings = storage.get('jellyfin_settings');
-        if (settings && settings.autoLogin) {
-            var lastLogin = storage.get('last_login');
-            if (lastLogin && lastLogin.serverAddress && lastLogin.username) {
-                attemptAutoLogin(lastLogin);
-                return true;
+        var settings = storage.getUserPreference('jellyfin_settings', null);
+        if (settings) {
+            var parsedSettings = typeof settings === 'string' ? JSON.parse(settings) : settings;
+            if (parsedSettings.autoLogin) {
+                var lastLogin = storage.get('last_login');
+                if (lastLogin && lastLogin.serverAddress && lastLogin.username) {
+                    attemptAutoLogin(lastLogin);
+                    return true;
+                }
             }
         }
         
@@ -959,24 +1104,19 @@ var LoginController = (function() {
                         prevSibling.focus();
                     }
                 } else if (e.keyCode === KeyCodes.UP) {
+                    // UP from user cards - do nothing (no elements above)
                     e.preventDefault();
                     e.stopPropagation();
-                    var prevSibling = this.previousElementSibling;
-                    if (prevSibling && prevSibling.classList.contains('user-card')) {
-                        prevSibling.focus();
-                    }
                 } else if (e.keyCode === KeyCodes.DOWN) {
                     e.preventDefault();
                     e.stopPropagation();
-                    // First check if there's a next sibling card
-                    var nextSibling = this.nextElementSibling;
-                    if (nextSibling && nextSibling.classList.contains('user-card')) {
-                        nextSibling.focus();
-                    } else {
-                        // Move to Manual Login button if we're at the last card
-                        if (elements.showManualLoginBtn) {
-                            elements.showManualLoginBtn.focus();
-                        }
+                    // DOWN goes to buttons below the user row
+                    if (elements.showManualLoginBtn && elements.showManualLoginBtn.offsetParent !== null) {
+                        elements.showManualLoginBtn.focus();
+                    } else if (elements.deleteServerBtn && elements.deleteServerBtn.offsetParent !== null) {
+                        elements.deleteServerBtn.focus();
+                    } else if (elements.backToServerBtn && elements.backToServerBtn.offsetParent !== null) {
+                        elements.backToServerBtn.focus();
                     }
                 }
             });

@@ -883,7 +883,7 @@
         const container = document.getElementById(containerId);
         container.innerHTML = `
             <div class="empty-state">
-                <div class="empty-state-icon">📺</div>
+                <div class="empty-state-icon"><img src="assets/icons/tv.png" alt="" class="emoji-icon-large"></div>
                 <div class="empty-state-title">${title}</div>
                 <div class="empty-state-message">${message}</div>
             </div>

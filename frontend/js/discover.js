@@ -193,11 +193,11 @@ var DiscoverController = (function() {
      * Check if Jellyseerr is properly configured
      */
     function checkJellyseerrConnection() {
-        var settings = storage.get('jellyfin_settings');
+        var settings = storage.getUserPreference('jellyfin_settings', null);
         if (!settings) return false;
         
         try {
-            var parsedSettings = JSON.parse(settings);
+            var parsedSettings = typeof settings === 'string' ? JSON.parse(settings) : settings;
             return parsedSettings.jellyseerrEnabled && parsedSettings.jellyseerrUrl;
         } catch (e) {
             return false;
@@ -223,10 +223,10 @@ var DiscoverController = (function() {
                 // If initializeFromPreferences returns false, it means no auth yet
                 // But we still need to initialize the API with the server URL for login to work
                 console.log('[Discover] initializeFromPreferences returned false, trying direct initialization');
-                var settings = storage.get('jellyfin_settings');
+                var settings = storage.getUserPreference('jellyfin_settings', null);
                 if (!settings) return false;
                 
-                var parsedSettings = JSON.parse(settings);
+                var parsedSettings = typeof settings === 'string' ? JSON.parse(settings) : settings;
                 if (!parsedSettings.jellyseerrUrl) return false;
                 
                 // Get user ID for cookie storage
@@ -592,12 +592,12 @@ var DiscoverController = (function() {
      * Filter NSFW content based on settings
      */
     function filterNSFW(items) {
-        var settings = storage.get('jellyfin_settings');
+        var settings = storage.getUserPreference('jellyfin_settings', null);
         var filterNSFW = true; // Default to filtering
         
         try {
-            var parsedSettings = JSON.parse(settings);
-            if (parsedSettings.jellyseerrFilterNSFW !== undefined) {
+            var parsedSettings = typeof settings === 'string' ? JSON.parse(settings) : settings;
+            if (parsedSettings && parsedSettings.jellyseerrFilterNSFW !== undefined) {
                 filterNSFW = parsedSettings.jellyseerrFilterNSFW;
             }
         } catch (e) {

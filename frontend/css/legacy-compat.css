@@ -293,3 +293,97 @@
 .card-rating > *:not(:last-child) {
     margin-right: 4px;
 }
+
+/* =================================================
+ * Emoji Icon Replacements
+ * PNG icons to replace emojis for better compatibility
+ * ================================================= */
+
+/* Standard emoji icon - inline with text */
+.emoji-icon {
+    width: 1em;
+    height: 1em;
+    vertical-align: middle;
+    display: inline-block;
+    object-fit: contain;
+}
+
+/* Large emoji icon - for placeholders and prominent displays */
+.emoji-icon-large {
+    width: 48px;
+    height: 48px;
+    display: block;
+    margin: 0 auto;
+    object-fit: contain;
+}
+
+/* Category icons in settings sidebar */
+.category-icon .emoji-icon {
+    width: 24px;
+    height: 24px;
+    filter: brightness(0) invert(1);
+}
+
+/* Icon in info badges */
+.info-badge .emoji-icon {
+    width: 14px;
+    height: 14px;
+    margin-right: 4px;
+}
+
+/* Selected indicator checkmarks */
+.selected-indicator .emoji-icon {
+    width: 16px;
+    height: 16px;
+    filter: brightness(0) invert(1);
+}
+
+/* Checkbox checkmarks */
+.row-checkbox .emoji-icon {
+    width: 16px;
+    height: 16px;
+    filter: brightness(0) invert(1);
+}
+
+/* Option icons in modals */
+.option-icon .emoji-icon {
+    width: 18px;
+    height: 18px;
+    filter: brightness(0) invert(1);
+}
+
+/* Error dialog icon */
+.error-dialog-icon .emoji-icon-large {
+    width: 64px;
+    height: 64px;
+    filter: none;
+}
+
+/* Person profile placeholder */
+.person-profile-placeholder .emoji-icon-large {
+    width: 80px;
+    height: 80px;
+    filter: brightness(0) invert(0.7);
+}
+
+/* Card placeholders */
+.card-placeholder .emoji-icon-large,
+.poster-placeholder .emoji-icon-large,
+.credit-poster-placeholder .emoji-icon-large {
+    width: 60px;
+    height: 60px;
+    filter: brightness(0) invert(0.5);
+}
+
+/* Empty state icons */
+.empty-state-icon .emoji-icon-large {
+    width: 80px;
+    height: 80px;
+    filter: brightness(0) invert(0.6);
+}
+
+/* Request status icons */
+.info-badge-request .emoji-icon {
+    width: 16px;
+    height: 16px;
+}

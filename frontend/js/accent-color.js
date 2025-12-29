@@ -9,11 +9,11 @@
      * Apply the accent color from settings
      */
     function applyAccentColor() {
-        var settingsStr = storage.get('jellyfin_settings');
-        if (!settingsStr) return;
+        var settings = storage.getUserPreference('jellyfin_settings', null);
+        if (!settings) return;
         
         try {
-            var settings = JSON.parse(settingsStr);
+            if (typeof settings === 'string') settings = JSON.parse(settings);
             var accentColor = settings.accentColor || 'blue';
             
             var root = document.documentElement;
