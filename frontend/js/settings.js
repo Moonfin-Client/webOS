@@ -115,6 +115,12 @@ var SettingsController = (function() {
 
         cacheElements();
         
+        // Display app version
+        var versionDisplay = document.getElementById('appVersionDisplay');
+        if (versionDisplay && typeof APP_VERSION !== 'undefined') {
+            versionDisplay.textContent = APP_VERSION;
+        }
+        
         // Migrate global settings to user-scoped (Phase 1)
         storage.migrateToUserPreference('jellyfin_settings');
         

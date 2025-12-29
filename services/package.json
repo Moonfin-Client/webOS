@@ -1,6 +1,6 @@
 {
   "name": "org.moonfin.webos.service",
-  "version": "1.0.0",
   "description": "Moonfin Services",
-  "main": "service.js"
+  "main": "service.js",
+  "version": "1.0.0"
 }

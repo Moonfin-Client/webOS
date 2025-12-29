@@ -47,7 +47,7 @@ var JellyfinAPI = (function() {
     let deviceId = null;
     const deviceName = 'LG Smart TV';
     const appName = 'Moonfin for webOS';
-    const appVersion = '1.0.0';
+    const appVersion = typeof APP_VERSION !== 'undefined' ? APP_VERSION : '1.0.0';
 
     const SERVER_DISCOVERY_TIMEOUT_MS = 5000;
     const LAN_SCAN_TIMEOUT_MS = 2000;
