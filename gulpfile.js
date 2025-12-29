@@ -38,6 +38,7 @@ function copyNonJsFiles() {
             "frontend/*.html",
             "frontend/*.json",
             "frontend/shaka-player.js",
+            "frontend/hls.js",
             "frontend/css/**/*",
             "frontend/assets/**/*",
             "frontend/components/**/*",

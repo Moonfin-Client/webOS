@@ -851,8 +851,6 @@ class WebOSVideoAdapter extends VideoPlayerAdapter {
 
 /**
  * Handle HLS.js media errors with retry logic
- * @param {Object} hlsPlayer - HLS.js player instance
- * @returns {boolean} True if recovery attempted, false if exhausted
  */
 function handleHlsJsMediaError(hlsPlayer) {
     if (!hlsPlayer) return false;
@@ -883,8 +881,6 @@ function handleHlsJsMediaError(hlsPlayer) {
 
 /**
  * Get cross-origin value based on media source
- * @param {Object} mediaSource - Media source info
- * @returns {string|null} Cross-origin value
  */
 function getCrossOriginValue(mediaSource) {
     if (mediaSource && mediaSource.IsRemote) {
@@ -975,6 +971,7 @@ class HTML5VideoAdapter extends VideoPlayerAdapter {
 
     /**
      * Load HLS stream using HLS.js with error recovery
+     * Configured to match jellyfin-web for maximum compatibility
      * @private
      */
     loadWithHlsJs(url, options = {}) {
@@ -989,33 +986,99 @@ class HTML5VideoAdapter extends VideoPlayerAdapter {
                 this.hlsPlayer = null;
             }
 
-            const hls = new Hls({
+            // HLS.js configuration matching jellyfin-web for best compatibility
+            var hlsConfig = {
+                // Manifest loading settings
                 manifestLoadingTimeOut: 20000,
-                startPosition: options.startPosition || 0,
-                xhrSetup: (xhr) => {
+                manifestLoadingMaxRetry: 4,
+                manifestLoadingRetryDelay: 500,
+
+                // Level loading settings
+                levelLoadingTimeOut: 20000,
+                levelLoadingMaxRetry: 4,
+                levelLoadingRetryDelay: 500,
+
+                // Fragment loading settings
+                fragLoadingTimeOut: 20000,
+                fragLoadingMaxRetry: 6,
+                fragLoadingRetryDelay: 500,
+
+                // Buffer settings - important for smooth playback
+                maxBufferLength: 30,
+                maxBufferSize: 60 * 1000 * 1000, // 60MB
+                maxBufferHole: 0.5,
+                backBufferLength: 90,
+                liveBackBufferLength: 90,
+
+                // Low latency mode disabled for better compatibility with webOS
+                lowLatencyMode: false,
+
+                // ABR settings - matching jellyfin-web
+                abrEwmaDefaultEstimate: 1000000,
+                abrBandWidthFactor: 0.8,
+                abrBandWidthUpFactor: 0.7,
+                abrMaxWithRealBitrate: true,
+
+                // Start from specific position if provided
+                startPosition: options.startPosition || -1,
+
+                // XHR setup for credentials
+                xhrSetup: function(xhr) {
                     xhr.withCredentials = options.withCredentials || false;
                 }
-            });
+            };
+
+            console.log('[HTML5+HLS.js] Creating player with config:', JSON.stringify({
+                maxBufferLength: hlsConfig.maxBufferLength,
+                backBufferLength: hlsConfig.backBufferLength,
+                lowLatencyMode: hlsConfig.lowLatencyMode,
+                startPosition: hlsConfig.startPosition
+            }));
+
+            var hls = new Hls(hlsConfig);
+            var self = this;
 
             hls.loadSource(url);
             hls.attachMedia(this.videoElement);
 
-            hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                console.log('[HTML5+HLS.js] Manifest parsed, starting playback');
-                this.videoElement.play().then(resolve).catch(reject);
+            hls.on(Hls.Events.MANIFEST_PARSED, function(event, data) {
+                console.log('[HTML5+HLS.js] Manifest parsed, levels:', data.levels ? data.levels.length : 0);
+                self.videoElement.play().then(resolve).catch(reject);
             });
 
-            hls.on(Hls.Events.ERROR, (event, data) => {
+            hls.on(Hls.Events.LEVEL_LOADED, function(event, data) {
+                console.log('[HTML5+HLS.js] Level loaded - duration:', data.details ? data.details.totalduration : 'unknown');
+            });
+
+            hls.on(Hls.Events.FRAG_LOADED, function(event, data) {
+                var fragSize = data.frag && data.frag.stats ? Math.round(data.frag.stats.loaded / 1024) : 0;
+                console.log('[HTML5+HLS.js] Fragment loaded - size:', fragSize + 'KB');
+            });
+
+            hls.on(Hls.Events.FRAG_BUFFERED, function(event, data) {
+                if (data.stats) {
+                    console.log('[HTML5+HLS.js] Fragment buffered - processing:', data.stats.buffering + 'ms');
+                }
+            });
+
+            hls.on(Hls.Events.ERROR, function(event, data) {
                 console.error('[HTML5+HLS.js] Error:', data.type, data.details, 'fatal:', data.fatal);
 
                 if (data.fatal) {
                     switch (data.type) {
                         case Hls.ErrorTypes.NETWORK_ERROR:
-                            if (data.response && data.response.code >= 400) {
+                            // Check if it's a 4xx error (client error - likely invalid stream)
+                            if (data.response && data.response.code >= 400 && data.response.code < 500) {
+                                console.error('[HTML5+HLS.js] Client error (4xx), not recoverable:', data.response.code);
                                 hls.destroy();
-                                this.emit('error', { type: MediaError.SERVER_ERROR, details: data });
-                                reject(new Error(MediaError.SERVER_ERROR));
+                                self.emit('error', { type: MediaError.SERVER_ERROR, details: data, code: data.response.code });
+                                reject(new Error(MediaError.SERVER_ERROR + ': ' + data.response.code));
+                            } else if (data.response && data.response.code >= 500) {
+                                // 5xx server error - might be temporary, try recovery
+                                console.log('[HTML5+HLS.js] Server error (5xx), attempting recovery...');
+                                hls.startLoad();
                             } else {
+                                // Network issue without HTTP response - try recovery
                                 console.log('[HTML5+HLS.js] Network error, attempting recovery...');
                                 hls.startLoad();
                             }
@@ -1024,14 +1087,16 @@ class HTML5VideoAdapter extends VideoPlayerAdapter {
                             if (handleHlsJsMediaError(hls)) {
                                 console.log('[HTML5+HLS.js] Media error recovery attempted');
                             } else {
+                                console.error('[HTML5+HLS.js] Media error recovery exhausted');
                                 hls.destroy();
-                                this.emit('error', { type: MediaError.MEDIA_DECODE_ERROR, details: data });
+                                self.emit('error', { type: MediaError.MEDIA_DECODE_ERROR, details: data });
                                 reject(new Error(MediaError.MEDIA_DECODE_ERROR));
                             }
                             break;
                         default:
+                            console.error('[HTML5+HLS.js] Fatal error, no recovery available');
                             hls.destroy();
-                            this.emit('error', { type: MediaError.FATAL_HLS_ERROR, details: data });
+                            self.emit('error', { type: MediaError.FATAL_HLS_ERROR, details: data });
                             reject(new Error(MediaError.FATAL_HLS_ERROR));
                             break;
                     }
@@ -1039,7 +1104,7 @@ class HTML5VideoAdapter extends VideoPlayerAdapter {
             });
 
             this.hlsPlayer = hls;
-            this.emit('loaded', { url });
+            this.emit('loaded', { url: url });
         });
     }
 
@@ -1192,11 +1257,12 @@ class VideoPlayerFactory {
      * @param {Object} options - Creation options
      * @param {boolean} options.preferWebOS - Prefer WebOS native adapter for HDR/Dolby Vision
      * @param {boolean} options.preferHTML5 - Prefer HTML5 video element for direct files
+     * @param {boolean} options.preferHLS - Prefer HTML5+HLS.js for transcoded HLS streams (matches jellyfin-web)
      * @returns {Promise<VideoPlayerAdapter>} Initialized player adapter
      */
     static async createPlayer(videoElement, options = {}) {
         // Determine adapter priority based on playback needs
-        let adapters = [
+        var adapters = [
             ShakaPlayerAdapter,
             WebOSVideoAdapter,
             HTML5VideoAdapter
@@ -1209,6 +1275,15 @@ class VideoPlayerFactory {
                 ShakaPlayerAdapter,
                 HTML5VideoAdapter
             ];
+        } else if (options.preferHLS) {
+            // For transcoded HLS streams: HTML5+HLS.js > Shaka > WebOS
+            // This matches jellyfin-web behavior for better compatibility
+            console.log('[PlayerFactory] preferHLS mode - using HTML5+HLS.js for transcoded stream');
+            adapters = [
+                HTML5VideoAdapter,
+                ShakaPlayerAdapter,
+                WebOSVideoAdapter
+            ];
         } else if (options.preferHTML5) {
             // For direct files: HTML5 > Shaka > WebOS
             adapters = [
@@ -1218,18 +1293,19 @@ class VideoPlayerFactory {
             ];
         }
 
-        for (const AdapterClass of adapters) {
+        for (var i = 0; i < adapters.length; i++) {
+            var AdapterClass = adapters[i];
             try {
-                console.log('[PlayerFactory] Attempting:', AdapterClass.name);
-                const adapter = new AdapterClass(videoElement);
-                const success = await adapter.initialize();
+                console.log('[PlayerFactory] Attempting:', AdapterClass.name || 'UnknownAdapter');
+                var adapter = new AdapterClass(videoElement);
+                var success = await adapter.initialize();
                 
                 if (success) {
                     console.log('[PlayerFactory] Using:', adapter.getName());
                     return adapter;
                 }
             } catch (error) {
-                console.warn('[PlayerFactory]', AdapterClass.name, 'failed:', error.message);
+                console.warn('[PlayerFactory]', (AdapterClass.name || 'UnknownAdapter'), 'failed:', error.message);
             }
         }
 
