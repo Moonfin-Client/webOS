@@ -7,7 +7,7 @@ var UpdateChecker = (function() {
 
     // GitHub API configuration
     const GITHUB_API_URL = 'https://api.github.com/repos/Moonfin-Client/webOS/releases/latest';
-    const CURRENT_VERSION = '1.0.0'; // Should match appinfo.json version
+    const CURRENT_VERSION = typeof APP_VERSION !== 'undefined' ? APP_VERSION : '1.0.0';
     
     // Modal state
     var modalElement = null;
