@@ -8,21 +8,78 @@
 var MultiServerRows = (function() {
     'use strict';
     
+    var REQUEST_TIMEOUT_MS = 3000; // 3 second timeout per request
+    
+    /**
+     * Filter servers to only those that are reachable (using ConnectionPool's cache)
+     * @param {Array} servers - Array of server objects
+     * @returns {Array} - Filtered array of reachable servers
+     */
+    function filterReachableServers(servers) {
+        if (typeof ConnectionPool !== 'undefined' && typeof ConnectionPool.isServerUnreachable === 'function') {
+            return servers.filter(function(server) {
+                var unreachable = ConnectionPool.isServerUnreachable(server.id);
+                if (unreachable) {
+                    console.log('[MultiServerRows] Skipping unreachable server:', server.name);
+                }
+                return !unreachable;
+            });
+        }
+        return servers;
+    }
+    
+    /**
+     * Wrap a promise with a timeout
+     * @param {Promise} promise - Promise to wrap
+     * @param {number} timeoutMs - Timeout in milliseconds
+     * @param {string} serverName - Server name for error logging
+     * @returns {Promise} - Promise that resolves/rejects within timeout
+     */
+    function withTimeout(promise, timeoutMs, serverName) {
+        return new Promise(function(resolve, reject) {
+            var timedOut = false;
+            var timer = setTimeout(function() {
+                timedOut = true;
+                console.log('[MultiServerRows] Request timeout for server:', serverName);
+                resolve([]); // Resolve with empty array instead of rejecting
+            }, timeoutMs);
+            
+            promise.then(function(result) {
+                if (!timedOut) {
+                    clearTimeout(timer);
+                    resolve(result);
+                }
+            }).catch(function(err) {
+                if (!timedOut) {
+                    clearTimeout(timer);
+                    console.warn('[MultiServerRows] Request error for', serverName, err);
+                    resolve([]); // Resolve with empty array instead of rejecting
+                }
+            });
+        });
+    }
+    
     async function getContinueWatching(limit) {
         if (typeof MultiServerManager === 'undefined') {
             return null; // Not in multi-server mode
         }
         
-        const servers = MultiServerManager.getAllServersArray();
+        var servers = MultiServerManager.getAllServersArray();
         if (!servers || servers.length === 0) {
+            return [];
+        }
+        
+        // Filter to only reachable servers
+        servers = filterReachableServers(servers);
+        if (servers.length === 0) {
             return [];
         }
         
         console.log('MultiServerRows: Aggregating Continue Watching from', servers.length, 'servers');
         
         const results = await Promise.all(servers.map(async (server) => {
-            try {
-                const data = await new Promise((resolve, reject) => {
+            return withTimeout(new Promise((resolve, reject) => {
+                try {
                     JellyfinAPI.getResumeItems(
                         server.url,
                         server.userId,
@@ -32,8 +89,10 @@ var MultiServerRows = (function() {
                             else resolve(data);
                         }
                     );
-                });
-                
+                } catch (e) {
+                    reject(e);
+                }
+            }).then(function(data) {
                 if (data && data.Items) {
                     data.Items.forEach(function(item) {
                         item.ServerUrl = server.url;
@@ -43,10 +102,7 @@ var MultiServerRows = (function() {
                     return data.Items;
                 }
                 return [];
-            } catch (err) {
-                console.warn('MultiServerRows: Failed to fetch Continue Watching from', server.name, err);
-                return [];
-            }
+            }), REQUEST_TIMEOUT_MS, server.name);
         }));
         
         const allItems = results.flat();
@@ -65,16 +121,22 @@ var MultiServerRows = (function() {
             return null;
         }
         
-        const servers = MultiServerManager.getAllServersArray();
+        var servers = MultiServerManager.getAllServersArray();
         if (!servers || servers.length === 0) {
+            return [];
+        }
+        
+        // Filter to only reachable servers
+        servers = filterReachableServers(servers);
+        if (servers.length === 0) {
             return [];
         }
         
         console.log('MultiServerRows: Aggregating Next Up from', servers.length, 'servers')
         
         const results = await Promise.all(servers.map(async (server) => {
-            try {
-                const data = await new Promise((resolve, reject) => {
+            return withTimeout(new Promise((resolve, reject) => {
+                try {
                     JellyfinAPI.getNextUpItems(
                         server.url,
                         server.userId,
@@ -84,8 +146,10 @@ var MultiServerRows = (function() {
                             else resolve(data);
                         }
                     );
-                });
-                
+                } catch (e) {
+                    reject(e);
+                }
+            }).then(function(data) {
                 if (data && data.Items) {
                     data.Items.forEach(function(item) {
                         item.ServerUrl = server.url;
@@ -95,10 +159,7 @@ var MultiServerRows = (function() {
                     return data.Items;
                 }
                 return [];
-            } catch (err) {
-                console.warn('MultiServerRows: Failed to fetch Next Up from', server.name, err);
-                return [];
-            }
+            }), REQUEST_TIMEOUT_MS, server.name);
         }));
         
         const allItems = results.flat();
@@ -117,16 +178,22 @@ var MultiServerRows = (function() {
             return null;
         }
         
-        const servers = MultiServerManager.getAllServersArray();
+        var servers = MultiServerManager.getAllServersArray();
         if (!servers || servers.length === 0) {
+            return [];
+        }
+        
+        // Filter to only reachable servers
+        servers = filterReachableServers(servers);
+        if (servers.length === 0) {
             return [];
         }
         
         console.log('MultiServerRows: Aggregating Latest Media for library', libraryId, 'from', servers.length, 'servers')
         
         const results = await Promise.all(servers.map(async (server) => {
-            try {
-                const data = await new Promise((resolve, reject) => {
+            return withTimeout(new Promise((resolve, reject) => {
+                try {
                     JellyfinAPI.getLatestMedia(
                         server.url,
                         server.userId,
@@ -138,8 +205,10 @@ var MultiServerRows = (function() {
                             else resolve(data);
                         }
                     );
-                });
-                
+                } catch (e) {
+                    reject(e);
+                }
+            }).then(function(data) {
                 if (data && data.Items) {
                     data.Items.forEach(function(item) {
                         item.ServerUrl = server.url;
@@ -149,10 +218,7 @@ var MultiServerRows = (function() {
                     return data.Items;
                 }
                 return [];
-            } catch (err) {
-                console.warn('MultiServerRows: Failed to fetch Latest Media from', server.name, err);
-                return [];
-            }
+            }), REQUEST_TIMEOUT_MS, server.name);
         }));
         
         const allItems = results.flat();
@@ -171,16 +237,22 @@ var MultiServerRows = (function() {
             return null;
         }
         
-        const servers = MultiServerManager.getAllServersArray();
+        var servers = MultiServerManager.getAllServersArray();
         if (!servers || servers.length === 0) {
+            return [];
+        }
+        
+        // Filter to only reachable servers
+        servers = filterReachableServers(servers);
+        if (servers.length === 0) {
             return [];
         }
         
         const hasMultipleServers = servers.length > 1;
         
         const results = await Promise.all(servers.map(async (server) => {
-            try {
-                const data = await new Promise((resolve, reject) => {
+            return withTimeout(new Promise((resolve, reject) => {
+                try {
                     JellyfinAPI.getUserViews(
                         server.url,
                         server.userId,
@@ -190,8 +262,10 @@ var MultiServerRows = (function() {
                             else resolve(data);
                         }
                     );
-                });
-                
+                } catch (e) {
+                    reject(e);
+                }
+            }).then(function(data) {
                 if (data && data.Items) {
                     return data.Items.map(function(library) {
                         return {
@@ -204,10 +278,7 @@ var MultiServerRows = (function() {
                     });
                 }
                 return [];
-            } catch (err) {
-                console.warn('MultiServerRows: Failed to fetch libraries from', server.name, err);
-                return [];
-            }
+            }), REQUEST_TIMEOUT_MS, server.name);
         }));
         
         const allLibraries = results.flat();

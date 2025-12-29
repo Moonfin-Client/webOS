@@ -7,6 +7,8 @@ var BrowseController = (function() {
     let featuredBannerEnabled = true;
     let hasImageHelper = false;
     let currentView = 'home'; // Track current view type
+    let homeContentLoaded = false; // Track if home content has been loaded
+    let contentLoading = false; // Track if content is currently being loaded
     
     const focusManager = {
         currentRow: 0,
@@ -80,8 +82,9 @@ var BrowseController = (function() {
         
         // Handle page show event (when returning via back button)
         window.addEventListener('pageshow', function(event) {
-            // If page is being restored from cache, reload home view
-            if (event.persisted || performance.navigation.type === 2) {
+            // If page is being restored from cache (back navigation), reload home view
+            // Only trigger on back navigation, not on initial page load
+            if (event.persisted && homeContentLoaded) {
                 switchView('home');
             }
         });
@@ -878,8 +881,10 @@ var BrowseController = (function() {
         
         const allRows = getAllRows();
         if (allRows.length === 0) {
-            // No content rows - enable fallback navigation
-            enableFallbackNavigation();
+            // No content rows - only enable fallback if we're not actively loading
+            if (!contentLoading) {
+                enableFallbackNavigation();
+            }
             return;
         }
         
@@ -1031,18 +1036,97 @@ var BrowseController = (function() {
      * @private
      */
     function loadHomeContent() {
-        console.trace('[browse] Stack trace');
+        // Mark that home content has been loaded (prevents duplicate loads on pageshow)
+        homeContentLoaded = true;
+        contentLoading = true; // Mark that we're loading content
         
         // Validate auth before attempting to load content
         if (!auth || !auth.serverAddress || !auth.userId) {
             console.error('[browse] Cannot load home content: auth is invalid');
+            contentLoading = false;
             window.location.href = 'login.html';
             return;
         }
         
         showLoading();
         
-        // Add timeout to prevent hanging on getUserViews
+        // Check if multi-server mode is active
+        var isMultiServer = typeof MultiServerManager !== 'undefined' && MultiServerManager.getServerCount() > 1;
+        
+        if (isMultiServer && typeof ConnectionPool !== 'undefined') {
+            // Multi-server mode: Get libraries from ALL servers (handles unreachable servers gracefully)
+            loadHomeContentMultiServer();
+        } else {
+            // Single server mode: Get libraries from primary server only
+            loadHomeContentSingleServer();
+        }
+    }
+    
+    /**
+     * Load home content in multi-server mode
+     * Uses ConnectionPool to get libraries from all servers
+     * @private
+     */
+    function loadHomeContentMultiServer() {
+        var userViewsTimeout = setTimeout(function() {
+            showError('Failed to load libraries - request timed out');
+            contentLoading = false;
+            enableFallbackNavigation();
+        }, 8000);
+        
+        ConnectionPool.getAllLibraries(function(err, allLibraries) {
+            clearTimeout(userViewsTimeout);
+            
+            if (err || !allLibraries || allLibraries.length === 0) {
+                showError('Failed to load libraries from any server');
+                enableFallbackNavigation();
+                return;
+            }
+            
+            clearRows();
+            
+            // Build a views-like object for compatibility
+            var views = {
+                Items: allLibraries
+            };
+            
+            // Load featured banner if enabled
+            var storedSettings = storage.getUserPreference('jellyfin_settings', null);
+            var showFeaturedBanner = true;
+            if (storedSettings) {
+                try {
+                    var parsedSettings = typeof storedSettings === 'string' ? JSON.parse(storedSettings) : storedSettings;
+                    showFeaturedBanner = parsedSettings.showFeaturedBanner !== false;
+                } catch (e) {
+                    // Parse error, use default
+                }
+            }
+            
+            // Store state for navigation logic
+            featuredBannerEnabled = showFeaturedBanner;
+            
+            if (showFeaturedBanner) {
+                loadFeaturedItem();
+            } else {
+                if (elements.featuredBanner) {
+                    elements.featuredBanner.style.display = 'none';
+                }
+            }
+            
+            var homeRowsSettings = getHomeRowsSettings();
+            homeRowsSettings = augmentHomeRowsForMultiServer(homeRowsSettings);
+            console.log('[browse] Home rows settings after augmentation:', homeRowsSettings.map(function(r) { return r.id + ' (order: ' + r.order + ', enabled: ' + r.enabled + ')'; }).join(', '));
+            
+            // Continue with the rest of the home content loading
+            loadHomeContentRows(views, homeRowsSettings, true);
+        });
+    }
+    
+    /**
+     * Load home content in single-server mode
+     * @private
+     */
+    function loadHomeContentSingleServer() {
         var userViewsTimeout = setTimeout(function() {
             showError('Failed to load libraries - request timed out');
         }, 10000);
@@ -1065,7 +1149,6 @@ var BrowseController = (function() {
                 return;
             }
             
-            
             clearRows();
             
             // Load featured banner if enabled
@@ -1086,36 +1169,42 @@ var BrowseController = (function() {
             if (showFeaturedBanner) {
                 loadFeaturedItem();
             } else {
-                // Hide featured banner if disabled
                 if (elements.featuredBanner) {
                     elements.featuredBanner.style.display = 'none';
                 }
             }
             
             var homeRowsSettings = getHomeRowsSettings();
-            
-            var isMultiServer = typeof MultiServerManager !== 'undefined' && MultiServerManager.getServerCount() > 1;
-            
-            if (isMultiServer) {
-                homeRowsSettings = augmentHomeRowsForMultiServer(homeRowsSettings);
-            }
             console.log('[browse] Home rows settings after augmentation:', homeRowsSettings.map(function(r) { return r.id + ' (order: ' + r.order + ', enabled: ' + r.enabled + ')'; }).join(', '));
             
-            var rowsToLoad = [];
-            
-            var hasTVShows = views.Items.some(function(view) {
-                return view.CollectionType && view.CollectionType.toLowerCase() === 'tvshows';
-            });
-            
-            var hasMovies = views.Items.some(function(view) {
-                return view.CollectionType && view.CollectionType.toLowerCase() === 'movies';
-            });
-            
-            var hasMusic = views.Items.some(function(view) {
-                return view.CollectionType && view.CollectionType.toLowerCase() === 'music';
-            });
-            
-            function isRowEnabled(rowId) {
+            // Continue with the rest of the home content loading
+            loadHomeContentRows(views, homeRowsSettings, false);
+        });
+    }
+    
+    /**
+     * Continue loading home content rows after getting libraries
+     * @param {Object} views - Views/libraries data
+     * @param {Array} homeRowsSettings - Home row settings
+     * @param {boolean} isMultiServer - Whether in multi-server mode
+     * @private
+     */
+    function loadHomeContentRows(views, homeRowsSettings, isMultiServer) {
+        var rowsToLoad = [];
+        
+        var hasTVShows = views.Items.some(function(view) {
+            return view.CollectionType && view.CollectionType.toLowerCase() === 'tvshows';
+        });
+        
+        var hasMovies = views.Items.some(function(view) {
+            return view.CollectionType && view.CollectionType.toLowerCase() === 'movies';
+        });
+        
+        var hasMusic = views.Items.some(function(view) {
+            return view.CollectionType && view.CollectionType.toLowerCase() === 'music';
+        });
+        
+        function isRowEnabled(rowId) {
                 var setting = homeRowsSettings.find(function(r) { return r.id === rowId; });
                 return setting ? setting.enabled : true;
             }
@@ -1458,7 +1547,6 @@ var BrowseController = (function() {
                 // Load each row
                 loadRows(rowsToLoad);
             }
-        });
     }
 
     function loadLibraryContent(libraryId, libraryName, collectionType) {
@@ -1669,16 +1757,18 @@ var BrowseController = (function() {
         
         // Add failsafe timeout to always hide loading indicator
         var loadingFailsafe = setTimeout(function() {
+            contentLoading = false;
             hideLoading();
             if (!hasContent) {
                 showError('Loading timed out. Some content may not have loaded.');
                 enableFallbackNavigation();
             }
-        }, 15000);
+        }, 8000);
         
         // If no rows to load, hide loading immediately
         if (rowDefinitions.length === 0) {
             clearTimeout(loadingFailsafe);
+            contentLoading = false;
             hideLoading();
             showError('No content rows configured');
             enableFallbackNavigation();
@@ -1696,6 +1786,7 @@ var BrowseController = (function() {
                     // Sort rows by their order attribute
                     sortRowsByOrder();
                     
+                    contentLoading = false;
                     hideLoading();
                     if (!hasContent) {
                         showError('No content available in your library');

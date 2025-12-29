@@ -6,6 +6,53 @@
 
 var ConnectionPool = (function() {
     'use strict';
+    
+    // Cache for unreachable servers - prevents repeated slow timeouts
+    var unreachableServers = {};
+    var UNREACHABLE_CACHE_DURATION_MS = 60000; // 1 minute cache for unreachable servers
+    var PER_SERVER_TIMEOUT_MS = 3000; // 3 seconds per server timeout
+    
+    /**
+     * Check if a server is cached as unreachable
+     * @param {string} serverId - Server ID to check
+     * @returns {boolean} - True if server is cached as unreachable
+     */
+    function isServerUnreachable(serverId) {
+        var cached = unreachableServers[serverId];
+        if (!cached) return false;
+        
+        // Check if cache has expired
+        if (Date.now() - cached.timestamp > UNREACHABLE_CACHE_DURATION_MS) {
+            delete unreachableServers[serverId];
+            return false;
+        }
+        return true;
+    }
+    
+    /**
+     * Mark a server as unreachable
+     * @param {string} serverId - Server ID
+     * @param {string} serverName - Server name for logging
+     */
+    function markServerUnreachable(serverId, serverName) {
+        unreachableServers[serverId] = {
+            timestamp: Date.now(),
+            serverName: serverName
+        };
+        console.log('[ConnectionPool] Marked server as unreachable:', serverName, '- will skip for', UNREACHABLE_CACHE_DURATION_MS / 1000, 'seconds');
+    }
+    
+    /**
+     * Clear unreachable cache for a server (e.g., when user manually connects)
+     * @param {string} serverId - Server ID to clear
+     */
+    function clearUnreachableCache(serverId) {
+        if (serverId) {
+            delete unreachableServers[serverId];
+        } else {
+            unreachableServers = {};
+        }
+    }
 
     /**
      * Execute a request to a specific server
@@ -201,17 +248,64 @@ var ConnectionPool = (function() {
         var servers = MultiServerManager.getAllServersArray();
         var allLibraries = [];
         var completed = 0;
+        var callbackCalled = false;
+        
+        // Filter out unreachable servers
+        var reachableServers = servers.filter(function(server) {
+            if (isServerUnreachable(server.id)) {
+                console.log('[ConnectionPool] Skipping unreachable server:', server.name);
+                return false;
+            }
+            return true;
+        });
 
-        if (servers.length === 0) {
+        if (reachableServers.length === 0) {
+            // All servers unreachable, try all anyway (cache may be stale)
+            reachableServers = servers;
+            clearUnreachableCache();
+        }
+        
+        var totalServers = reachableServers.length;
+        
+        if (totalServers === 0) {
             if (callback) callback(null, []);
             return;
         }
+        
+        // Failsafe timeout - shorter now that we skip unreachable servers
+        var failsafeTimeout = setTimeout(function() {
+            if (!callbackCalled) {
+                callbackCalled = true;
+                console.log('[ConnectionPool] Failsafe timeout - returning', allLibraries.length, 'libraries from responsive servers');
+                allLibraries.sort(function(a, b) {
+                    return a.Name.localeCompare(b.Name);
+                });
+                if (callback) callback(null, allLibraries);
+            }
+        }, PER_SERVER_TIMEOUT_MS * totalServers + 1000);
 
-        servers.forEach(function(server) {
+        reachableServers.forEach(function(server) {
+            var serverCompleted = false;
+            
+            // Per-server timeout
+            var serverTimeout = setTimeout(function() {
+                if (!serverCompleted) {
+                    serverCompleted = true;
+                    completed++;
+                    console.log('[ConnectionPool] Server timeout:', server.name, '(' + server.url + ')');
+                    markServerUnreachable(server.id, server.name);
+                    checkComplete();
+                }
+            }, PER_SERVER_TIMEOUT_MS);
+            
             JellyfinAPI.getUserViews(server.url, server.userId, server.accessToken, function(err, data) {
+                if (serverCompleted) return; // Already timed out
+                serverCompleted = true;
+                clearTimeout(serverTimeout);
                 completed++;
 
                 if (!err && data && data.Items) {
+                    console.log('[ConnectionPool] Got', data.Items.length, 'libraries from', server.name);
                     data.Items.forEach(function(library) {
                         allLibraries.push({
                             Id: library.Id,
@@ -228,18 +322,29 @@ var ConnectionPool = (function() {
                             BackdropImageTags: library.BackdropImageTags
                         });
                     });
+                } else {
+                    console.log('[ConnectionPool] Failed to get libraries from', server.name, err ? '(error)' : '(no data)');
+                    if (err) {
+                        markServerUnreachable(server.id, server.name);
+                    }
                 }
 
-                if (completed === servers.length) {
-                    // Sort libraries alphabetically
-                    allLibraries.sort(function(a, b) {
-                        return a.Name.localeCompare(b.Name);
-                    });
-                    
-                    if (callback) callback(null, allLibraries);
-                }
+                checkComplete();
             });
         });
+        
+        function checkComplete() {
+            if (completed === servers.length && !callbackCalled) {
+                callbackCalled = true;
+                clearTimeout(failsafeTimeout);
+                // Sort libraries alphabetically
+                allLibraries.sort(function(a, b) {
+                    return a.Name.localeCompare(b.Name);
+                });
+                console.log('[ConnectionPool] All servers processed, total libraries:', allLibraries.length);
+                if (callback) callback(null, allLibraries);
+            }
+        }
     }
 
     /**
@@ -352,6 +457,8 @@ var ConnectionPool = (function() {
         getAllLibraries: getAllLibraries,
         getAllResumeItems: getAllResumeItems,
         getAllNextUpItems: getAllNextUpItems,
-        searchAll: searchAll
+        searchAll: searchAll,
+        isServerUnreachable: isServerUnreachable,
+        clearUnreachableCache: clearUnreachableCache
     };
 })();
