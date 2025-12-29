@@ -259,7 +259,12 @@ var BrowseController = (function() {
         }
         
         var allRows = getAllRows();
-        if (allRows.length === 0) return;
+        if (allRows.length === 0) {
+            // No content rows - fall back to navbar navigation
+            console.log('[browse] No content rows, enabling fallback navigation to navbar');
+            focusToNavBar();
+            return;
+        }
         
         var currentRowElement = allRows[focusManager.currentRow];
         if (!currentRowElement) return;
@@ -454,6 +459,19 @@ var BrowseController = (function() {
                 if (featuredBannerEnabled && elements.featuredBanner && elements.featuredBanner.style.display !== 'none') {
                     focusToFeaturedBanner();
                 } else {
+                    // Check if there are content rows to focus on
+                    var contentRows = getAllRows();
+                    if (contentRows.length === 0) {
+                        // No content rows available, stay in navbar
+                        console.log('[browse] No content rows available, staying in navbar');
+                        return;
+                    }
+                    var firstRowItems = contentRows[0].querySelectorAll('.item-card');
+                    if (firstRowItems.length === 0) {
+                        // First row has no items, stay in navbar
+                        console.log('[browse] First row has no items, staying in navbar');
+                        return;
+                    }
                     focusManager.inNavBar = false;
                     focusManager.currentRow = 0;
                     focusManager.currentItem = focusManager.rowPositions[0] || 0;
@@ -859,13 +877,30 @@ var BrowseController = (function() {
         clearAllItemFocus();
         
         const allRows = getAllRows();
-        if (allRows.length === 0) return;
+        if (allRows.length === 0) {
+            // No content rows - enable fallback navigation
+            enableFallbackNavigation();
+            return;
+        }
         
         const currentRowElement = allRows[focusManager.currentRow];
-        if (!currentRowElement) return;
+        if (!currentRowElement) {
+            // Invalid row - try first row
+            focusManager.currentRow = 0;
+            if (allRows[0]) {
+                updateFocus();
+            } else {
+                enableFallbackNavigation();
+            }
+            return;
+        }
         
         const items = currentRowElement.querySelectorAll('.item-card');
-        if (items.length === 0) return;
+        if (items.length === 0) {
+            // Row has no items - enable fallback navigation
+            enableFallbackNavigation();
+            return;
+        }
         
         const currentItem = items[focusManager.currentItem];
         if (currentItem) {
@@ -890,6 +925,38 @@ var BrowseController = (function() {
         
         setTimeout(function() {
             focusToNavBar();
+        }, FOCUS_INIT_DELAY_MS);
+    }
+
+    /**
+     * Enable fallback navigation when content fails to load
+     * Allows users to navigate to settings/logout via navbar buttons
+     * even if content rows fail to load
+     * @private
+     */
+    function enableFallbackNavigation() {
+        console.log('[BROWSE] Enabling fallback navigation mode - no content rows available');
+        
+        // Clear any existing focus from content area
+        clearAllItemFocus();
+        
+        // Set focus manager to navbar mode
+        focusManager.inNavBar = true;
+        focusManager.currentRow = -1;
+        focusManager.currentItem = -1;
+        
+        // Focus on home button or first available navbar button
+        setTimeout(function() {
+            if (elements.homeBtn) {
+                elements.homeBtn.focus();
+                elements.homeBtn.classList.add('focused');
+            } else if (elements.userBtn) {
+                elements.userBtn.focus();
+                elements.userBtn.classList.add('focused');
+            } else if (elements.settingsBtn) {
+                elements.settingsBtn.focus();
+                elements.settingsBtn.classList.add('focused');
+            }
         }, FOCUS_INIT_DELAY_MS);
     }
 
@@ -1002,11 +1069,11 @@ var BrowseController = (function() {
             clearRows();
             
             // Load featured banner if enabled
-            var storedSettings = storage.get('jellyfin_settings');
+            var storedSettings = storage.getUserPreference('jellyfin_settings', null);
             var showFeaturedBanner = true;
             if (storedSettings) {
                 try {
-                    var parsedSettings = JSON.parse(storedSettings);
+                    var parsedSettings = typeof storedSettings === 'string' ? JSON.parse(storedSettings) : storedSettings;
                     showFeaturedBanner = parsedSettings.showFeaturedBanner !== false;
                 } catch (e) {
                     // Parse error, use default
@@ -1053,11 +1120,11 @@ var BrowseController = (function() {
                 return setting ? setting.enabled : true;
             }
             
-            var storedSettings = storage.get('jellyfin_settings');
+            var storedSettings = storage.getUserPreference('jellyfin_settings', null);
             var mergeContinueWatching = false;
             if (storedSettings) {
                 try {
-                    var parsedSettings = JSON.parse(storedSettings);
+                    var parsedSettings = typeof storedSettings === 'string' ? JSON.parse(storedSettings) : storedSettings;
                     mergeContinueWatching = parsedSettings.mergeContinueWatchingNextUp || false;
                 } catch (e) {
                     // Settings parsing failed, use separate rows
@@ -1605,6 +1672,7 @@ var BrowseController = (function() {
             hideLoading();
             if (!hasContent) {
                 showError('Loading timed out. Some content may not have loaded.');
+                enableFallbackNavigation();
             }
         }, 15000);
         
@@ -1613,6 +1681,7 @@ var BrowseController = (function() {
             clearTimeout(loadingFailsafe);
             hideLoading();
             showError('No content rows configured');
+            enableFallbackNavigation();
             return;
         }
         
@@ -1630,6 +1699,7 @@ var BrowseController = (function() {
                     hideLoading();
                     if (!hasContent) {
                         showError('No content available in your library');
+                        enableFallbackNavigation();
                     }
                     // Focus initialization handled by restoreFocusPosition in init()
                 }
@@ -2029,9 +2099,9 @@ var BrowseController = (function() {
         // Get featured media filter setting
         var featuredMediaFilter = 'both'; // default
         try {
-            var settings = storage.get('jellyfin_settings');
+            var settings = storage.getUserPreference('jellyfin_settings', null);
             if (settings) {
-                var parsedSettings = JSON.parse(settings);
+                var parsedSettings = typeof settings === 'string' ? JSON.parse(settings) : settings;
                 featuredMediaFilter = parsedSettings.featuredMediaFilter || 'both';
             }
         } catch (e) {
@@ -2228,10 +2298,10 @@ var BrowseController = (function() {
         
         // Get carousel speed from settings
         var carouselSpeed = 8000; // default
-        var stored = storage.get('jellyfin_settings');
+        var stored = storage.getUserPreference('jellyfin_settings', null);
         if (stored) {
             try {
-                var settings = JSON.parse(stored);
+                var settings = typeof stored === 'string' ? JSON.parse(stored) : stored;
                 carouselSpeed = settings.carouselSpeed || 8000;
             } catch (e) {
                 // Use default on parse error

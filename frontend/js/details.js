@@ -465,9 +465,9 @@ var DetailsController = (function() {
             elements.criticRating.style.display = 'inline-flex';
             var rating = itemData.CriticRating;
             if (rating >= 60) {
-                elements.criticIcon.textContent = '🍅';
+                elements.criticIcon.innerHTML = '<img src="assets/icons/star.png" alt="" class="emoji-icon" style="filter: hue-rotate(90deg);">';
             } else {
-                elements.criticIcon.textContent = '🍅';
+                elements.criticIcon.innerHTML = '<img src="assets/icons/star.png" alt="" class="emoji-icon" style="filter: hue-rotate(90deg) brightness(0.7);">';
             }
             elements.criticValue.textContent = rating + '%';
         }
@@ -1859,14 +1859,14 @@ var DetailsController = (function() {
      */
     function getRequestStatusInfo(status) {
         var statusMap = {
-            1: { icon: '⏳', text: 'Requested', class: 'pending' },
-            2: { icon: '✓', text: 'Available', class: 'available' },
-            3: { icon: '📥', text: 'Partially Available', class: 'partial' },
-            4: { icon: '❌', text: 'Unavailable', class: 'unavailable' },
-            5: { icon: '⚙', text: 'Processing', class: 'processing' }
+            1: { icon: '<img src="assets/icons/options.png" alt="" class="emoji-icon">', text: 'Requested', class: 'pending' },
+            2: { icon: '<img src="assets/icons/check.png" alt="" class="emoji-icon">', text: 'Available', class: 'available' },
+            3: { icon: '<img src="assets/icons/options.png" alt="" class="emoji-icon">', text: 'Partially Available', class: 'partial' },
+            4: { icon: '<img src="assets/icons/warning.png" alt="" class="emoji-icon">', text: 'Unavailable', class: 'unavailable' },
+            5: { icon: '<img src="assets/icons/settings.png" alt="" class="emoji-icon">', text: 'Processing', class: 'processing' }
         };
         
-        return statusMap[status] || { icon: '❓', text: 'Unknown', class: 'unknown' };
+        return statusMap[status] || { icon: '?', text: 'Unknown', class: 'unknown' };
     }
 
     /**

@@ -116,10 +116,10 @@ var JellyseerrDetailsController = (function() {
                 // If initializeFromPreferences returns false, it means no auth yet
                 // But we still need to initialize the API with the server URL
                 console.log('[Jellyseerr Details] initializeFromPreferences returned false, trying direct initialization');
-                var settings = storage.get('jellyfin_settings');
+                var settings = storage.getUserPreference('jellyfin_settings', null);
                 if (!settings) return false;
                 
-                var parsedSettings = JSON.parse(settings);
+                var parsedSettings = typeof settings === 'string' ? JSON.parse(settings) : settings;
                 if (!parsedSettings.jellyseerrUrl) return false;
                 
                 // Get user ID for cookie storage
@@ -288,7 +288,7 @@ var JellyseerrDetailsController = (function() {
         
         // Rating
         if (mediaData.voteAverage) {
-            elements.mediaRating.textContent = '⭐ ' + mediaData.voteAverage.toFixed(1);
+            elements.mediaRating.innerHTML = '<img src=\"assets/icons/star.png\" alt=\"\" class=\"emoji-icon\"> ' + mediaData.voteAverage.toFixed(1);
             elements.mediaRating.style.display = 'inline';
         }
         

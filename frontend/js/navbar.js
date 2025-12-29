@@ -333,9 +333,13 @@
         var clockElement = document.getElementById('navClock');
         if (!clockElement) return;
         
-        // Check clock display setting
-        var settings = storage.get('jellyfin_settings');
-        var use24Hour = settings && JSON.parse(settings).clockDisplay === '24-hour';
+        // Check clock display setting (use user-scoped settings)
+        var settings = storage.getUserPreference('jellyfin_settings', null);
+        var use24Hour = false;
+        if (settings) {
+            if (typeof settings === 'string') settings = JSON.parse(settings);
+            use24Hour = settings.clockDisplay === '24-hour';
+        }
         
         var now = new Date();
         var hours = now.getHours();

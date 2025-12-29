@@ -166,7 +166,7 @@
         console.log('[Jellyseerr Person] JellyseerrAPI exists, checking initialization...');
         
         // Check if Jellyseerr is configured via jellyfin_settings
-        var settings = storage.get('jellyfin_settings');
+        var settings = storage.getUserPreference('jellyfin_settings', null);
         console.log('[Jellyseerr Person] Settings:', settings);
         
         if (!settings) {
@@ -176,7 +176,7 @@
             return;
         }
         
-        var parsedSettings = JSON.parse(settings);
+        var parsedSettings = typeof settings === 'string' ? JSON.parse(settings) : settings;
         console.log('[Jellyseerr Person] Parsed settings:', parsedSettings);
         
         if (!parsedSettings.jellyseerrUrl) {

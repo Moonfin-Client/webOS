@@ -463,11 +463,11 @@ STORAGE.prototype.hasUserPreferences = function(userId) {
 STORAGE.prototype.applyBackdropBlur = function(element, settingKey, maxBlur) {
 	if (!element) return;
 	
-	var settingsStr = this.get('jellyfin_settings');
-	if (!settingsStr) return;
+	var settings = this.getUserPreference('jellyfin_settings', null);
+	if (!settings) return;
 	
 	try {
-		var settings = JSON.parse(settingsStr);
+		if (typeof settings === 'string') settings = JSON.parse(settings);
 		var blurAmount = settings[settingKey] !== undefined ? settings[settingKey] : 3;
 		var blurPx = blurAmount * (maxBlur / 5); // Maps 0-5 to 0-maxBlur
 		element.style.filter = 'blur(' + blurPx + 'px)';

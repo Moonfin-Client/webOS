@@ -1329,7 +1329,7 @@ var SettingsController = (function() {
             
             var checkbox = document.createElement('div');
             checkbox.className = 'row-checkbox ' + (row.enabled ? 'checked' : '');
-            checkbox.textContent = row.enabled ? '✓' : '';
+            checkbox.innerHTML = row.enabled ? '<img src=\"assets/icons/check.png\" alt=\"\" class=\"emoji-icon\">' : '';
             
             var name = document.createElement('div');
             name.className = 'row-name';
@@ -2677,7 +2677,7 @@ var SettingsController = (function() {
         
         if (servers.length === 0) {
             list.innerHTML = '<div class="empty-servers">' +
-                '<div class="empty-servers-icon">🖥️</div>' +
+                '<div class="empty-servers-icon"><img src="assets/icons/tv.png" alt="" class="emoji-icon-large"></div>' +
                 '<div class="empty-servers-text">No servers configured</div>' +
                 '<div class="empty-servers-hint">Click "Add Server" to get started</div>' +
                 '</div>';

@@ -2597,7 +2597,7 @@ var PlayerController = (function() {
             listHtml += '<div class="track-item' + (isSelected ? ' selected' : '') + '" tabindex="0" data-speed="' + speed + '">';
             listHtml += '<span class="track-name">' + speed.toFixed(2) + 'x</span>';
             if (isSelected) {
-                listHtml += '<span class="selected-indicator">✓</span>';
+                listHtml += '<span class="selected-indicator"><img src="assets/icons/check.png" alt="" class="emoji-icon"></span>';
             }
             listHtml += '</div>';
         });
@@ -2701,7 +2701,7 @@ var PlayerController = (function() {
             listHtml += '<div class="track-item' + (isSelected ? ' selected' : '') + '" tabindex="0" data-bitrate="' + profile.value + '">';
             listHtml += '<span class="track-name">' + profile.label + '</span>';
             if (isSelected) {
-                listHtml += '<span class="selected-indicator">✓</span>';
+                listHtml += '<span class="selected-indicator"><img src="assets/icons/check.png" alt="" class="emoji-icon"></span>';
             }
             listHtml += '</div>';
         });
@@ -2789,7 +2789,7 @@ var PlayerController = (function() {
             listHtml += '<div class="track-item' + (isSelected ? ' selected' : '') + '" tabindex="0" data-mode="' + mode.value + '">';
             listHtml += '<span class="track-name">' + mode.label + '</span>';
             if (isSelected) {
-                listHtml += '<span class="selected-indicator">✓</span>';
+                listHtml += '<span class="selected-indicator"><img src="assets/icons/check.png" alt="" class="emoji-icon"></span>';
             }
             listHtml += '</div>';
         });
@@ -3034,10 +3034,10 @@ var PlayerController = (function() {
         if (!mediaSegments || mediaSegments.length === 0) return;
         
         // Check if skip intro feature is enabled
-        var stored = storage.get('jellyfin_settings');
+        var stored = storage.getUserPreference('jellyfin_settings', null);
         if (stored) {
             try {
-                var settings = JSON.parse(stored);
+                var settings = typeof stored === 'string' ? JSON.parse(stored) : stored;
                 if (settings.skipIntro === false) {
                     // Skip intro is disabled, don't show skip buttons
                     if (skipOverlayVisible) {
