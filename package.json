@@ -2,10 +2,15 @@
   "name": "org.moonfin.webos",
   "version": "1.0.0",
   "description": "Moonfin WebOS client",
+  "type": "module",
   "scripts": {
     "check": "ares-package --check",
     "package": "ares-package --no-minify --outdir build/ services frontend",
-    "clean": "rm -rf build/",
+    "build": "gulp",
+    "build:es5": "gulp buildES5",
+    "package:es5": "gulp buildES5 && ares-package --no-minify --outdir build/ services frontend-build",
+    "clean": "rm -rf build/ frontend-build/",
+    "clean:all": "rm -rf build/ frontend-build/ node_modules/",
     "deploy": "ares-install build/org.moonfin.webos_${npm_package_version}_all.ipk",
     "launch": "ares-launch org.moonfin.webos",
     "manifest": "node tools/gen-manifest.js build/org.moonfin.webos.manifest.json",
@@ -15,6 +20,12 @@
   "author": "Jellyfin contributors",
   "license": "MPL-2.0",
   "devDependencies": {
-    "@webosose/ares-cli": "^2.4.0"
+    "@babel/core": "7.25.7",
+    "@babel/preset-env": "7.25.7",
+    "@babel/register": "7.25.7",
+    "@webosose/ares-cli": "^2.4.0",
+    "del": "^7.0.0",
+    "gulp": "^5.0.0",
+    "gulp-babel": "^8.0.0"
   }
 }
