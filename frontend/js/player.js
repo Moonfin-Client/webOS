@@ -105,9 +105,6 @@ var PlayerController = (function() {
         return true;
     }
     
-    /**
-     * Clear loading timeout safely
-     */
     function clearLoadingTimeout() {
         if (loadingTimeout) {
             clearTimeout(loadingTimeout);
@@ -115,9 +112,6 @@ var PlayerController = (function() {
         }
     }
     
-    /**
-     * Set loading state with automatic UI update
-     */
     function setLoadingState(state) {
         loadingState = state;
         
@@ -165,10 +159,6 @@ var PlayerController = (function() {
         return params.get('id');
     }
     
-    /**
-     * Get the start position (in seconds) from the URL query parameter, if present
-     * @returns {number|null} Start position in seconds, or null if not specified
-     */
     function getStartPositionFromUrl() {
         var params = new URLSearchParams(window.location.search);
         var position = params.get('position');
@@ -348,21 +338,21 @@ var PlayerController = (function() {
         try {
             // Reuse adapter if it already matches the preference
             if (playerAdapter) {
-                const name = playerAdapter.getName();
+                var name = playerAdapter.getName();
                 if (options.preferWebOS && name === 'WebOSVideo') {
                     return;
                 }
-                if (options.preferHTML5 && name === 'HTML5Video') {
+                if ((options.preferHTML5 || options.preferHLS) && name === 'HTML5Video') {
                     return;
                 }
-                if (!options.preferWebOS && !options.preferHTML5 && name === 'ShakaPlayer') {
+                if (!options.preferWebOS && !options.preferHTML5 && !options.preferHLS && name === 'ShakaPlayer') {
                     return;
                 }
                 await playerAdapter.destroy();
             }
 
             showLoading();
-            console.log('[Player] Initializing video player adapter');
+            console.log('[Player] Initializing video player adapter, options:', JSON.stringify(options));
 
             playerAdapter = await VideoPlayerFactory.createPlayer(videoPlayer, options);
             console.log('[Player] Using adapter:', playerAdapter.getName());
@@ -535,10 +525,6 @@ var PlayerController = (function() {
         }
     }
 
-    /**
-     * Handle keyboard navigation within modal dialogs
-     * @param {KeyboardEvent} evt - Keyboard event
-     */
     function handleModalKeyDown(evt) {
         // Special handling for video info modal - scroll instead of navigating items
         if (activeModal === 'videoInfo') {
@@ -920,6 +906,10 @@ var PlayerController = (function() {
             creationOptions.preferWebOS = true;
         } else if (useDirectPlay) {
             creationOptions.preferHTML5 = true;
+        } else if (isTranscoding) {
+            // For transcoded HLS streams, prefer HTML5+HLS.js for best compatibility
+            // This matches jellyfin-web behavior
+            creationOptions.preferHLS = true;
         }
         await ensurePlayerAdapter(creationOptions);
 
@@ -974,10 +964,6 @@ var PlayerController = (function() {
         });
     }
     
-    /**
-     * Monitor playback health and fallback to HLS if issues detected
-     * Checks for: stuck playback, no video/audio tracks, stalled buffering
-     */
     function startPlaybackHealthCheck(mediaSource) {
         console.log('[Player] Starting playback health check for direct play');
         
@@ -1036,12 +1022,6 @@ var PlayerController = (function() {
         playbackHealthCheckTimer = setTimeout(checkHealth, 2000);
     }
 
-    /**
-     * Handle playback load errors with appropriate fallback logic
-     * @param {Error} error - Load error from adapter
-     * @param {Object} mediaSource - Current media source
-     * @param {boolean} isDirectPlay - Whether this was a direct play attempt
-     */
     function handlePlaybackLoadError(error, mediaSource, isDirectPlay) {
         clearLoadingTimeout();
         console.log('[Player] Playback load failed:', error.message);
@@ -1055,11 +1035,6 @@ var PlayerController = (function() {
         }
     }
     
-    /**
-     * Setup smart timeout for direct play with buffering progress detection
-     * Monitors progress events and extends timeout if buffering is active
-     * @param {Object} mediaSource - Current media source for fallback
-     */
     function setupDirectPlayTimeout(mediaSource) {
         var timeoutDuration = DIRECT_PLAY_TIMEOUT_MS;
         var directPlayStartTime = Date.now();
@@ -1126,10 +1101,6 @@ var PlayerController = (function() {
     // UTILITY FUNCTIONS
     // ============================================================================
 
-    /**
-     * Generate a UUID v4
-     * @returns {string} UUID string
-     */
     function generateUUID() {
         return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
             var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
@@ -1137,11 +1108,6 @@ var PlayerController = (function() {
         });
     }
 
-    /**
-     * Format seconds into human-readable time string
-     * @param {number} seconds - Time in seconds
-     * @returns {string} Formatted time (e.g., "1:23:45" or "12:34")
-     */
     function formatTime(seconds) {
         if (isNaN(seconds)) return '0:00';
         
@@ -1155,19 +1121,10 @@ var PlayerController = (function() {
         return minutes + ':' + padZero(secs);
     }
 
-    /**
-     * Pad number with leading zero
-     * @param {number} num - Number to pad
-     * @returns {string} Padded number
-     */
     function padZero(num) {
         return num < 10 ? '0' + num : num;
     }
 
-    /**
-     * Build playback data object for Jellyfin API
-     * @returns {Object} Playback data
-     */
     function buildPlaybackData() {
         return {
             ItemId: itemId,
@@ -1179,13 +1136,6 @@ var PlayerController = (function() {
         };
     }
 
-    /**
-     * Make Jellyfin API request with auth headers
-     * @param {string} url - API endpoint URL
-     * @param {Object} data - Request data
-     * @param {Function} onSuccess - Success callback
-     * @param {Function} onError - Error callback
-     */
     function makePlaybackRequest(url, data, onSuccess, onError) {
         ajax.request(url, {
             method: 'POST',
@@ -1203,9 +1153,6 @@ var PlayerController = (function() {
     // PLAYBACK REPORTING
     // ============================================================================
 
-    /**
-     * Report playback start to Jellyfin server
-     */
     function reportPlaybackStart() {
         makePlaybackRequest(
             auth.serverAddress + '/Sessions/Playing',
@@ -1217,9 +1164,6 @@ var PlayerController = (function() {
         );
     }
 
-    /**
-     * Report playback progress to Jellyfin server
-     */
     function reportPlaybackProgress() {
         if (!playSessionId) return;
 
@@ -1236,9 +1180,6 @@ var PlayerController = (function() {
         );
     }
 
-    /**
-     * Report playback stop to Jellyfin server
-     */
     function reportPlaybackStop() {
         if (!playSessionId) return;
 
@@ -1255,12 +1196,6 @@ var PlayerController = (function() {
         );
     }
 
-    /**
-     * Start periodic progress reporting to server
-     */
-    /**
-     * Start periodic progress reporting to server
-     */
     function startProgressReporting() {
         if (progressInterval) clearInterval(progressInterval);
         
@@ -1269,12 +1204,6 @@ var PlayerController = (function() {
         }, PROGRESS_REPORT_INTERVAL_MS);
     }
 
-    /**
-     * Stop periodic progress reporting
-     */
-    /**
-     * Stop periodic progress reporting
-     */
     function stopProgressReporting() {
         if (progressInterval) {
             clearInterval(progressInterval);
@@ -1286,16 +1215,10 @@ var PlayerController = (function() {
     // PLAYBACK CONTROLS
     // ============================================================================
 
-    /**
-     * Toggle between play and pause states
-     */
     // ============================================================================
     // PLAYBACK CONTROLS
     // ============================================================================
 
-    /**
-     * Toggle between play and pause states
-     */
     function togglePlayPause() {
         if (videoPlayer.paused) {
             play();
@@ -1304,12 +1227,6 @@ var PlayerController = (function() {
         }
     }
 
-    /**
-     * Play video and update UI
-     */
-    /**
-     * Play video and update UI
-     */
     function play() {
         videoPlayer.play();
         if (elements.playPauseBtn) {
@@ -1319,12 +1236,6 @@ var PlayerController = (function() {
         showControls();
     }
 
-    /**
-     * Pause video and update UI
-     */
-    /**
-     * Pause video and update UI
-     */
     function pause() {
         videoPlayer.pause();
         if (elements.playPauseBtn) {
@@ -1334,31 +1245,16 @@ var PlayerController = (function() {
         showControls();
     }
 
-    /**
-     * Skip backward by configured interval
-     */
-    /**
-     * Skip backward by configured interval
-     */
     function rewind() {
         seekTo(Math.max(0, videoPlayer.currentTime - SKIP_INTERVAL_SECONDS));
         showControls();
     }
 
-    /**
-     * Skip forward by configured interval
-     */
-    /**
-     * Skip forward by configured interval
-     */
     function forward() {
         seekTo(Math.min(videoPlayer.duration, videoPlayer.currentTime + SKIP_INTERVAL_SECONDS));
         showControls();
     }
     
-    /**
-     * Seek forward by interval on seekbar
-     */
     function seekForward() {
         if (videoPlayer.duration) {
             // Use pending seek position if a seek is in progress, otherwise use current video time
@@ -1369,9 +1265,6 @@ var PlayerController = (function() {
         }
     }
     
-    /**
-     * Seek backward by interval on seekbar
-     */
     function seekBackward() {
         // Use pending seek position if a seek is in progress, otherwise use current video time
         var currentPosition = pendingSeekPosition !== null ? pendingSeekPosition : videoPlayer.currentTime;
@@ -1380,10 +1273,6 @@ var PlayerController = (function() {
         showControls();
     }
     
-    /**
-     * Debounced seek function to prevent rapid seek operations
-     * @param {number} position - Target position in seconds
-     */
     function seekTo(position) {
         if (!videoPlayer.duration || isNaN(position)) return;
         
@@ -1403,10 +1292,6 @@ var PlayerController = (function() {
         }, SEEK_DEBOUNCE_MS);
     }
     
-    /**
-     * Actually perform the seek operation
-     * @param {number} position - Target position in seconds
-     */
     function performSeek(position) {
         if (isSeeking) return;
         
@@ -1429,10 +1314,6 @@ var PlayerController = (function() {
         }, FOCUS_DELAY_MS);
     }
     
-    /**
-     * Update seek preview UI
-     * @param {number} position - Preview position in seconds
-     */
     function updateSeekPreview(position) {
         if (!videoPlayer.duration) return;
         
@@ -1460,18 +1341,12 @@ var PlayerController = (function() {
         }
     }
     
-    /**
-     * Show visual seeking indicator
-     */
     function showSeekingIndicator() {
         if (elements.seekIndicator) {
             elements.seekIndicator.classList.add('seeking');
         }
     }
     
-    /**
-     * Hide visual seeking indicator
-     */
     function hideSeekingIndicator() {
         if (elements.seekIndicator) {
             elements.seekIndicator.classList.remove('seeking');
@@ -1479,10 +1354,6 @@ var PlayerController = (function() {
         }
     }
     
-    /**
-     * Handle progress bar click for seeking
-     * @param {MouseEvent} evt - Click event
-     */
     function handleProgressBarClick(evt) {
         var rect = elements.progressBar.getBoundingClientRect();
         var pos = (evt.clientX - rect.left) / rect.width;
@@ -1495,9 +1366,6 @@ var PlayerController = (function() {
     // UI CONTROLS
     // ============================================================================
 
-    /**
-     * Show player controls and set auto-hide timer
-     */
     function showControls() {
         if (elements.playerControls) {
             elements.playerControls.classList.add('visible');
@@ -1523,12 +1391,6 @@ var PlayerController = (function() {
         }, CONTROLS_HIDE_DELAY_MS);
     }
 
-    /**
-     * Hide player controls
-     */
-    /**
-     * Hide player controls
-     */
     function hideControls() {
         if (elements.playerControls) {
             elements.playerControls.classList.remove('visible');
@@ -1554,34 +1416,12 @@ var PlayerController = (function() {
     // VIDEO EVENT HANDLERS
     // ============================================================================
 
-    /**
-     * Handle video play event
-     */
-    // ============================================================================
-    // VIDEO EVENT HANDLERS
-    // ============================================================================
-
-    /**
-     * Handle video play event
-     */
     function onPlay() {
     }
 
-    /**
-     * Handle video pause event
-     */
-    /**
-     * Handle video pause event
-     */
     function onPause() {
     }
     
-    /**
-     * Handle video ready to play event
-     */
-    /**
-     * Handle video ready to play event
-     */
     function onCanPlay() {
         console.log('[Player] Video ready to play');
         clearLoadingTimeout();
@@ -1593,31 +1433,13 @@ var PlayerController = (function() {
         }
     }
     
-    /**
-     * Handle video metadata loaded event
-     */
-    /**
-     * Handle video metadata loaded event
-     */
     function onLoadedMetadata() {
         clearLoadingTimeout();
     }
     
-    /**
-     * Handle video buffering event
-     */
-    /**
-     * Handle video buffering event
-     */
     function onWaiting() {
     }
     
-    /**
-     * Handle video playing event (playback started)
-     */
-    /**
-     * Handle video playing event (playback started)
-     */
     function onPlaying() {
         clearLoadingTimeout();
         setLoadingState(LoadingState.READY);
@@ -1645,12 +1467,6 @@ var PlayerController = (function() {
         }
     }
 
-    /**
-     * Handle video time update event
-     */
-    /**
-     * Handle video time update event
-     */
     function onTimeUpdate() {
         if (!videoPlayer.duration) return;
 
@@ -1733,15 +1549,6 @@ var PlayerController = (function() {
         alert('Playback error occurred (code: ' + errorCode + ')');
     }
 
-    /**
-     * Exit player and clean up resources
-     */
-    /**
-     * Exit player and clean up resources
-     */
-    /**
-     * Play previous item in queue/playlist
-     */
     function playPreviousItem() {
         
         // Stop current playback
@@ -1754,9 +1561,6 @@ var PlayerController = (function() {
         window.history.back();
     }
     
-    /**
-     * Play next item in queue/playlist
-     */
     function playNextItem() {
         
         // Stop current playback
@@ -1819,40 +1623,18 @@ var PlayerController = (function() {
     // LOADING STATE MANAGEMENT
     // ============================================================================
 
-    /**
-     * Show loading indicator
-     */
-    // ============================================================================
-    // LOADING STATE MANAGEMENT
-    // ============================================================================
-
-    /**
-     * Show loading indicator
-     */
     function showLoading() {
         if (elements.loadingIndicator) {
             elements.loadingIndicator.style.display = 'flex';
         }
     }
 
-    /**
-     * Hide loading indicator
-     */
-    /**
-     * Hide loading indicator
-     */
     function hideLoading() {
         if (elements.loadingIndicator) {
             elements.loadingIndicator.style.display = 'none';
         }
     }
 
-    /**
-     * Show user-friendly error dialog
-     * @param {string} title - Error title
-     * @param {string} message - User-friendly error message
-     * @param {string} [details] - Technical details (optional)
-     */
     function showErrorDialog(title, message, details) {
         hideLoading();
         
@@ -1874,9 +1656,6 @@ var PlayerController = (function() {
         }, 100);
     }
 
-    /**
-     * Close error dialog and navigate back
-     */
     function closeErrorDialog() {
         if (elements.errorDialog) {
             elements.errorDialog.style.display = 'none';
@@ -1884,9 +1663,6 @@ var PlayerController = (function() {
         window.history.back();
     }
 
-    /**
-     * Detect which audio track is currently playing and update currentAudioIndex
-     */
     function detectCurrentAudioTrack() {
         if (!playerAdapter || !itemData || !itemData.MediaSources) return;
         
@@ -1954,16 +1730,6 @@ var PlayerController = (function() {
     // TRACK SELECTION
     // ============================================================================
 
-    /**
-     * Show audio track selector modal
-     */
-    // ============================================================================
-    // TRACK SELECTION
-    // ============================================================================
-
-    /**
-     * Show audio track selector modal
-     */
     function showAudioTrackSelector() {
         
         if (!itemData || !itemData.MediaSources || !itemData.MediaSources[0].MediaStreams) {
@@ -2000,12 +1766,6 @@ var PlayerController = (function() {
         }
     }
 
-    /**
-     * Show subtitle track selector modal
-     */
-    /**
-     * Show subtitle track selector modal
-     */
     function showSubtitleTrackSelector() {
         
         if (!itemData || !itemData.MediaSources || !itemData.MediaSources[0].MediaStreams) {
@@ -2033,14 +1793,6 @@ var PlayerController = (function() {
         }
     }
 
-    /**
-     * Select audio track by index
-     * @param {number} index - Track index
-     */
-    /**
-     * Select audio track by index
-     * @param {number} index - Track index
-     */
     function selectAudioTrack(index) {
         console.log('[Player] Selecting audio track:', index);
         
@@ -2101,14 +1853,6 @@ var PlayerController = (function() {
         closeModal();
     }
 
-    /**
-     * Select subtitle track by index
-     * @param {number} index - Track index (-1 to disable)
-     */
-    /**
-     * Select subtitle track by index
-     * @param {number} index - Track index (-1 to disable)
-     */
     function selectSubtitleTrack(index) {
         console.log('[Player] Selecting subtitle track:', index === -1 ? 'None' : index);
         
@@ -2167,11 +1911,6 @@ var PlayerController = (function() {
         closeModal();
     }
 
-    /**
-     * Reload video with specific track selection (fallback for non-Shaka adapters)
-     * @param {string} trackType - 'audio' or 'subtitle'
-     * @param {Object} stream - The stream object to select
-     */
     function reloadVideoWithTrack(trackType, stream) {
         console.log('[Player] Reloading video with', trackType, 'track:', stream.Index);
         
@@ -2256,9 +1995,6 @@ var PlayerController = (function() {
         }
     }
 
-    /**
-     * Show video playback information modal
-     */
     function showVideoInfo() {
         if (!itemData || !playbackInfo) {
             return;
@@ -2473,9 +2209,6 @@ var PlayerController = (function() {
         
     }
 
-    /**
-     * Show chapters modal
-     */
     function showChaptersModal() {
         if (!itemData || !itemData.Chapters || itemData.Chapters.length === 0) {
             // Still show modal but with "No chapters" message
@@ -2565,9 +2298,6 @@ var PlayerController = (function() {
         
     }
 
-    /**
-     * Seek to a chapter by its start position
-     */
     function seekToChapter(startTicks) {
         var startSeconds = startTicks / 10000000;
         
@@ -2583,9 +2313,6 @@ var PlayerController = (function() {
         closeModal();
     }
 
-    /**
-     * Show playback speed selector modal
-     */
     function showPlaybackSpeedSelector() {
         if (!elements.speedList || !elements.speedModal) {
             return;
@@ -2626,10 +2353,6 @@ var PlayerController = (function() {
         
     }
     
-    /**
-     * Set playback speed
-     * @param {number} speed - Playback speed multiplier
-     */
     function setPlaybackSpeed(speed) {
         if (speed < 0.25 || speed > 2.0) {
             return;
@@ -2684,9 +2407,6 @@ var PlayerController = (function() {
         { value: '420000', label: '420 Kbps' }
     ];
     
-    /**
-     * Show quality/bitrate selector modal
-     */
     function showQualitySelector() {
         if (!elements.qualityList || !elements.qualityModal) {
             return;
@@ -2734,10 +2454,6 @@ var PlayerController = (function() {
         
     }
     
-    /**
-     * Set max bitrate preference
-     * @param {string} bitrate - Max bitrate in bps
-     */
     function setMaxBitrate(bitrate) {
         storage.set('maxBitrate', bitrate, false);
         
@@ -2826,9 +2542,6 @@ var PlayerController = (function() {
         closeModal();
     }
     
-    /**
-     * Start monitoring bitrate and update indicator
-     */
     function startBitrateMonitoring() {
         if (bitrateUpdateInterval) {
             clearInterval(bitrateUpdateInterval);
@@ -2839,9 +2552,6 @@ var PlayerController = (function() {
         }, BITRATE_UPDATE_INTERVAL_MS);
     }
     
-    /**
-     * Stop bitrate monitoring
-     */
     function stopBitrateMonitoring() {
         if (bitrateUpdateInterval) {
             clearInterval(bitrateUpdateInterval);
@@ -2853,9 +2563,6 @@ var PlayerController = (function() {
         }
     }
     
-    /**
-     * Update bitrate indicator based on current playback
-     */
     function updateBitrateIndicator() {
         if (!elements.bitrateIndicator || !playbackInfo || !playbackInfo.MediaSource) {
             return;
@@ -2879,12 +2586,6 @@ var PlayerController = (function() {
         }
     }
 
-    /**
-     * Close all modals
-     */
-    /**
-     * Close all modals
-     */
     function closeModal() {
         if (elements.audioModal) {
             elements.audioModal.style.display = 'none';
@@ -2917,9 +2618,6 @@ var PlayerController = (function() {
         }
     }
 
-    /**
-     * Load media segments (intro/outro markers) from Jellyfin server
-     */
     function loadMediaSegments() {
         if (!auth || !itemId) {
             return;
@@ -2965,9 +2663,6 @@ var PlayerController = (function() {
         });
     }
 
-    /**
-     * Load next episode data for "Play Next Episode" button
-     */
     function loadNextEpisode() {
         console.log('[loadNextEpisode] START');
         console.log('[loadNextEpisode] auth:', !!auth, 'itemData:', !!itemData);
@@ -3027,9 +2722,6 @@ var PlayerController = (function() {
         });
     }
 
-    /**
-     * Check if current playback position is within a skip segment
-     */
     function checkSkipSegments(currentTime) {
         if (!mediaSegments || mediaSegments.length === 0) return;
         
@@ -3072,9 +2764,6 @@ var PlayerController = (function() {
         }
     }
 
-    /**
-     * Show skip overlay button
-     */
     function showSkipOverlay(segment) {
         if (!elements.skipOverlay || !elements.skipButton || !elements.skipButtonText) return;
         
@@ -3093,9 +2782,6 @@ var PlayerController = (function() {
         skipOverlayVisible = true;
     }
 
-    /**
-     * Hide skip overlay button
-     */
     function hideSkipOverlay() {
         if (!elements.skipOverlay) return;
         
@@ -3108,9 +2794,6 @@ var PlayerController = (function() {
         currentSkipSegment = null;
     }
 
-    /**
-     * Get button text based on segment type
-     */
     function getSkipButtonText(segmentType) {
         switch (segmentType) {
             case 'Intro':
@@ -3131,9 +2814,6 @@ var PlayerController = (function() {
         }
     }
 
-    /**
-     * Update skip button countdown time
-     */
     function updateSkipButtonTime(seconds) {
         if (!elements.skipButtonTime) return;
         
@@ -3144,12 +2824,6 @@ var PlayerController = (function() {
         }
     }
 
-    /**
-     * Play next episode without page reload
-     */
-    /**
-     * Play the next episode in the series without reloading the page
-     */
     function playNextEpisode() {
         console.log('[playNextEpisode] START');
         if (!nextEpisodeData) {
@@ -3191,12 +2865,6 @@ var PlayerController = (function() {
         console.log('[playNextEpisode] END');
     }
     
-    /**
-     * Execute skip action (seek past segment or play next episode)
-     */
-    /**
-     * Execute skip action (seek past segment or play next episode)
-     */
     function executeSkip() {
         console.log('[executeSkip] START - currentSkipSegment:', currentSkipSegment);
         if (!currentSkipSegment) {
