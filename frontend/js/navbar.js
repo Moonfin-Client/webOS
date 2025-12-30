@@ -302,7 +302,15 @@
         var navPill = document.querySelector('.nav-pill');
         var settingsBtn = document.getElementById('settingsBtn');
         
-        if (navPill && libraries.length > 0) {
+        if (!navPill) return;
+        
+        // Remove any existing library buttons to prevent duplicates
+        var existingButtons = navPill.querySelectorAll('.nav-btn[data-library-id]');
+        for (var i = 0; i < existingButtons.length; i++) {
+            existingButtons[i].parentNode.removeChild(existingButtons[i]);
+        }
+        
+        if (libraries.length > 0) {
             libraries.forEach(function(library) {
                 var btn = document.createElement('button');
                 btn.className = 'nav-btn';

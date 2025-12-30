@@ -59,6 +59,7 @@ var SettingsController = (function() {
         // Jellyseerr settings
         jellyseerrEnabled: false,
         jellyseerrUrl: '',
+        jellyseerrApiKey: '',
         jellyseerrFilterNSFW: true
     };
 
@@ -457,6 +458,16 @@ var SettingsController = (function() {
         var jellyseerrUrlValue = document.getElementById('jellyseerrUrlValue');
         if (jellyseerrUrlValue) {
             jellyseerrUrlValue.textContent = settings.jellyseerrUrl || 'Not Set';
+        }
+        
+        var jellyseerrApiKeyValue = document.getElementById('jellyseerrApiKeyValue');
+        if (jellyseerrApiKeyValue) {
+            if (settings.jellyseerrApiKey && settings.jellyseerrApiKey.length > 0) {
+                // Show masked API key
+                jellyseerrApiKeyValue.textContent = '••••••••' + settings.jellyseerrApiKey.slice(-4);
+            } else {
+                jellyseerrApiKeyValue.textContent = 'Not Set';
+            }
         }
         
         var jellyseerrAutoRequestValue = document.getElementById('jellyseerrAutoRequestValue');
@@ -1137,6 +1148,10 @@ var SettingsController = (function() {
                 
             case 'jellyseerrUrl':
                 promptJellyseerrUrl();
+                break;
+                
+            case 'jellyseerrApiKey':
+                promptJellyseerrApiKey();
                 break;
                 
             case 'jellyseerrAuthJellyfin':
@@ -2030,6 +2045,57 @@ var SettingsController = (function() {
     }
 
     /**
+     * Prompt for Jellyseerr API Key using modal
+     * @private
+     */
+    function promptJellyseerrApiKey() {
+        var input = document.getElementById('jellyseerrApiKeyInput');
+        if (input) {
+            input.value = settings.jellyseerrApiKey || '';
+        }
+        
+        ModalManager.show({
+            modalId: 'jellyseerrApiKeyModal',
+            inputIds: ['jellyseerrApiKeyInput'],
+            buttonIds: ['saveJellyseerrApiKeyBtn', 'cancelJellyseerrApiKeyBtn'],
+            focusReturn: '[data-setting="jellyseerrApiKey"]',
+            clearInputs: false,
+            onSave: function(inputs) {
+                var newApiKey = inputs[0].value.trim();
+                
+                settings.jellyseerrApiKey = newApiKey;
+                saveSettings();
+                updateSettingValues();
+                
+                // Also update the API client directly
+                if (typeof JellyseerrAPI !== 'undefined') {
+                    JellyseerrAPI.setApiKey(newApiKey);
+                }
+                
+                // Save to global storage for use across pages
+                if (typeof storage !== 'undefined') {
+                    storage.setJellyseerrSetting('apiKey', newApiKey);
+                }
+                
+                if (newApiKey) {
+                    showAlert('API Key saved. Jellyseerr should now work on webOS 4.', 'Success');
+                }
+                
+                closeJellyseerrApiKeyModal();
+            },
+            onCancel: closeJellyseerrApiKeyModal
+        });
+    }
+    
+    /**
+     * Close Jellyseerr API Key modal
+     * @private
+     */
+    function closeJellyseerrApiKeyModal() {
+        ModalManager.close('jellyseerrApiKeyModal');
+    }
+
+    /**
      * Handle Jellyseerr Jellyfin authentication
      * @private
      */
@@ -2055,9 +2121,7 @@ var SettingsController = (function() {
         var userId = auth.userId;
         
         // Initialize Jellyseerr first with direct initialize() call (not initializeFromPreferences which requires auth)
-        console.log('[Settings] Initializing Jellyseerr with URL:', settings.jellyseerrUrl);
         JellyseerrAPI.initialize(settings.jellyseerrUrl, null, userId).then(function() {
-            console.log('[Settings] Jellyseerr initialized successfully');
             // Show Jellyfin authentication modal
             showJellyseerrJellyfinAuthModal(username, jellyfinUrl);
         }).catch(function(error) {
@@ -2085,9 +2149,7 @@ var SettingsController = (function() {
         var userId = auth && auth.userId ? auth.userId : null;
         
         // Initialize Jellyseerr first with direct initialize() call (not initializeFromPreferences which requires auth)
-        console.log('[Settings] Initializing Jellyseerr with URL:', settings.jellyseerrUrl);
         JellyseerrAPI.initialize(settings.jellyseerrUrl, null, userId).then(function() {
-            console.log('[Settings] Jellyseerr initialized successfully');
             // Show local login modal
             showJellyseerrLocalModal();
         }).catch(function(error) {

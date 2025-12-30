@@ -865,4 +865,126 @@
          "[Polyfills] Loaded comprehensive polyfills for webOS " + webOSVersion
       );
    }
+
+   // Global image proxy for webOS 4 SSL certificate issues
+   window.ImageProxy = (function() {
+      var proxyCache = {};
+      var proxyEnabled = false;
+      var pendingRequests = {};
+      
+      // Check if image proxy should be enabled (webOS with Luna service)
+      function init() {
+         if (typeof webOS !== 'undefined' && webOS.service) {
+            proxyEnabled = true;
+            console.log('[ImageProxy] Enabled - Luna service available');
+         }
+      }
+      
+      // Load image through Luna service proxy
+      function loadImage(imgElement, url) {
+         if (!proxyEnabled || !url) {
+            imgElement.src = url;
+            return;
+         }
+         
+         // Only proxy TMDB images
+         if (url.indexOf('image.tmdb.org') === -1) {
+            imgElement.src = url;
+            return;
+         }
+         
+         // Check cache first
+         if (proxyCache[url]) {
+            imgElement.src = proxyCache[url];
+            return;
+         }
+         
+         // Check if request is already pending
+         if (pendingRequests[url]) {
+            pendingRequests[url].push(imgElement);
+            return;
+         }
+         
+         pendingRequests[url] = [imgElement];
+         
+         // Set placeholder while loading
+         imgElement.dataset.originalSrc = url;
+         
+         webOS.service.request('luna://org.moonfin.webos.service', {
+            method: 'imageProxy',
+            parameters: { url: url },
+            onSuccess: function(response) {
+               if (response.success && response.data) {
+                  proxyCache[url] = response.data;
+                  // Apply to all waiting images
+                  var waiting = pendingRequests[url] || [];
+                  for (var i = 0; i < waiting.length; i++) {
+                     waiting[i].src = response.data;
+                  }
+               } else {
+                  // Fallback to direct URL
+                  var waiting = pendingRequests[url] || [];
+                  for (var i = 0; i < waiting.length; i++) {
+                     waiting[i].src = url;
+                  }
+               }
+               delete pendingRequests[url];
+            },
+            onFailure: function(error) {
+               console.warn('[ImageProxy] Failed to proxy:', url, error);
+               // Fallback to direct URL
+               var waiting = pendingRequests[url] || [];
+               for (var i = 0; i < waiting.length; i++) {
+                  waiting[i].src = url;
+               }
+               delete pendingRequests[url];
+            }
+         });
+      }
+      
+      // Get proxied URL (for background images, etc.)
+      function getProxiedUrl(url, callback) {
+         if (!proxyEnabled || !url || url.indexOf('image.tmdb.org') === -1) {
+            callback(url);
+            return;
+         }
+         
+         if (proxyCache[url]) {
+            callback(proxyCache[url]);
+            return;
+         }
+         
+         webOS.service.request('luna://org.moonfin.webos.service', {
+            method: 'imageProxy',
+            parameters: { url: url },
+            onSuccess: function(response) {
+               if (response.success && response.data) {
+                  proxyCache[url] = response.data;
+                  callback(response.data);
+               } else {
+                  callback(url);
+               }
+            },
+            onFailure: function() {
+               callback(url);
+            }
+         });
+      }
+      
+      // Initialize on load
+      if (typeof document !== 'undefined') {
+         if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+         } else {
+            init();
+         }
+      }
+      
+      return {
+         loadImage: loadImage,
+         getProxiedUrl: getProxiedUrl,
+         isEnabled: function() { return proxyEnabled; },
+         clearCache: function() { proxyCache = {}; }
+      };
+   })();
 })();

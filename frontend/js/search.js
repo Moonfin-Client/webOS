@@ -95,40 +95,61 @@ var SearchController = (function() {
      * @private
      */
     function initializeJellyseerr() {
-        // Try initializeFromPreferences first (for existing auth)
-        return JellyseerrAPI.initializeFromPreferences()
-            .then(function(success) {
-                if (success) {
-                    console.log('[Search] initializeFromPreferences succeeded');
-                    jellyseerrEnabled = true;
-                    return success;
-                }
+        // Check for API key first (for webOS 4 compatibility)
+        var settings = storage.getUserPreference('jellyfin_settings', null);
+        if (!settings) {
+            jellyseerrEnabled = false;
+            return Promise.resolve(false);
+        }
+        
+        try {
+            var parsedSettings = typeof settings === 'string' ? JSON.parse(settings) : settings;
+            var hasApiKey = parsedSettings.jellyseerrApiKey && parsedSettings.jellyseerrApiKey.length > 0;
+            var jellyseerrUrl = parsedSettings.jellyseerrUrl;
+            
+            if (!jellyseerrUrl) {
+                jellyseerrEnabled = false;
+                return Promise.resolve(false);
+            }
+            
+            // If API key is available, use direct initialization
+            if (hasApiKey) {
+                console.log('[Search] API key found, initializing directly...');
+                var auth = JellyfinAPI.getStoredAuth();
+                var userId = auth && auth.userId ? auth.userId : null;
                 
-                // If initializeFromPreferences returns false, it means no auth yet
-                // But we still need to initialize the API with the server URL for searches to work
-                console.log('[Search] initializeFromPreferences returned false, trying direct initialization');
-                var settings = storage.getUserPreference('jellyfin_settings', null);
-                if (!settings) {
-                    jellyseerrEnabled = false;
-                    return false;
-                }
-                
-                try {
-                    var parsedSettings = typeof settings === 'string' ? JSON.parse(settings) : settings;
-                    if (!parsedSettings.jellyseerrUrl) {
+                JellyseerrAPI.setApiKey(parsedSettings.jellyseerrApiKey);
+                return JellyseerrAPI.initialize(jellyseerrUrl, parsedSettings.jellyseerrApiKey, userId)
+                    .then(function() {
+                        console.log('[Search] API key initialization succeeded');
+                        jellyseerrEnabled = true;
+                        return true;
+                    })
+                    .catch(function(error) {
+                        console.error('[Search] API key initialization failed:', error);
                         jellyseerrEnabled = false;
                         return false;
+                    });
+            }
+            
+            // No API key - try standard initialization flow
+            return JellyseerrAPI.initializeFromPreferences()
+                .then(function(success) {
+                    if (success) {
+                        console.log('[Search] initializeFromPreferences succeeded');
+                        jellyseerrEnabled = true;
+                        return success;
                     }
                     
-                    // Get user ID for cookie storage
+                    // If initializeFromPreferences returns false, it means no auth yet
+                    console.log('[Search] initializeFromPreferences returned false, trying direct initialization');
+                    
                     var auth = JellyfinAPI.getStoredAuth();
                     var userId = auth && auth.userId ? auth.userId : null;
                     
-                    // Initialize directly with just the server URL (no auth required)
-                    return JellyseerrAPI.initialize(parsedSettings.jellyseerrUrl, null, userId)
+                    return JellyseerrAPI.initialize(jellyseerrUrl, null, userId)
                         .then(function() {
                             console.log('[Search] Direct initialization succeeded');
-                            // Try auto-login to get authenticated
                             return JellyseerrAPI.attemptAutoLogin()
                                 .then(function(loginSuccess) {
                                     jellyseerrEnabled = loginSuccess;
@@ -141,12 +162,12 @@ var SearchController = (function() {
                             jellyseerrEnabled = false;
                             return false;
                         });
-                } catch (e) {
-                    console.error('[Search] Settings parsing failed:', e);
-                    jellyseerrEnabled = false;
-                    return false;
-                }
-            });
+                });
+        } catch (e) {
+            console.error('[Search] Settings parsing failed:', e);
+            jellyseerrEnabled = false;
+            return Promise.resolve(false);
+        }
     }
 
     /**
