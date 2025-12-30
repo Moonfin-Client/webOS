@@ -500,20 +500,35 @@
          self.dict = {};
 
          if (search) {
-            // Remove leading '?' if present
-            search = search.replace(/^\?/, "");
-
-            if (search) {
-               var pairs = search.split("&");
-               for (var i = 0; i < pairs.length; i++) {
-                  var pair = pairs[i].split("=");
-                  var key = decodeURIComponent(pair[0]);
-                  var value = pair[1] ? decodeURIComponent(pair[1]) : "";
-
-                  if (!self.dict[key]) {
-                     self.dict[key] = [];
+            // Handle object input (modern API)
+            if (typeof search === 'object' && search !== null && !(search instanceof Array)) {
+               for (var key in search) {
+                  if (search.hasOwnProperty(key)) {
+                     var value = search[key];
+                     if (!self.dict[key]) {
+                        self.dict[key] = [];
+                     }
+                     self.dict[key].push(value === null || value === undefined ? '' : String(value));
                   }
-                  self.dict[key].push(value);
+               }
+            }
+            // Handle string input
+            else if (typeof search === 'string') {
+               // Remove leading '?' if present
+               search = search.replace(/^\?/, "");
+
+               if (search) {
+                  var pairs = search.split("&");
+                  for (var i = 0; i < pairs.length; i++) {
+                     var pair = pairs[i].split("=");
+                     var key = decodeURIComponent(pair[0]);
+                     var value = pair[1] ? decodeURIComponent(pair[1]) : "";
+
+                     if (!self.dict[key]) {
+                        self.dict[key] = [];
+                     }
+                     self.dict[key].push(value);
+                  }
                }
             }
          }
@@ -522,7 +537,7 @@
             if (!self.dict[key]) {
                self.dict[key] = [];
             }
-            self.dict[key].push(value);
+            self.dict[key].push(value === null || value === undefined ? '' : String(value));
          };
 
          this.delete = function (key) {

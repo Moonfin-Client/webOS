@@ -63,13 +63,13 @@ AJAX.prototype.request = function(url, settings) {
 	
 	xhr.ontimeout = function (event) {
 		if (settings.error) {
-			settings.error({error: "timeout"});
+			settings.error({error: "timeout", url: url});
 		}			
 	}
 
 	xhr.onerror = function (event) {
 		if (settings.error) {
-			settings.error({error: event.target.status});
+			settings.error({error: event.target.status, url: url});
 		}			
 	}
 	

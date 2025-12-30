@@ -1307,8 +1307,8 @@ var JellyseerrAPI = (function() {
             var localEmail = storage.getJellyseerrUserSetting(currentUserId, 'localEmail', null);
             var localPassword = storage.getJellyseerrUserSetting(currentUserId, 'localPassword', null);
             
-            // Try Jellyfin SSO first
-            if (username && password && jellyfinUrl) {
+            // Try Jellyfin SSO first (password can be empty string for passwordless users)
+            if (username && jellyfinUrl && password !== null && password !== undefined) {
                 Logger.info('Attempting auto-login with Jellyfin credentials...');
                 
                 return this.loginWithJellyfin(username, password, jellyfinUrl)

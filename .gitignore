@@ -32,6 +32,13 @@ frontend-build/
 yarn.lock
 package-lock.json
 
+# webOS TV SDK folders (large, not needed in repo)
+frontend/webOSTVjs-1.2.11/Downloads/
+frontend/webOSTVjs-1.2.11/TV/
+frontend/webOSTVjs-1.2.11/Tools/
+frontend/webOSTVjs-1.2.11/OSE/
+frontend/webOSTVjs-1.2.11/Config/
+
 # IDE & Editors
 .vscode/
 .idea/

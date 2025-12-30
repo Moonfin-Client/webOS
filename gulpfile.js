@@ -42,7 +42,9 @@ function copyNonJsFiles() {
             "frontend/css/**/*",
             "frontend/assets/**/*",
             "frontend/components/**/*",
-            "frontend/webOSTVjs-1.2.11/**/*",
+            // Only copy the needed webOSTV JS files, not the entire SDK
+            "frontend/webOSTVjs-1.2.11/*.js",
+            "frontend/webOSTVjs-1.2.11/*.txt",
          ],
          { base: "frontend", encoding: false }
       )

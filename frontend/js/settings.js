@@ -2110,17 +2110,12 @@ var SettingsController = (function() {
             focusReturn: '[data-setting="jellyseerrAuthJellyfin"]',
             clearInputs: true, // Clear password for security
             onSave: function(inputs) {
-                var password = inputs[0].value;
+                var password = inputs[0].value || ''; // Allow empty password for passwordless Jellyfin users
                 
-                console.log('[Settings] Auth modal onSave called, password length:', password ? password.length : 0);
+                console.log('[Settings] Auth modal onSave called, password length:', password.length);
                 console.log('[Settings] Calling JellyseerrAPI.loginWithJellyfin with username:', username);
                 
-                if (!password) {
-                    showAlert('Password is required', 'Error');
-                    return;
-                }
-                
-                // Login with Jellyfin SSO
+                // Login with Jellyfin SSO (password can be empty for passwordless users)
                 JellyseerrAPI.loginWithJellyfin(username, password, jellyfinUrl)
                     .then(function(response) {
                         console.log('[Settings] Login successful:', response);

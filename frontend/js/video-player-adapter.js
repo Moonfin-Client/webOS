@@ -912,61 +912,190 @@ class HTML5VideoAdapter extends VideoPlayerAdapter {
         console.log('[HTML5Adapter] Loading:', url.substring(0, 80) + '...');
 
         try {
-            // Check if HLS stream and HLS.js is available
+            // Check if HLS stream
             const isHLS = url.includes('.m3u8') || (options.mimeType && options.mimeType.includes('mpegURL'));
             
-            if (isHLS && typeof Hls !== 'undefined' && Hls.isSupported()) {
-                return this.loadWithHlsJs(url, options);
-            }
-
-            // Clear existing sources
-            this.videoElement.innerHTML = '';
-            
-            // Set cross-origin if needed
-            const crossOrigin = getCrossOriginValue(options.mediaSource);
-            if (crossOrigin) {
-                this.videoElement.crossOrigin = crossOrigin;
-            }
-            
-            // Create source element
-            const source = document.createElement('source');
-            source.src = url;
-            
-            if (options.mimeType) {
-                source.type = options.mimeType;
-            }
-            
-            this.videoElement.appendChild(source);
-
-            // Set start position if provided
-            if (options.startPosition) {
-                this.videoElement.currentTime = options.startPosition;
-            }
-
-            this.emit('loaded', { url });
-
-            // Wait for video to be ready
-            return new Promise((resolve, reject) => {
-                const onCanPlay = () => {
-                    this.videoElement.removeEventListener('canplay', onCanPlay);
-                    this.videoElement.removeEventListener('error', onError);
-                    resolve();
-                };
+            if (isHLS) {
+                // Use DeviceProfile module if available for smarter HLS decision
+                if (typeof DeviceProfile !== 'undefined') {
+                    const preferNative = DeviceProfile.shouldUseNativeHls();
+                    const preferHlsJs = DeviceProfile.shouldUseHlsJs();
+                    
+                    console.log('[HTML5Adapter] DeviceProfile: preferNative=' + preferNative + ', preferHlsJs=' + preferHlsJs);
+                    
+                    // If device profile says use native HLS
+                    if (preferNative) {
+                        console.log('[HTML5Adapter] Using native HLS playback (DeviceProfile)');
+                        return this.loadNativeHLS(url, options);
+                    }
+                    
+                    // If device profile says use HLS.js and it's available
+                    if (preferHlsJs && typeof Hls !== 'undefined' && Hls.isSupported()) {
+                        console.log('[HTML5Adapter] Using HLS.js for HLS playback (DeviceProfile)');
+                        return this.loadWithHlsJs(url, options);
+                    }
+                }
                 
-                const onError = (e) => {
-                    this.videoElement.removeEventListener('canplay', onCanPlay);
-                    this.videoElement.removeEventListener('error', onError);
-                    reject(e);
-                };
+                // Fallback: Check for native HLS support first (Safari, iOS, some smart TVs)
+                // Native HLS is more reliable on older/embedded browsers than HLS.js + MediaSource
+                const videoTest = document.createElement('video');
+                const canPlayNativeHLS = videoTest.canPlayType('application/vnd.apple.mpegurl') || 
+                                         videoTest.canPlayType('application/x-mpegURL');
+                
+                if (canPlayNativeHLS) {
+                    console.log('[HTML5Adapter] Using native HLS playback');
+                    return this.loadNativeHLS(url, options);
+                }
+                
+                // Fall back to HLS.js if native not supported but MediaSource is
+                if (typeof Hls !== 'undefined' && Hls.isSupported()) {
+                    console.log('[HTML5Adapter] Using HLS.js for HLS playback');
+                    return this.loadWithHlsJs(url, options);
+                }
+                
+                // Last resort: try direct src assignment (some browsers handle it)
+                console.log('[HTML5Adapter] Trying direct HLS src assignment');
+                return this.loadNativeHLS(url, options);
+            }
 
-                this.videoElement.addEventListener('canplay', onCanPlay);
-                this.videoElement.addEventListener('error', onError);
-            });
+            // Non-HLS content - use standard HTML5 video
+            return this.loadDirect(url, options);
 
         } catch (error) {
             this.emit('error', error);
             throw error;
         }
+    }
+
+    /**
+     * Load video directly without HLS.js
+     * @private
+     */
+    loadDirect(url, options = {}) {
+        // Clear existing sources
+        this.videoElement.innerHTML = '';
+        
+        // Set cross-origin if needed
+        const crossOrigin = getCrossOriginValue(options.mediaSource);
+        if (crossOrigin) {
+            this.videoElement.crossOrigin = crossOrigin;
+        }
+        
+        // Create source element
+        const source = document.createElement('source');
+        source.src = url;
+        
+        if (options.mimeType) {
+            source.type = options.mimeType;
+        }
+        
+        this.videoElement.appendChild(source);
+
+        // Set start position if provided
+        if (options.startPosition) {
+            this.videoElement.currentTime = options.startPosition;
+        }
+
+        this.emit('loaded', { url });
+
+        // Wait for video to be ready
+        return new Promise((resolve, reject) => {
+            const onCanPlay = () => {
+                this.videoElement.removeEventListener('canplay', onCanPlay);
+                this.videoElement.removeEventListener('error', onError);
+                resolve();
+            };
+            
+            const onError = (e) => {
+                this.videoElement.removeEventListener('canplay', onCanPlay);
+                this.videoElement.removeEventListener('error', onError);
+                reject(e);
+            };
+
+            this.videoElement.addEventListener('canplay', onCanPlay);
+            this.videoElement.addEventListener('error', onError);
+        });
+    }
+
+    /**
+     * Load HLS stream using native browser support
+     * Works on Safari, iOS, and some smart TV browsers
+     * @private
+     */
+    loadNativeHLS(url, options = {}) {
+        var self = this;
+        
+        return new Promise(function(resolve, reject) {
+            // Clear existing sources
+            self.videoElement.innerHTML = '';
+            
+            // Set cross-origin if needed  
+            var crossOrigin = getCrossOriginValue(options.mediaSource);
+            if (crossOrigin) {
+                self.videoElement.crossOrigin = crossOrigin;
+            }
+            
+            // Set src directly for native HLS
+            self.videoElement.src = url;
+            
+            // Set start position if provided
+            if (options.startPosition && options.startPosition > 0) {
+                self.videoElement.currentTime = options.startPosition;
+            }
+            
+            var resolved = false;
+            var timeoutId = null;
+            
+            var cleanup = function() {
+                if (timeoutId) clearTimeout(timeoutId);
+                self.videoElement.removeEventListener('canplay', onCanPlay);
+                self.videoElement.removeEventListener('loadedmetadata', onLoadedMetadata);
+                self.videoElement.removeEventListener('error', onError);
+            };
+            
+            var onCanPlay = function() {
+                if (resolved) return;
+                resolved = true;
+                cleanup();
+                console.log('[HTML5Adapter] Native HLS ready to play');
+                self.videoElement.play().then(function() {
+                    console.log('[HTML5Adapter] Native HLS playback started');
+                    resolve();
+                }).catch(function(err) {
+                    // Play might be blocked by autoplay policy, but stream is loaded
+                    console.log('[HTML5Adapter] Native HLS loaded (play pending):', err.message);
+                    resolve();
+                });
+            };
+            
+            var onLoadedMetadata = function() {
+                console.log('[HTML5Adapter] Native HLS metadata loaded');
+            };
+            
+            var onError = function(e) {
+                if (resolved) return;
+                resolved = true;
+                cleanup();
+                var error = self.videoElement.error;
+                console.error('[HTML5Adapter] Native HLS error:', error ? error.message : 'Unknown error');
+                reject(new Error('Native HLS playback failed: ' + (error ? error.message : 'Unknown')));
+            };
+            
+            self.videoElement.addEventListener('canplay', onCanPlay);
+            self.videoElement.addEventListener('loadedmetadata', onLoadedMetadata);
+            self.videoElement.addEventListener('error', onError);
+            
+            // Timeout after 30 seconds
+            timeoutId = setTimeout(function() {
+                if (!resolved) {
+                    resolved = true;
+                    cleanup();
+                    reject(new Error('Native HLS timeout'));
+                }
+            }, 30000);
+            
+            self.emit('loaded', { url: url });
+        });
     }
 
     /**
@@ -1043,7 +1172,24 @@ class HTML5VideoAdapter extends VideoPlayerAdapter {
 
             hls.on(Hls.Events.MANIFEST_PARSED, function(event, data) {
                 console.log('[HTML5+HLS.js] Manifest parsed, levels:', data.levels ? data.levels.length : 0);
-                self.videoElement.play().then(resolve).catch(reject);
+                // Call play() but don't reject the load promise on play() errors
+                // The "interrupted by new load request" error is common during HLS.js recovery
+                // and shouldn't be treated as a fatal load failure
+                self.videoElement.play().then(function() {
+                    console.log('[HTML5+HLS.js] Play started successfully');
+                    resolve();
+                }).catch(function(err) {
+                    // AbortError ("interrupted by new load request") is not fatal
+                    // The video will continue loading and play via HLS.js events
+                    if (err.name === 'AbortError' || (err.message && err.message.indexOf('interrupted') !== -1)) {
+                        console.log('[HTML5+HLS.js] Play interrupted (non-fatal):', err.message);
+                        // Still resolve - HLS.js will handle playback
+                        resolve();
+                    } else {
+                        console.error('[HTML5+HLS.js] Play failed:', err.message);
+                        reject(err);
+                    }
+                });
             });
 
             hls.on(Hls.Events.LEVEL_LOADED, function(event, data) {
