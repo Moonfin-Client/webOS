@@ -132,6 +132,13 @@ var PlayerController = (function() {
     function init() {
         console.log('[Player] Initializing player controller');
         
+        // Initialize DeviceProfile early to load device info (HDR/DV capabilities)
+        if (typeof DeviceProfile !== 'undefined' && DeviceProfile.init) {
+            DeviceProfile.init(function(deviceInfo) {
+                console.log('[Player] DeviceProfile initialized with device info:', deviceInfo);
+            });
+        }
+        
         // Get auth for the specific server from URL params or active server
         auth = typeof MultiServerManager !== 'undefined' 
             ? MultiServerManager.getAuthForPage() 
@@ -800,12 +807,13 @@ var PlayerController = (function() {
         var streamUrl;
         var mimeType;
         var useDirectPlay = false;
-        var params = new URLSearchParams({
-            mediaSourceId: mediaSource.Id,
-            deviceId: JellyfinAPI.init(),
-            api_key: auth.accessToken,
-            PlaySessionId: playSessionId
-        });
+        // URLSearchParams in Chrome 53 (webOS 4) doesn't support object constructor
+        // Must append parameters one by one
+        var params = new URLSearchParams();
+        params.append('mediaSourceId', mediaSource.Id);
+        params.append('deviceId', JellyfinAPI.init());
+        params.append('api_key', auth.accessToken);
+        params.append('PlaySessionId', playSessionId);
         
         var videoStream = mediaSource.MediaStreams ? mediaSource.MediaStreams.find(function(s) { return s.Type === 'Video'; }) : null;
         var audioStream = mediaSource.MediaStreams ? mediaSource.MediaStreams.find(function(s) { return s.Type === 'Audio'; }) : null;
@@ -817,16 +825,38 @@ var PlayerController = (function() {
             (videoStream.Codec.toLowerCase() === 'hevc' || videoStream.Codec.toLowerCase().startsWith('hev1') || 
              videoStream.Codec.toLowerCase().startsWith('hvc1')) && 
             videoStream.BitDepth === 10;
+        var isHDR = videoStream && videoStream.VideoRangeType && 
+            videoStream.VideoRangeType !== 'SDR';
         
         var safeVideoCodecs = ['h264', 'avc', 'hevc', 'h265', 'hev1', 'hvc1', 'dvhe', 'dvh1'];
         var safeAudioCodecs = ['aac', 'mp3', 'ac3', 'eac3', 'dts', 'truehd', 'flac'];
-        var safeContainers = ['mp4', 'mkv'];
+        var safeContainers = ['mp4', 'mkv', 'ts', 'm2ts'];
+        
+        // Use DeviceProfile for more accurate capability detection
+        var recommendedPlayMethod = 'Transcode';
+        if (typeof DeviceProfile !== 'undefined' && DeviceProfile.getPlayMethod) {
+            recommendedPlayMethod = DeviceProfile.getPlayMethod(mediaSource);
+            console.log('[Player] DeviceProfile recommended play method:', recommendedPlayMethod);
+        }
         
         var canDirectPlay = mediaSource.SupportsDirectPlay && 
             mediaSource.Container && 
             safeContainers.indexOf(mediaSource.Container.toLowerCase()) !== -1 &&
             videoStream && videoStream.Codec && safeVideoCodecs.indexOf(videoStream.Codec.toLowerCase()) !== -1 &&
             audioStream && audioStream.Codec && safeAudioCodecs.indexOf(audioStream.Codec.toLowerCase()) !== -1;
+        
+        // Consider HDR capability from DeviceProfile
+        if (isHDR && typeof DeviceProfile !== 'undefined') {
+            var caps = DeviceProfile.getCapabilities();
+            if (!caps.hdr10 && videoStream.VideoRangeType && videoStream.VideoRangeType.indexOf('HDR10') !== -1) {
+                console.log('[Player] HDR10 content but TV may not support HDR10, preferring transcode');
+                canDirectPlay = false;
+            }
+            if (!caps.dolbyVision && isDolbyVision) {
+                console.log('[Player] Dolby Vision content but TV may not support DV, preferring transcode');
+                canDirectPlay = false;
+            }
+        }
         
         var canTranscode = mediaSource.SupportsTranscoding;
         
@@ -872,14 +902,33 @@ var PlayerController = (function() {
             isTranscoding = false;
         } else if (canTranscode) {
             streamUrl = auth.serverAddress + '/Videos/' + itemId + '/master.m3u8';
-            params.append('VideoCodec', 'h264');
-            params.append('AudioCodec', 'aac');
-            params.append('VideoBitrate', '20000000');  // Increased for better quality
+            
+            // Determine best transcoding codec based on capabilities
+            var transVideoCodec = 'h264';
+            var transAudioCodec = 'aac';
+            var transMaxBitrate = '20000000';
+            
+            // If webOS 4+ supports HEVC in HLS, prefer HEVC transcoding for HDR content
+            if (typeof DeviceProfile !== 'undefined') {
+                var caps = DeviceProfile.getCapabilities();
+                if (caps.hevc && caps.webosVersion >= 4 && (isHDR || isHEVC10bit)) {
+                    transVideoCodec = 'hevc';
+                    console.log('[Player] Using HEVC transcoding for HDR content');
+                }
+                // Check if AC3/EAC3 is preferred over AAC
+                if (caps.ac3 || caps.eac3) {
+                    transAudioCodec = 'aac,ac3,eac3';
+                }
+            }
+            
+            params.append('VideoCodec', transVideoCodec);
+            params.append('AudioCodec', transAudioCodec);
+            params.append('VideoBitrate', transMaxBitrate);
             params.append('AudioBitrate', '256000');
             params.append('MaxWidth', '3840');  // Support 4K transcoding
             params.append('MaxHeight', '2160');
             params.append('SegmentLength', '6');
-            params.append('MinSegments', '3');
+            params.append('MinSegments', '2');
             params.append('BreakOnNonKeyFrames', 'false');
             
             // Check for user-selected track preferences from details page (not for Live TV)
@@ -1934,21 +1983,21 @@ var PlayerController = (function() {
         
         // Build stream URL with track-specific parameters
         var streamUrl = auth.serverAddress + '/Videos/' + itemId + '/master.m3u8';
-        var params = new URLSearchParams({
-            mediaSourceId: currentMediaSource.Id,
-            deviceId: JellyfinAPI.init(),
-            api_key: auth.accessToken,
-            PlaySessionId: newPlaySessionId,  // New session ID
-            VideoCodec: 'h264',
-            AudioCodec: 'aac',
-            VideoBitrate: '20000000',  // Increased for better quality
-            AudioBitrate: '256000',
-            MaxWidth: '3840',  // Support 4K transcoding
-            MaxHeight: '2160',
-            SegmentLength: '6',
-            MinSegments: '3',
-            BreakOnNonKeyFrames: 'false'
-        });
+        // URLSearchParams in Chrome 53 (webOS 4) doesn't support object constructor
+        var params = new URLSearchParams();
+        params.append('mediaSourceId', currentMediaSource.Id);
+        params.append('deviceId', JellyfinAPI.init());
+        params.append('api_key', auth.accessToken);
+        params.append('PlaySessionId', newPlaySessionId);  // New session ID
+        params.append('VideoCodec', 'h264');
+        params.append('AudioCodec', 'aac');
+        params.append('VideoBitrate', '20000000');  // Increased for better quality
+        params.append('AudioBitrate', '256000');
+        params.append('MaxWidth', '3840');  // Support 4K transcoding
+        params.append('MaxHeight', '2160');
+        params.append('SegmentLength', '6');
+        params.append('MinSegments', '3');
+        params.append('BreakOnNonKeyFrames', 'false');
 
         // Set the specific track indices - these tell Jellyfin which tracks to transcode
         if (trackType === 'audio') {
