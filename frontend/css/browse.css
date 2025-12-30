@@ -105,13 +105,15 @@ body {
 
 .featured-logo {
     position: absolute;
-    top: 180px;
-    left: 60px;
-    max-width: 450px;
-    max-height: 180px;
+    bottom: 80px;
+    left: 1360px;
+    right: 0;
+    max-width: 350px;
+    max-height: 140px;
     object-fit: contain;
     z-index: 10;
-    filter: drop-shadow(2px 4px 12px rgba(0, 0, 0, 0.8));
+    filter: drop-shadow(2px 4px 12px rgba(0, 0, 0, 0.8)) drop-shadow(0 0 20px rgba(0, 0, 0, 0.6));
+    margin: 0 auto;
 }
 
 .featured-title {
@@ -131,7 +133,7 @@ body {
     position: absolute;
     bottom: 80px;
     left: 60px;
-    max-width: 750px;
+    max-width: 1300px;
     z-index: 2;
 }
 
