@@ -3,7 +3,7 @@
  * Handles library grid navigation, filtering, and item selection
  * @namespace LibraryController
  */
-const LibraryController = {
+var LibraryController = {
     libraryId: null,
     libraryName: null,
     libraryType: null,
@@ -31,8 +31,8 @@ const LibraryController = {
      * Initialize the library controller
      * Gets library ID from URL, caches elements, and loads library items
      */
-    init() {
-        const urlParams = new URLSearchParams(window.location.search);
+    init: function() {
+        var urlParams = new URLSearchParams(window.location.search);
         this.libraryId = urlParams.get('id');
         this.serverId = urlParams.get('serverId'); // Get server ID from URL if present
         
@@ -41,12 +41,12 @@ const LibraryController = {
             return;
         }
 
-        const self = this;
-        const initLibrary = function() {
+        var self = this;
+        var initLibrary = function() {
             self.cacheElements();
             self.setupEventListeners();
             self.updateColumns();
-            window.addEventListener('resize', () => self.updateColumns());
+            window.addEventListener('resize', function() { self.updateColumns(); });
             self.loadLibrary();
         };
 

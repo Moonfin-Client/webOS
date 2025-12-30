@@ -480,31 +480,25 @@ var MultiServerManager = (function() {
      * @private
      */
     function cleanupServerNames() {
-        console.log('[MULTI-SERVER] cleanupServerNames() starting...');
         var servers = getAllServers();
-        console.log('[MULTI-SERVER] Loaded servers:', JSON.stringify(servers, null, 2));
         var updated = false;
         
         for (var serverId in servers) {
             if (servers.hasOwnProperty(serverId)) {
                 var server = servers[serverId];
                 var originalName = server.name;
-                console.log('[MULTI-SERVER] Checking server:', serverId, 'name:', originalName);
                 
                 // Check if server name has the old enhanced format with parentheses
                 // This handles formats like: "Name (hostname)", "Jellyfin Server (hostname)", etc.
                 var match = server.name.match(/^(.+?)\s*\((.+?)\)$/);
-                console.log('[MULTI-SERVER] Regex match result:', match);
                 if (match) {
                     // Extract the base name (before the parentheses)
                     var baseName = match[1].trim();
-                    console.log('[MULTI-SERVER] Extracted base name:', baseName);
                     
                     // Only update if the base name is different
                     if (baseName !== server.name) {
                         server.name = baseName;
                         updated = true;
-                        console.log('[MULTI-SERVER] ✓ Cleaned server name: "' + originalName + '" -> "' + baseName + '"');
                         if (typeof JellyfinAPI !== 'undefined') {
                             JellyfinAPI.Logger.info('[MULTI-SERVER] Cleaned server name: "' + originalName + '" -> "' + baseName + '"');
                         }
@@ -514,16 +508,9 @@ var MultiServerManager = (function() {
         }
         
         if (updated) {
-            console.log('[MULTI-SERVER] Saving cleaned servers to storage...');
             storage.set(SERVERS_KEY, servers);
-            console.log('[MULTI-SERVER] ✓ Server names cleaned and saved');
             if (typeof JellyfinAPI !== 'undefined') {
                 JellyfinAPI.Logger.success('[MULTI-SERVER] Server names cleaned');
-            }
-        } else {
-            console.log('[MULTI-SERVER] No server names needed cleaning');
-            if (typeof JellyfinAPI !== 'undefined') {
-                JellyfinAPI.Logger.info('[MULTI-SERVER] No server names needed cleaning');
             }
         }
     }

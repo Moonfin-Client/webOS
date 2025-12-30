@@ -697,6 +697,16 @@ var PlayerController = (function() {
     }
 
     function getDeviceProfile() {
+        // Use the DeviceProfile module if available for dynamic capability detection
+        if (typeof DeviceProfile !== 'undefined') {
+            return DeviceProfile.getProfile({
+                maxBitrate: 120000000,
+                maxWidth: 3840,
+                maxHeight: 2160
+            });
+        }
+        
+        // Fallback to static profile
         return {
             MaxStreamingBitrate: 120000000,
             MaxStaticBitrate: 100000000,
@@ -710,6 +720,7 @@ var PlayerController = (function() {
                 { Container: 'mkv', Type: 'Video', VideoCodec: 'dvhe,dvh1', AudioCodec: 'eac3,ac3,aac,mp3,dts,truehd' }
             ],
             TranscodingProfiles: [
+                { Container: 'mp4', Type: 'Video', AudioCodec: 'aac,mp3,ac3', VideoCodec: 'h264', Protocol: 'hls', Context: 'Streaming', MaxAudioChannels: '6', MinSegments: '2', BreakOnNonKeyFrames: false },
                 { Container: 'ts', Type: 'Video', AudioCodec: 'aac,mp3,ac3', VideoCodec: 'h264', Protocol: 'hls', Context: 'Streaming', MaxAudioChannels: '6' },
                 { Container: 'mp4', Type: 'Video', AudioCodec: 'aac,mp3', VideoCodec: 'h264', Context: 'Static' }
             ],
@@ -719,10 +730,11 @@ var PlayerController = (function() {
                     Type: 'Video',
                     Codec: 'h264',
                     Conditions: [
-                        { Condition: 'LessThanEqual', Property: 'Width', Value: '1920' },
-                        { Condition: 'LessThanEqual', Property: 'Height', Value: '1000' },
+                        { Condition: 'LessThanEqual', Property: 'Width', Value: '3840' },
+                        { Condition: 'LessThanEqual', Property: 'Height', Value: '2160' },
                         { Condition: 'LessThanEqual', Property: 'VideoFramerate', Value: '60' },
-                        { Condition: 'LessThanEqual', Property: 'VideoBitrate', Value: '40000000' }
+                        { Condition: 'LessThanEqual', Property: 'VideoBitrate', Value: '120000000' },
+                        { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: '51' }
                     ]
                 },
                 {
@@ -730,15 +742,15 @@ var PlayerController = (function() {
                     Codec: 'hevc',
                     Conditions: [
                         { Condition: 'LessThanEqual', Property: 'Width', Value: '3840' },
-                        { Condition: 'LessThanEqual', Property: 'Height', Value: '2000' },
+                        { Condition: 'LessThanEqual', Property: 'Height', Value: '2160' },
                         { Condition: 'LessThanEqual', Property: 'VideoFramerate', Value: '60' },
-                        { Condition: 'LessThanEqual', Property: 'VideoBitrate', Value: '100000000' }
+                        { Condition: 'LessThanEqual', Property: 'VideoBitrate', Value: '120000000' }
                     ]
                 },
                 {
                     Type: 'VideoAudio',
                     Conditions: [
-                        { Condition: 'LessThanEqual', Property: 'AudioChannels', Value: '6' }
+                        { Condition: 'LessThanEqual', Property: 'AudioChannels', Value: '8' }
                     ]
                 }
             ],

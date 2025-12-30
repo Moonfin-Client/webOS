@@ -1,16 +1,17 @@
 var BrowseController = (function() {
     'use strict';
 
-    let auth = null;
-    let rows = [];
-    let userLibraries = [];
-    let featuredBannerEnabled = true;
-    let hasImageHelper = false;
-    let currentView = 'home'; // Track current view type
-    let homeContentLoaded = false; // Track if home content has been loaded
-    let contentLoading = false; // Track if content is currently being loaded
+    var auth = null;
+    var rows = [];
+    var userLibraries = [];
+    var featuredBannerEnabled = true;
+    var hasImageHelper = false;
+    var currentView = 'home'; // Track current view type
+    var homeContentLoaded = false; // Track if home content has been loaded
+    var contentLoading = false; // Track if content is currently being loaded
+    var fallbackNavigationActive = false; // Track if fallback navigation has been enabled
     
-    const focusManager = {
+    var focusManager = {
         currentRow: 0,
         currentItem: 0,
         totalRows: 0,
@@ -22,29 +23,28 @@ var BrowseController = (function() {
         previousRow: 0
     };
     
-    const featuredCarousel = {
+    var featuredCarousel = {
         items: [],
         currentIndex: 0,
         intervalId: null,
         transitioning: false
     };
 
-    let elements = {};
+    var elements = {};
 
-    const NAVBAR_CHECK_INTERVAL_MS = 50;
-    const FOCUS_INIT_DELAY_MS = 100;
-    const CONTENT_LOAD_DELAY_MS = 800;
+    var NAVBAR_CHECK_INTERVAL_MS = 50;
+    var FOCUS_INIT_DELAY_MS = 100;
+    var CONTENT_LOAD_DELAY_MS = 800;
     
-    const SCROLL_ANIMATION_DURATION_MS = 250;
-    const SCROLL_THRESHOLD_PX = 2;
-    const ROW_VERTICAL_POSITION = 0.45;
+    var SCROLL_ANIMATION_DURATION_MS = 250;
+    var SCROLL_THRESHOLD_PX = 2;
+    var ROW_VERTICAL_POSITION = 0.45;
 
     /**
      * Initialize the browse controller
      * Authenticates, caches elements, loads libraries, and sets up navigation
      */
     function init() {
-        
         // Use MultiServerManager if available, otherwise fall back to JellyfinAPI
         auth = typeof MultiServerManager !== 'undefined' 
             ? MultiServerManager.getAuthForPage() 
@@ -69,10 +69,8 @@ var BrowseController = (function() {
                 setupNavigation();
                 loadHomeContent();
                 
+                // Update checker runs after a delay
                 setTimeout(function() {
-                    restoreFocusPosition();
-                    
-                    // Check for app updates silently after content loads
                     if (typeof UpdateChecker !== 'undefined') {
                         UpdateChecker.init();
                     }
@@ -84,7 +82,7 @@ var BrowseController = (function() {
         window.addEventListener('pageshow', function(event) {
             // If page is being restored from cache (back navigation), reload home view
             // Only trigger on back navigation, not on initial page load
-            if (event.persisted && homeContentLoaded) {
+            if (event.persisted && homeContentLoaded && !contentLoading) {
                 switchView('home');
             }
         });
@@ -737,12 +735,22 @@ var BrowseController = (function() {
         var itemCenter = itemRect.left + (itemRect.width / 2);
         var scrollerCenter = scrollerRect.left + (scrollerRect.width / 2);
         
-        // Get current transform
+        // Get current transform - use fallback for older browsers without DOMMatrix
         var currentTransform = getComputedStyle(rowItems).transform;
         var currentX = 0;
         if (currentTransform !== 'none') {
-            var matrix = new DOMMatrix(currentTransform);
-            currentX = matrix.m41;
+            // Try DOMMatrix first, fall back to regex parsing for older browsers
+            if (typeof DOMMatrix !== 'undefined') {
+                var matrix = new DOMMatrix(currentTransform);
+                currentX = matrix.m41;
+            } else {
+                // Fallback: parse matrix(a, b, c, d, tx, ty) or matrix3d(...)
+                var matrixMatch = currentTransform.match(/matrix\(([^)]+)\)/);
+                if (matrixMatch) {
+                    var values = matrixMatch[1].split(',').map(function(v) { return parseFloat(v.trim()); });
+                    currentX = values[4] || 0; // tx is the 5th value
+                }
+            }
         }
         
         // Calculate desired scroll
@@ -940,6 +948,8 @@ var BrowseController = (function() {
      * @private
      */
     function enableFallbackNavigation() {
+        if (fallbackNavigationActive) return;
+        fallbackNavigationActive = true;
         console.log('[BROWSE] Enabling fallback navigation mode - no content rows available');
         
         // Clear any existing focus from content area
@@ -1036,7 +1046,7 @@ var BrowseController = (function() {
      * @private
      */
     function loadHomeContent() {
-        // Mark that home content has been loaded (prevents duplicate loads on pageshow)
+        if (contentLoading) return;
         homeContentLoaded = true;
         contentLoading = true; // Mark that we're loading content
         
@@ -1754,8 +1764,8 @@ var BrowseController = (function() {
     function loadRows(rowDefinitions) {
         var completed = 0;
         var hasContent = false;
+        fallbackNavigationActive = false;
         
-        // Add failsafe timeout to always hide loading indicator
         var loadingFailsafe = setTimeout(function() {
             contentLoading = false;
             hideLoading();
@@ -1763,6 +1773,7 @@ var BrowseController = (function() {
                 showError('Loading timed out. Some content may not have loaded.');
                 enableFallbackNavigation();
             }
+            restoreFocusPosition();
         }, 8000);
         
         // If no rows to load, hide loading immediately
@@ -1782,7 +1793,6 @@ var BrowseController = (function() {
                 
                 if (completed === rowDefinitions.length) {
                     clearTimeout(loadingFailsafe);
-                    
                     // Sort rows by their order attribute
                     sortRowsByOrder();
                     
@@ -1792,7 +1802,10 @@ var BrowseController = (function() {
                         showError('No content available in your library');
                         enableFallbackNavigation();
                     }
-                    // Focus initialization handled by restoreFocusPosition in init()
+                    // Restore focus now that content has loaded
+                    setTimeout(function() {
+                        restoreFocusPosition();
+                    }, 100);
                 }
             });
         });
@@ -2885,6 +2898,8 @@ var BrowseController = (function() {
         if (elements.contentRows) {
             elements.contentRows.innerHTML = '';
         }
+        // Reset fallback flag when clearing rows for new content
+        fallbackNavigationActive = false;
     }
 
     function showLoading() {
