@@ -23,6 +23,21 @@ function clean() {
    return del(["frontend/js-transpiled/**", "!frontend/js-transpiled"]);
 }
 
+// Sync version from package.json to appinfo.json and services/package.json
+function syncVersion(cb) {
+   const appInfo = JSON.parse(readFileSync("./frontend/appinfo.json", "utf8"));
+   const servicesPackageInfo = JSON.parse(readFileSync("./services/package.json", "utf8"));
+   
+   appInfo.version = version;
+   servicesPackageInfo.version = version;
+   
+   writeFileSync("./frontend/appinfo.json", JSON.stringify(appInfo, null, 4) + "\n");
+   writeFileSync("./services/package.json", JSON.stringify(servicesPackageInfo, null, 2) + "\n");
+   
+   console.info(`Synced version ${version} to appinfo.json and services/package.json`);
+   cb();
+}
+
 // Update app-version.js with current version
 function updateVersion(cb) {
    const versionContent = `var APP_VERSION = '${version}';\n`;
@@ -94,12 +109,13 @@ function transpileInPlace() {
       .pipe(gulp.dest("."));
 }
 
-const buildES5 = gulp.series(clean, updateVersion, gulp.parallel(copyNonJsFiles, transpileES5));
-const transpile = gulp.series(updateVersion, transpileInPlace);
+const buildES5 = gulp.series(clean, syncVersion, updateVersion, gulp.parallel(copyNonJsFiles, transpileES5));
+const transpile = gulp.series(syncVersion, updateVersion, transpileInPlace);
 
 // Export tasks
 export {
    clean,
+   syncVersion,
    updateVersion,
    copyNonJsFiles,
    transpileES5,
