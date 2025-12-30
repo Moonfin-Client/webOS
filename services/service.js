@@ -8,25 +8,64 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
+// File-based logging for debugging on webOS 4
+var fs = require('fs');
+var logFile = '/tmp/moonfin-service.log';
+
+function logToFile(msg) {
+	var timestamp = new Date().toISOString();
+	var line = '[' + timestamp + '] ' + msg + '\n';
+	try {
+		fs.appendFileSync(logFile, line);
+	} catch (e) {
+		// Ignore file write errors
+	}
+	console.log(msg);
+}
+
+logToFile('[Service] ========================================');
+logToFile('[Service] Moonfin service starting...');
+logToFile('[Service] Node.js version: ' + process.version);
+logToFile('[Service] Platform: ' + process.platform);
+logToFile('[Service] ========================================');
+
+// Catch any uncaught exceptions
+process.on('uncaughtException', function(err) {
+	logToFile('[Service] UNCAUGHT EXCEPTION: ' + err.message);
+	logToFile('[Service] Stack: ' + err.stack);
+});
+
 var pkgInfo = require('./package.json');
+logToFile('[Service] Package loaded: ' + pkgInfo.name);
+
 var Service = require('webos-service');
+logToFile('[Service] webos-service module loaded');
 
 // Register com.yourdomain.@DIR@.service, on both buses
 var service = new Service(pkgInfo.name);
+logToFile('[Service] Service instance created');
 
 var dgram = require('dgram');
-var client4 = dgram.createSocket("udp4");
+logToFile('[Service] dgram module loaded');
 
-const JELLYFIN_DISCOVERY_PORT = 7359;
-const JELLYFIN_DISCOVERY_MESSAGE = "who is JellyfinServer?";
+var client4 = null;
+try {
+	client4 = dgram.createSocket("udp4");
+	logToFile('[Service] UDP4 socket created');
+} catch (e) {
+	logToFile('[Service] Failed to create UDP4 socket: ' + e.message);
+}
 
-const SCAN_INTERVAL = 15 * 1000;
-const SCAN_ON_START = true;
-const ENABLE_IP_SCAN = true; // Fallback to IP scanning if broadcast discovery fails
+var JELLYFIN_DISCOVERY_PORT = 7359;
+var JELLYFIN_DISCOVERY_MESSAGE = "who is JellyfinServer?";
+
+var SCAN_INTERVAL = 15 * 1000;
+var SCAN_ON_START = true;
+var ENABLE_IP_SCAN = true; // Fallback to IP scanning if broadcast discovery fails
 
 var scanresult = {};
 var ipScanInProgress = false;
-var scannedIPs = new Set();
+var scannedIPs = {}; // Use object instead of Set for Node.js 8 compatibility
 
 function sendScanResults(server_id) {
 	for (var i in subscriptions) {
@@ -70,7 +109,7 @@ function handleDiscoveryResponse(message, remote) {
 }
 
 function sendJellyfinDiscovery() {
-	var msg = new Buffer(JELLYFIN_DISCOVERY_MESSAGE);
+	var msg = Buffer.from(JELLYFIN_DISCOVERY_MESSAGE);
 	client4.send(msg, 0, msg.length, 7359, "255.255.255.255");
 
 	// if (client6) {
@@ -105,10 +144,10 @@ function getLocalNetworkPrefix() {
 
 // Check a single IP for Jellyfin server
 function checkIP(ip) {
-	if (scannedIPs.has(ip)) {
+	if (scannedIPs[ip]) {
 		return; // Already checked this IP
 	}
-	scannedIPs.add(ip);
+	scannedIPs[ip] = true;
 	
 	var ports = [8096, 8920]; // Common Jellyfin ports
 	var schemes = ['http', 'https'];
@@ -167,7 +206,7 @@ function startIPScan() {
 	}
 	
 	ipScanInProgress = true;
-	scannedIPs.clear();
+	scannedIPs = {};
 	
 	var networkPrefix = getLocalNetworkPrefix();
 	
@@ -494,12 +533,86 @@ service.register('jellyseerrClearCookies', function(message) {
 });
 
 /**
+ * Image proxy for TMDB images (bypasses SSL certificate issues on old webOS)
+ */
+service.register('imageProxy', function(message) {
+	var imageUrl = message.payload.url;
+	
+	if (!imageUrl) {
+		message.respond({
+			success: false,
+			error: 'Missing image URL'
+		});
+		return;
+	}
+	
+	logToFile('[ImageProxy] Proxying: ' + imageUrl);
+	
+	var parsedUrl = url.parse(imageUrl);
+	var isHttps = parsedUrl.protocol === 'https:';
+	var httpModule = isHttps ? https : http;
+	
+	var options = {
+		hostname: parsedUrl.hostname,
+		port: parsedUrl.port || (isHttps ? 443 : 80),
+		path: parsedUrl.path,
+		method: 'GET',
+		headers: {
+			'User-Agent': 'Moonfin/1.0'
+		},
+		rejectUnauthorized: false // Accept any SSL cert
+	};
+	
+	var req = httpModule.request(options, function(res) {
+		var chunks = [];
+		
+		res.on('data', function(chunk) {
+			chunks.push(chunk);
+		});
+		
+		res.on('end', function() {
+			var buffer = Buffer.concat(chunks);
+			var base64 = buffer.toString('base64');
+			var contentType = res.headers['content-type'] || 'image/jpeg';
+			
+			message.respond({
+				success: true,
+				data: 'data:' + contentType + ';base64,' + base64,
+				contentType: contentType,
+				statusCode: res.statusCode
+			});
+		});
+	});
+	
+	req.on('error', function(err) {
+		logToFile('[ImageProxy] Error: ' + err.message);
+		message.respond({
+			success: false,
+			error: err.message
+		});
+	});
+	
+	req.setTimeout(10000, function() {
+		req.abort();
+		message.respond({
+			success: false,
+			error: 'Request timeout'
+		});
+	});
+	
+	req.end();
+});
+
+/**
  * Status check for Jellyseerr proxy
  */
 service.register('jellyseerrStatus', function(message) {
+	logToFile('[Service] jellyseerrStatus called!');
+	logToFile('[Service] Payload: ' + JSON.stringify(message.payload));
 	var userId = message.payload.userId;
 	var cookieCount = (cookieJars[userId] || []).length;
 	
+	logToFile('[Service] Responding with success');
 	message.respond({
 		success: true,
 		running: true,
@@ -508,4 +621,6 @@ service.register('jellyseerrStatus', function(message) {
 	});
 });
 
-console.log('[Service] Jellyseerr proxy methods registered');
+logToFile('[Service] jellyseerrStatus method registered');
+logToFile('[Service] All Jellyseerr proxy methods registered');
+logToFile('[Service] Service ready!');

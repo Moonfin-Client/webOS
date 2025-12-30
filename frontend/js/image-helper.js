@@ -174,6 +174,43 @@ var ImageHelper = (function() {
     }
 
     /**
+     * Load a TMDB image into an img element, using proxy on webOS 4 if needed
+     * @param {HTMLImageElement} imgElement - The image element
+     * @param {string} path - TMDB image path
+     * @param {string} size - Image size
+     */
+    function loadTMDBImage(imgElement, path, size) {
+        var url = getTMDBImageUrl(path, size);
+        if (!url) return;
+        
+        if (typeof ImageProxy !== 'undefined' && ImageProxy.isEnabled()) {
+            ImageProxy.loadImage(imgElement, url);
+        } else {
+            imgElement.src = url;
+        }
+    }
+
+    /**
+     * Get a TMDB image URL, proxied if needed (async for proxy case)
+     * @param {string} path - TMDB image path
+     * @param {string} size - Image size
+     * @param {Function} callback - Callback with the URL
+     */
+    function getProxiedTMDBImageUrl(path, size, callback) {
+        var url = getTMDBImageUrl(path, size);
+        if (!url) {
+            callback(null);
+            return;
+        }
+        
+        if (typeof ImageProxy !== 'undefined' && ImageProxy.isEnabled()) {
+            ImageProxy.getProxiedUrl(url, callback);
+        } else {
+            callback(url);
+        }
+    }
+
+    /**
      * Load settings from storage and apply them
      * @private
      */
@@ -207,6 +244,8 @@ var ImageHelper = (function() {
         getImageUrl: getImageUrl,
         getPlaceholderUrl: getPlaceholderUrl,
         getAspectRatio: getAspectRatio,
-        getTMDBImageUrl: getTMDBImageUrl
+        getTMDBImageUrl: getTMDBImageUrl,
+        loadTMDBImage: loadTMDBImage,
+        getProxiedTMDBImageUrl: getProxiedTMDBImageUrl
     };
 })();

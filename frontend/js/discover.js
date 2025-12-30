@@ -88,14 +88,14 @@ var DiscoverController = (function() {
     
     // Backdrop update debouncing
     var backdropUpdateTimer = null;
-    const BACKDROP_UPDATE_DELAY = 300;
-    const SCROLL_ANIMATION_DURATION_MS = 250;
-    const SCROLL_THRESHOLD_PX = 2;
-    const ROW_VERTICAL_POSITION = 0.45;
+    var BACKDROP_UPDATE_DELAY = 300;
+    var SCROLL_ANIMATION_DURATION_MS = 250;
+    var SCROLL_THRESHOLD_PX = 2;
+    var ROW_VERTICAL_POSITION = 0.45;
     
     // Horizontal scroll cooldown tracking
     var lastHorizontalScrollTime = 0;
-    const SCROLL_COOLDOWN_MS = 300;
+    var SCROLL_COOLDOWN_MS = 300;
 
     /**
      * Initialize the discover controller
@@ -118,27 +118,66 @@ var DiscoverController = (function() {
         }
         console.log('[Discover] Jellyseerr configured, initializing...');
 
-        // Initialize Jellyseerr and wait for service check before auto-login
-        initializeJellyseerr()
-            .then(function() {
-                console.log('[Discover] Jellyseerr initialized, attempting auto-login...');
-                return JellyseerrAPI.attemptAutoLogin();
-            })
-            .then(function(success) {
-                console.log('[Discover] Auto-login result:', success);
-                if (success) {
+        // Check if we have an API key configured (required for webOS 4)
+        var settingsStr = storage.getUserPreference('jellyfin_settings', null);
+        var parsedSettings = null;
+        var hasApiKey = false;
+        var jellyseerrApiKey = null;
+        var jellyseerrUrl = null;
+        
+        if (settingsStr) {
+            try {
+                parsedSettings = typeof settingsStr === 'string' ? JSON.parse(settingsStr) : settingsStr;
+                hasApiKey = parsedSettings.jellyseerrApiKey && parsedSettings.jellyseerrApiKey.length > 0;
+                jellyseerrApiKey = parsedSettings.jellyseerrApiKey;
+                jellyseerrUrl = parsedSettings.jellyseerrUrl;
+            } catch (e) {
+                console.error('[Discover] Error parsing settings:', e);
+            }
+        }
+        
+        // If we have an API key, use it directly (for webOS 4 compatibility)
+        if (hasApiKey && jellyseerrUrl) {
+            console.log('[Discover] API key found, initializing directly with API key auth...');
+            var userId = auth && auth.userId ? auth.userId : null;
+            
+            // Set API key first
+            JellyseerrAPI.setApiKey(jellyseerrApiKey);
+            
+            // Initialize with URL and API key
+            JellyseerrAPI.initialize(jellyseerrUrl, jellyseerrApiKey, userId)
+                .then(function() {
+                    console.log('[Discover] API key auth initialized successfully');
                     attachEventListeners();
                     loadAllRows();
-                } else {
-                    // Authentication failed - show auth required message
-                    console.log('[Discover] Auto-login failed, showing auth required message');
+                })
+                .catch(function(error) {
+                    console.error('[Discover] Error during API key initialization:', error);
                     showAuthRequired();
-                }
-            })
-            .catch(function(error) {
-                console.error('[Discover] Error during initialization:', error);
-                showAuthRequired();
-            });
+                });
+        } else {
+            // No API key - use standard initialization flow (for webOS 23+ with Luna service)
+            initializeJellyseerr()
+                .then(function() {
+                    console.log('[Discover] Jellyseerr initialized, attempting auto-login...');
+                    return JellyseerrAPI.attemptAutoLogin();
+                })
+                .then(function(success) {
+                    console.log('[Discover] Auto-login result:', success);
+                    if (success) {
+                        attachEventListeners();
+                        loadAllRows();
+                    } else {
+                        // Authentication failed - show auth required message
+                        console.log('[Discover] Auto-login failed, showing auth required message');
+                        showAuthRequired();
+                    }
+                })
+                .catch(function(error) {
+                    console.error('[Discover] Error during initialization:', error);
+                    showAuthRequired();
+                });
+        }
         
         // Initialize navbar
         if (typeof NavbarController !== 'undefined') {
@@ -205,14 +244,48 @@ var DiscoverController = (function() {
     }
 
     /**
-     * Initialize Jellyseerr API
-     */
-    /**
      * Initialize Jellyseerr integration
+     * On webOS 4 without Luna service, uses API key authentication
      * @private
      */
     function initializeJellyseerr() {
-        // Try initializeFromPreferences first (for existing auth)
+        // Get settings
+        var settingsStr = storage.getUserPreference('jellyfin_settings', null);
+        if (!settingsStr) return Promise.resolve(false);
+        
+        var parsedSettings;
+        try {
+            parsedSettings = typeof settingsStr === 'string' ? JSON.parse(settingsStr) : settingsStr;
+        } catch (e) {
+            return Promise.resolve(false);
+        }
+        
+        if (!parsedSettings.jellyseerrUrl) return Promise.resolve(false);
+        
+        // Check if we have a manual API key configured
+        var jellyseerrApiKey = parsedSettings.jellyseerrApiKey;
+        if (jellyseerrApiKey && jellyseerrApiKey.length > 0) {
+            console.log('[Discover] API key found - initializing with direct API key auth');
+            
+            // Get user ID
+            var auth = JellyfinAPI.getStoredAuth();
+            var userId = auth && auth.userId ? auth.userId : null;
+            
+            // Set API key and initialize
+            JellyseerrAPI.setApiKey(jellyseerrApiKey);
+            
+            return JellyseerrAPI.initialize(parsedSettings.jellyseerrUrl, jellyseerrApiKey, userId)
+                .then(function() {
+                    console.log('[Discover] API key initialization succeeded');
+                    return true; // We're authenticated via API key
+                })
+                .catch(function(error) {
+                    console.error('[Discover] API key initialization failed:', error);
+                    return false;
+                });
+        }
+        
+        // No API key - try normal flow with initializeFromPreferences (cookie/service auth)
         return JellyseerrAPI.initializeFromPreferences()
             .then(function(success) {
                 if (success) {
@@ -223,11 +296,6 @@ var DiscoverController = (function() {
                 // If initializeFromPreferences returns false, it means no auth yet
                 // But we still need to initialize the API with the server URL for login to work
                 console.log('[Discover] initializeFromPreferences returned false, trying direct initialization');
-                var settings = storage.getUserPreference('jellyfin_settings', null);
-                if (!settings) return false;
-                
-                var parsedSettings = typeof settings === 'string' ? JSON.parse(settings) : settings;
-                if (!parsedSettings.jellyseerrUrl) return false;
                 
                 // Get user ID for cookie storage
                 var auth = JellyfinAPI.getStoredAuth();
@@ -336,6 +404,7 @@ var DiscoverController = (function() {
         
         Promise.all(promises)
             .then(function() {
+                console.log('[Discover] All rows loaded successfully, calling hideLoading()');
                 hideLoading();
                 isLoading = false;
                 buildFocusableItemsCache();
@@ -345,6 +414,7 @@ var DiscoverController = (function() {
                 }, 100);
             })
             .catch(function(error) {
+                console.error('[Discover] Promise.all caught error:', error);
                 hideLoading();
                 isLoading = false;
                 showError('Failed to load content. Please try again.');
@@ -651,16 +721,18 @@ var DiscoverController = (function() {
             card.setAttribute('data-index', index);
             
             // Use random backdrop image for variety (so genres don't show the same image)
-            var backdropUrl = '';
+            var backdropPath = '';
             if (genre.backdrops && genre.backdrops.length > 0) {
                 var randomIndex = Math.floor(Math.random() * genre.backdrops.length);
-                backdropUrl = ImageHelper.getTMDBImageUrl(genre.backdrops[randomIndex], 'w1280');
+                backdropPath = genre.backdrops[randomIndex];
             }
             
             var backdrop = document.createElement('img');
             backdrop.className = 'genre-slider-backdrop';
-            backdrop.src = backdropUrl;
             backdrop.alt = genre.name;
+            if (backdropPath) {
+                ImageHelper.loadTMDBImage(backdrop, backdropPath, 'w1280');
+            }
             
             var overlay = document.createElement('div');
             overlay.className = 'genre-slider-overlay';
@@ -722,15 +794,20 @@ var DiscoverController = (function() {
             card.setAttribute('data-row-id', rowId);
             card.setAttribute('data-index', index);
             
-            var logoUrl = 'https://image.tmdb.org/t/p/w780_filter(duotone,ffffff,bababa)/' + network.logo;
+            var logoPath = '/t/p/w780_filter(duotone,ffffff,bababa)/' + network.logo;
             
             var logoContainer = document.createElement('div');
             logoContainer.className = 'network-logo-container';
             
             var logo = document.createElement('img');
             logo.className = 'network-logo';
-            logo.src = logoUrl;
             logo.alt = network.name;
+            // Use proxy for TMDB logo images
+            if (typeof ImageProxy !== 'undefined' && ImageProxy.isEnabled()) {
+                ImageProxy.loadImage(logo, 'https://image.tmdb.org' + logoPath);
+            } else {
+                logo.src = 'https://image.tmdb.org' + logoPath;
+            }
             
             logoContainer.appendChild(logo);
             card.appendChild(logoContainer);
@@ -771,15 +848,20 @@ var DiscoverController = (function() {
             card.setAttribute('data-row-id', rowId);
             card.setAttribute('data-index', index);
             
-            var logoUrl = 'https://image.tmdb.org/t/p/w780_filter(duotone,ffffff,bababa)/' + studio.logo;
+            var logoPath = '/t/p/w780_filter(duotone,ffffff,bababa)/' + studio.logo;
             
             var logoContainer = document.createElement('div');
             logoContainer.className = 'network-logo-container';
             
             var logo = document.createElement('img');
             logo.className = 'network-logo';
-            logo.src = logoUrl;
             logo.alt = studio.name;
+            // Use proxy for TMDB logo images
+            if (typeof ImageProxy !== 'undefined' && ImageProxy.isEnabled()) {
+                ImageProxy.loadImage(logo, 'https://image.tmdb.org' + logoPath);
+            } else {
+                logo.src = 'https://image.tmdb.org' + logoPath;
+            }
             
             logoContainer.appendChild(logo);
             card.appendChild(logoContainer);
@@ -942,11 +1024,12 @@ var DiscoverController = (function() {
         
         if (item.posterPath) {
             var img = document.createElement('img');
-            img.src = ImageHelper.getTMDBImageUrl(item.posterPath, 'w500');
             img.alt = item.title || item.name || 'Media poster';
             img.onerror = function() {
                 this.style.display = 'none';
             };
+            // Use proxy-aware loading for TMDB images
+            ImageHelper.loadTMDBImage(img, item.posterPath, 'w500');
             poster.appendChild(img);
         }
         
@@ -1010,12 +1093,22 @@ var DiscoverController = (function() {
             
             if (!item.backdropPath) return;
             
-            var backdropUrl = ImageHelper.getTMDBImageUrl(item.backdropPath, 'original');
-            
-            if (elements.globalBackdropImage) {
-                elements.globalBackdropImage.src = backdropUrl;
-                elements.globalBackdropImage.style.display = 'block';
-                elements.globalBackdropImage.style.opacity = '1';
+            // Use proxy-aware loading for backdrop
+            if (typeof ImageProxy !== 'undefined' && ImageProxy.isEnabled()) {
+                ImageHelper.getProxiedTMDBImageUrl(item.backdropPath, 'original', function(url) {
+                    if (elements.globalBackdropImage && url) {
+                        elements.globalBackdropImage.src = url;
+                        elements.globalBackdropImage.style.display = 'block';
+                        elements.globalBackdropImage.style.opacity = '1';
+                    }
+                });
+            } else {
+                var backdropUrl = ImageHelper.getTMDBImageUrl(item.backdropPath, 'original');
+                if (elements.globalBackdropImage) {
+                    elements.globalBackdropImage.src = backdropUrl;
+                    elements.globalBackdropImage.style.display = 'block';
+                    elements.globalBackdropImage.style.opacity = '1';
+                }
             }
         }, BACKDROP_UPDATE_DELAY);
     }
@@ -1206,10 +1299,16 @@ var DiscoverController = (function() {
         
         if (Math.abs(scrollAdjustment) > 5) {
             lastHorizontalScrollTime = now;
-            rowContainer.scrollBy({
-                left: scrollAdjustment,
-                behavior: 'smooth'
-            });
+            // Use scrollBy if available, otherwise fallback for older browsers
+            if (typeof rowContainer.scrollBy === 'function') {
+                rowContainer.scrollBy({
+                    left: scrollAdjustment,
+                    behavior: 'smooth'
+                });
+            } else {
+                // Fallback for Chromium 53 and older
+                rowContainer.scrollLeft += scrollAdjustment;
+            }
         }
     }
 
@@ -1309,11 +1408,19 @@ var DiscoverController = (function() {
             elements.rowsContainer.classList.add('with-detail');
         }
         
-        // Update backdrop
+        // Update backdrop (use proxy if available and URL is TMDB)
         if (elements.globalBackdropImage && data.backdropUrl) {
-            elements.globalBackdropImage.src = data.backdropUrl;
-            elements.globalBackdropImage.style.display = 'block';
-            elements.globalBackdropImage.style.opacity = '1';
+            if (typeof ImageProxy !== 'undefined' && ImageProxy.isEnabled() && data.backdropUrl.indexOf('image.tmdb.org') !== -1) {
+                ImageProxy.getProxiedUrl(data.backdropUrl, function(proxiedUrl) {
+                    elements.globalBackdropImage.src = proxiedUrl;
+                    elements.globalBackdropImage.style.display = 'block';
+                    elements.globalBackdropImage.style.opacity = '1';
+                });
+            } else {
+                elements.globalBackdropImage.src = data.backdropUrl;
+                elements.globalBackdropImage.style.display = 'block';
+                elements.globalBackdropImage.style.opacity = '1';
+            }
         }
         
         // Update title
@@ -1589,11 +1696,14 @@ var DiscoverController = (function() {
      * Hide loading indicator
      */
     function hideLoading() {
+        console.log('[Discover] hideLoading() called');
         if (elements.loadingIndicator) {
             elements.loadingIndicator.style.display = 'none';
+            console.log('[Discover] Loading indicator hidden');
         }
         if (elements.rowsContainer) {
             elements.rowsContainer.style.display = 'block';
+            console.log('[Discover] Rows container shown');
         }
     }
 

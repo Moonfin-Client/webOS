@@ -141,44 +141,79 @@ var JellyseerrAPI = (function() {
          */
         checkAvailability: function() {
             return new Promise(function(resolve) {
-                if (typeof webOS === 'undefined' || !webOS.service) {
-                    Logger.warn('webOS Luna service API not available (running in browser?)');
-                    Logger.warn('Jellyseerr proxy service requires running on actual webOS TV');
+                Logger.info('Checking Luna service availability...');
+                Logger.info('webOS defined:', typeof webOS !== 'undefined');
+                Logger.info('webOS.service defined:', typeof webOS !== 'undefined' && typeof webOS.service !== 'undefined');
+                
+                if (typeof webOS === 'undefined') {
+                    Logger.warn('webOS object not available (running in browser?)');
                     resolve(false);
                     return;
                 }
                 
+                if (!webOS.service) {
+                    Logger.warn('webOS.service not available');
+                    Logger.info('Available webOS properties:', Object.keys(webOS).join(', '));
+                    resolve(false);
+                    return;
+                }
+                
+                Logger.info('webOS.service is available, calling jellyseerrStatus...');
+                
+                // Add timeout to prevent hanging
+                var resolved = false;
+                var timeout = setTimeout(function() {
+                    if (!resolved) {
+                        resolved = true;
+                        Logger.warn('Jellyseerr proxy service check timed out after 1.5s');
+                        proxyServiceAvailable = false;
+                        resolve(false);
+                    }
+                }, 1500);
+                
                 // Try to call the status endpoint
                 try {
+                    Logger.info('Calling luna://org.moonfin.webos.service/jellyseerrStatus');
                     webOS.service.request('luna://org.moonfin.webos.service/', {
                         method: 'jellyseerrStatus',
                         parameters: { userId: 'test' },
                         onSuccess: function(response) {
+                            Logger.info('Luna service onSuccess called');
+                            Logger.info('Response:', JSON.stringify(response));
+                            if (resolved) return;
+                            resolved = true;
+                            clearTimeout(timeout);
                             if (response.success && response.running) {
                                 Logger.success('Jellyseerr proxy service is available');
                                 proxyServiceAvailable = true;
                                 useProxyService = true;
                                 resolve(true);
                             } else {
-                                Logger.warn('Jellyseerr proxy service returned invalid status');
+                                Logger.warn('Jellyseerr proxy service returned invalid status:', response);
                                 proxyServiceAvailable = false;
                                 resolve(false);
                             }
                         },
                         onFailure: function(error) {
+                            Logger.info('Luna service onFailure called');
+                            Logger.info('Error object:', JSON.stringify(error));
+                            if (resolved) return;
+                            resolved = true;
+                            clearTimeout(timeout);
                             var errorMsg = error.errorText || error.message || 'Unknown error';
-                            if (errorMsg.includes('does not exist')) {
+                            Logger.error('Luna service call failed:', errorMsg);
+                            if (errorMsg.indexOf('does not exist') !== -1 || errorMsg.indexOf('not exist') !== -1) {
                                 Logger.error('Jellyseerr proxy service not installed on TV');
                                 Logger.error('App must be built and deployed to TV for service to work');
-                                Logger.error('Service file: services/jellyseerr-proxy.js');
-                            } else {
-                                Logger.error('Jellyseerr proxy service error:', errorMsg);
                             }
                             proxyServiceAvailable = false;
                             resolve(false);
                         }
                     });
                 } catch (err) {
+                    if (resolved) return;
+                    resolved = true;
+                    clearTimeout(timeout);
                     Logger.error('Failed to call Luna service:', err.message);
                     resolve(false);
                 }
@@ -1561,17 +1596,42 @@ var JellyseerrAPI = (function() {
                 if (token) {
                     apiKey = token;
                     Logger.info('API key/token received (length):', token.length);
+                    return {
+                        user: user,
+                        apiKey: token
+                    };
                 } else {
-                    Logger.info('No API key in response; relying on session cookies');
-                    if (!proxyServiceAvailable) {
-                        Logger.warn('No proxy service available; browser cannot read Set-Cookie headers. hasCookies() may be false even if session works.');
-                    }
+                    Logger.info('No API key in response; fetching user profile to get API key');
+                    // Try to fetch user profile to get API key
+                    return makeUnauthenticatedRequest('/auth/me', { method: 'GET' })
+                        .then(function(meResponse) {
+                            var meUser = meResponse.data || meResponse;
+                            if (meUser && meUser.apiKey) {
+                                apiKey = meUser.apiKey;
+                                Logger.info('API key retrieved from user profile (length):', apiKey.length);
+                                return {
+                                    user: meUser,
+                                    apiKey: apiKey
+                                };
+                            } else {
+                                Logger.warn('No API key in user profile; session cookies required');
+                                if (!proxyServiceAvailable) {
+                                    Logger.warn('No proxy service available; browser cannot read Set-Cookie headers');
+                                }
+                                return {
+                                    user: user,
+                                    apiKey: null
+                                };
+                            }
+                        })
+                        .catch(function(meError) {
+                            Logger.warn('Could not fetch user profile for API key:', meError.message);
+                            return {
+                                user: user,
+                                apiKey: null
+                            };
+                        });
                 }
-                
-                return {
-                    user: user,
-                    apiKey: token
-                };
             }).catch(function(error) {
                 // 401 - Server not configured yet, retry with hostname
                 if (error && error.status === 401) {
@@ -1607,17 +1667,38 @@ var JellyseerrAPI = (function() {
                         if (token) {
                             apiKey = token;
                             Logger.info('API key/token received (length):', token.length);
+                            return {
+                                user: user,
+                                apiKey: token
+                            };
                         } else {
-                            Logger.info('No API key in response; relying on session cookies');
-                            if (!proxyServiceAvailable) {
-                                Logger.warn('No proxy service available; browser cannot read Set-Cookie headers. hasCookies() may be false even if session works.');
-                            }
+                            Logger.info('No API key in response; fetching user profile to get API key');
+                            return makeUnauthenticatedRequest('/auth/me', { method: 'GET' })
+                                .then(function(meResponse) {
+                                    var meUser = meResponse.data || meResponse;
+                                    if (meUser && meUser.apiKey) {
+                                        apiKey = meUser.apiKey;
+                                        Logger.info('API key retrieved from user profile (length):', apiKey.length);
+                                        return {
+                                            user: meUser,
+                                            apiKey: apiKey
+                                        };
+                                    } else {
+                                        Logger.warn('No API key in user profile; session cookies required');
+                                        return {
+                                            user: user,
+                                            apiKey: null
+                                        };
+                                    }
+                                })
+                                .catch(function(meError) {
+                                    Logger.warn('Could not fetch user profile for API key:', meError.message);
+                                    return {
+                                        user: user,
+                                        apiKey: null
+                                    };
+                                });
                         }
-                        
-                        return {
-                            user: user,
-                            apiKey: token
-                        };
                     }).catch(function(retryError) {
                         // Handle errors from second attempt
                         var errorMsg = retryError.message || retryError.error || 'Unknown error';
@@ -1669,20 +1750,52 @@ var JellyseerrAPI = (function() {
                 
                 if (token) {
                     apiKey = token;
+                    return {
+                        user: user,
+                        apiKey: token,
+                        data: user
+                    };
                 } else {
-                    // Save credentials for auto-login if no API key
-                    if (currentUserId && typeof storage !== 'undefined') {
-                        storage.setJellyseerrUserSetting(currentUserId, 'localEmail', email);
-                        storage.setJellyseerrUserSetting(currentUserId, 'localPassword', password);
-                    }
+                    // No API key in response - try to fetch from user profile
+                    Logger.info('No API key in local login response; fetching user profile');
+                    return makeUnauthenticatedRequest('/auth/me', { method: 'GET' })
+                        .then(function(meResponse) {
+                            var meUser = meResponse.data || meResponse;
+                            if (meUser && meUser.apiKey) {
+                                apiKey = meUser.apiKey;
+                                Logger.info('API key retrieved from user profile (length):', apiKey.length);
+                                return {
+                                    user: meUser,
+                                    apiKey: apiKey,
+                                    data: meUser
+                                };
+                            } else {
+                                // Save credentials for auto-login if no API key
+                                if (currentUserId && typeof storage !== 'undefined') {
+                                    storage.setJellyseerrUserSetting(currentUserId, 'localEmail', email);
+                                    storage.setJellyseerrUserSetting(currentUserId, 'localPassword', password);
+                                }
+                                return {
+                                    user: user,
+                                    apiKey: null,
+                                    data: user
+                                };
+                            }
+                        })
+                        .catch(function(meError) {
+                            Logger.warn('Could not fetch user profile for API key:', meError.message);
+                            // Save credentials for auto-login
+                            if (currentUserId && typeof storage !== 'undefined') {
+                                storage.setJellyseerrUserSetting(currentUserId, 'localEmail', email);
+                                storage.setJellyseerrUserSetting(currentUserId, 'localPassword', password);
+                            }
+                            return {
+                                user: user,
+                                apiKey: null,
+                                data: user
+                            };
+                        });
                 }
-                
-                // Return normalized format (same as loginWithJellyfin)
-                return {
-                    user: user,
-                    apiKey: token,
-                    data: user  // Keep for backward compatibility
-                };
             });
         },
 

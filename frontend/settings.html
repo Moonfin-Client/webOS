@@ -315,6 +315,14 @@
                         <div class="setting-value" id="jellyseerrUrlValue">Not Set</div>
                     </div>
                     
+                    <div class="setting-item" data-setting="jellyseerrApiKey" tabindex="0">
+                        <div class="setting-label">
+                            <div class="setting-title">API Key</div>
+                            <div class="setting-description">Required for webOS 4 (Settings → General in Jellyseerr)</div>
+                        </div>
+                        <div class="setting-value" id="jellyseerrApiKeyValue">Not Set</div>
+                    </div>
+                    
                     <div class="setting-item" data-setting="jellyseerrAuthJellyfin" tabindex="0">
                         <div class="setting-label">
                             <div class="setting-title">Login with Jellyfin Account</div>
@@ -490,6 +498,21 @@
             <div class="modal-actions">
                 <button class="btn-primary" id="saveJellyseerrUrlBtn" tabindex="0">Save</button>
                 <button class="btn-secondary" id="cancelJellyseerrUrlBtn" tabindex="0">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Jellyseerr API Key Input Modal -->
+    <div id="jellyseerrApiKeyModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h2>Jellyseerr API Key</h2>
+            <p class="modal-description">Enter your API key from Jellyseerr Settings → General.<br>Required for webOS 4 TVs.</p>
+            
+            <input type="text" id="jellyseerrApiKeyInput" class="url-input" placeholder="API Key" tabindex="0">
+            
+            <div class="modal-actions">
+                <button class="btn-primary" id="saveJellyseerrApiKeyBtn" tabindex="0">Save</button>
+                <button class="btn-secondary" id="cancelJellyseerrApiKeyBtn" tabindex="0">Cancel</button>
             </div>
         </div>
     </div>

@@ -191,19 +191,31 @@
 
         console.log('[Jellyseerr Person] Initializing JellyseerrAPI...');
         
-        // Initialize JellyseerrAPI first
-        JellyseerrAPI.initializeFromPreferences()
-            .then(function(isAuthenticated) {
-                console.log('[Jellyseerr Person] initializeFromPreferences result:', isAuthenticated);
-                
-                if (!isAuthenticated) {
-                    // Initialize with just the server URL (no auth required for TMDB data)
-                    var auth = JellyfinAPI.getStoredAuth();
-                    var userId = auth && auth.userId ? auth.userId : null;
-                    return JellyseerrAPI.initialize(parsedSettings.jellyseerrUrl, null, userId);
-                }
-                return Promise.resolve();
-            })
+        // Check for API key (for webOS 4 compatibility)
+        var hasApiKey = parsedSettings.jellyseerrApiKey && parsedSettings.jellyseerrApiKey.length > 0;
+        var auth = JellyfinAPI.getStoredAuth();
+        var userId = auth && auth.userId ? auth.userId : null;
+        
+        var initPromise;
+        
+        if (hasApiKey) {
+            console.log('[Jellyseerr Person] API key found, initializing directly...');
+            JellyseerrAPI.setApiKey(parsedSettings.jellyseerrApiKey);
+            initPromise = JellyseerrAPI.initialize(parsedSettings.jellyseerrUrl, parsedSettings.jellyseerrApiKey, userId);
+        } else {
+            // Standard initialization flow
+            initPromise = JellyseerrAPI.initializeFromPreferences()
+                .then(function(isAuthenticated) {
+                    console.log('[Jellyseerr Person] initializeFromPreferences result:', isAuthenticated);
+                    
+                    if (!isAuthenticated) {
+                        return JellyseerrAPI.initialize(parsedSettings.jellyseerrUrl, null, userId);
+                    }
+                    return Promise.resolve();
+                });
+        }
+        
+        initPromise
             .then(function() {
                 console.log('[Jellyseerr Person] API initialized, making calls...');
                 return Promise.all([

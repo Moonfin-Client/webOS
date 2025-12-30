@@ -59,17 +59,52 @@ var JellyseerrDetailsController = (function() {
         cacheElements();
         setupEventListeners();
         
-        // Initialize Jellyseerr API before loading details
-        initializeJellyseerr()
-            .then(function() {
-                return JellyseerrAPI.attemptAutoLogin();
-            })
-            .then(function() {
-                loadMediaDetails();
-            })
-            .catch(function(error) {
-                showError('Failed to initialize Jellyseerr');
-            });
+        // Check if we have an API key configured (for webOS 4)
+        var settingsStr = storage.getUserPreference('jellyfin_settings', null);
+        var parsedSettings = null;
+        var hasApiKey = false;
+        var jellyseerrApiKey = null;
+        var jellyseerrUrl = null;
+        
+        if (settingsStr) {
+            try {
+                parsedSettings = typeof settingsStr === 'string' ? JSON.parse(settingsStr) : settingsStr;
+                hasApiKey = parsedSettings.jellyseerrApiKey && parsedSettings.jellyseerrApiKey.length > 0;
+                jellyseerrApiKey = parsedSettings.jellyseerrApiKey;
+                jellyseerrUrl = parsedSettings.jellyseerrUrl;
+            } catch (e) {
+                console.error('[Jellyseerr Details] Error parsing settings:', e);
+            }
+        }
+        
+        // If we have an API key, use it directly
+        if (hasApiKey && jellyseerrUrl) {
+            console.log('[Jellyseerr Details] API key found, initializing directly...');
+            var userId = auth && auth.userId ? auth.userId : null;
+            
+            JellyseerrAPI.setApiKey(jellyseerrApiKey);
+            JellyseerrAPI.initialize(jellyseerrUrl, jellyseerrApiKey, userId)
+                .then(function() {
+                    console.log('[Jellyseerr Details] API key auth initialized');
+                    loadMediaDetails();
+                })
+                .catch(function(error) {
+                    console.error('[Jellyseerr Details] API key init failed:', error);
+                    showError('Failed to initialize Jellyseerr');
+                });
+        } else {
+            // Standard initialization flow
+            initializeJellyseerr()
+                .then(function() {
+                    return JellyseerrAPI.attemptAutoLogin();
+                })
+                .then(function() {
+                    loadMediaDetails();
+                })
+                .catch(function(error) {
+                    showError('Failed to initialize Jellyseerr');
+                });
+        }
         
         // Initialize navbar
         if (typeof NavbarController !== 'undefined') {
@@ -102,10 +137,47 @@ var JellyseerrDetailsController = (function() {
      */
     /**
      * Initialize Jellyseerr integration
+     * On webOS 4 without Luna service, uses API key authentication
      * @private
      */
     function initializeJellyseerr() {
-        // Try initializeFromPreferences first (for existing auth)
+        // Get settings
+        var settingsStr = storage.getUserPreference('jellyfin_settings', null);
+        if (!settingsStr) return Promise.resolve(false);
+        
+        var parsedSettings;
+        try {
+            parsedSettings = typeof settingsStr === 'string' ? JSON.parse(settingsStr) : settingsStr;
+        } catch (e) {
+            return Promise.resolve(false);
+        }
+        
+        if (!parsedSettings.jellyseerrUrl) return Promise.resolve(false);
+        
+        // Check if we have a manual API key configured
+        var jellyseerrApiKey = parsedSettings.jellyseerrApiKey;
+        if (jellyseerrApiKey && jellyseerrApiKey.length > 0) {
+            console.log('[Jellyseerr Details] API key found - initializing with direct API key auth');
+            
+            // Get user ID
+            var auth = JellyfinAPI.getStoredAuth();
+            var userId = auth && auth.userId ? auth.userId : null;
+            
+            // Set API key and initialize
+            JellyseerrAPI.setApiKey(jellyseerrApiKey);
+            
+            return JellyseerrAPI.initialize(parsedSettings.jellyseerrUrl, jellyseerrApiKey, userId)
+                .then(function() {
+                    console.log('[Jellyseerr Details] API key initialization succeeded');
+                    return true;
+                })
+                .catch(function(error) {
+                    console.error('[Jellyseerr Details] API key initialization failed:', error);
+                    return false;
+                });
+        }
+        
+        // No API key - try normal flow with initializeFromPreferences
         return JellyseerrAPI.initializeFromPreferences()
             .then(function(success) {
                 if (success) {
@@ -116,11 +188,6 @@ var JellyseerrDetailsController = (function() {
                 // If initializeFromPreferences returns false, it means no auth yet
                 // But we still need to initialize the API with the server URL
                 console.log('[Jellyseerr Details] initializeFromPreferences returned false, trying direct initialization');
-                var settings = storage.getUserPreference('jellyfin_settings', null);
-                if (!settings) return false;
-                
-                var parsedSettings = typeof settings === 'string' ? JSON.parse(settings) : settings;
-                if (!parsedSettings.jellyseerrUrl) return false;
                 
                 // Get user ID for cookie storage
                 var auth = JellyfinAPI.getStoredAuth();
