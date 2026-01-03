@@ -196,7 +196,7 @@ var JellyfinAPI = (function() {
         
         var hasPort = false;
         try {
-            var match = address.match(/:(\d+)$/);
+            var match = address.match(/:(\d+)(?=\/|$)/);
             if (match) {
                 hasPort = true;
             }

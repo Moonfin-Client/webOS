@@ -887,7 +887,7 @@ var LoginController = (function() {
         serverUrl = serverUrl.replace(/\/+$/, '');
         
         // Check if user provided a port
-        var hasPort = /:(\d+)$/.test(serverUrl);
+        var hasPort = /:(\d+)(?=\/|$)/.test(serverUrl);
         var hasProtocol = /^https?:\/\//i.test(serverUrl);
         
         showStatus('Testing connection to ' + serverUrl + '...', 'info');
