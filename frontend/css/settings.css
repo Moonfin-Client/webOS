@@ -208,26 +208,16 @@ body {
     color: #fff;
 }
 
-/* Scrollbar */
+/* Hide scrollbars for TV navigation */
+.settings-sidebar,
+.settings-content {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
 .settings-sidebar::-webkit-scrollbar,
 .settings-content::-webkit-scrollbar {
-    width: 8px;
-}
-
-.settings-sidebar::-webkit-scrollbar-track,
-.settings-content::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.settings-sidebar::-webkit-scrollbar-thumb,
-.settings-content::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 4px;
-}
-
-.settings-sidebar::-webkit-scrollbar-thumb:hover,
-.settings-content::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.3);
+    display: none;
 }
 
 /* Dialog/Modal styles (for future use) */
@@ -404,17 +394,13 @@ body {
     transform: scale(1.05);
 }
 
+.modal-content {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
 .modal-content::-webkit-scrollbar {
-    width: 8px;
-}
-
-.modal-content::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.modal-content::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 4px;
+    display: none;
 }
 
 .modal-content::-webkit-scrollbar-thumb:hover {

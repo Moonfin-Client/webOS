@@ -779,22 +779,14 @@ body {
     transform: scale(1.05);
 }
 
-/* Scrollbar styling for webkit browsers */
+/* Hide scrollbar for TV navigation */
+.main-content {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
 .main-content::-webkit-scrollbar {
-    width: 12px;
-}
-
-.main-content::-webkit-scrollbar-track {
-    background: rgba(0, 0, 0, 0.3);
-}
-
-.main-content::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 6px;
-}
-
-.main-content::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.3);
+    display: none;
 }
 
 /* Focus states */
@@ -952,21 +944,12 @@ body {
     box-shadow: 0 6px 25px rgba(0, 164, 220, 0.6), 0 0 20px rgba(0, 164, 220, 0.4);
 }
 
-/* Custom scrollbar for release notes */
+/* Hide scrollbar for TV navigation */
+.update-release-notes {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
 .update-release-notes::-webkit-scrollbar {
-    width: 8px;
-}
-
-.update-release-notes::-webkit-scrollbar-track {
-    background: rgba(0, 0, 0, 0.2);
-    border-radius: 4px;
-}
-
-.update-release-notes::-webkit-scrollbar-thumb {
-    background: rgba(0, 164, 220, 0.5);
-    border-radius: 4px;
-}
-
-.update-release-notes::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 164, 220, 0.7);
+    display: none;
 }
