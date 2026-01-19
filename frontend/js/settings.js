@@ -2181,6 +2181,8 @@ var SettingsController = (function() {
     function showJellyseerrJellyfinAuthModal(username, jellyfinUrl) {
         console.log('[Settings] Showing Jellyfin auth modal for user:', username, 'jellyfin URL:', jellyfinUrl);
         
+        var isAuthenticating = false;
+        
         ModalManager.show({
             modalId: 'jellyseerrJellyfinAuthModal',
             inputIds: ['jellyseerrJellyfinAuthPasswordInput'],
@@ -2188,14 +2190,27 @@ var SettingsController = (function() {
             focusReturn: '[data-setting="jellyseerrAuthJellyfin"]',
             clearInputs: true, // Clear password for security
             onSave: function(inputs) {
-                var password = inputs[0].value || ''; // Allow empty password for passwordless Jellyfin users
+                if (isAuthenticating) {
+                    console.log('[Settings] Authentication already in progress, ignoring duplicate request');
+                    return;
+                }
+                
+                var password = inputs[0].value || '';
                 
                 console.log('[Settings] Auth modal onSave called, password length:', password.length);
                 console.log('[Settings] Calling JellyseerrAPI.loginWithJellyfin with username:', username);
                 
-                // Login with Jellyfin SSO (password can be empty for passwordless users)
+                isAuthenticating = true;
+                
+                var saveBtn = document.getElementById('saveJellyseerrJellyfinAuthBtn');
+                if (saveBtn) {
+                    saveBtn.disabled = true;
+                    saveBtn.style.opacity = '0.5';
+                }
+                
                 JellyseerrAPI.loginWithJellyfin(username, password, jellyfinUrl)
                     .then(function(response) {
+                        isAuthenticating = false;
                         console.log('[Settings] Login successful:', response);
                         var user = response.user;
                         var apiKey = response.apiKey;
@@ -2224,6 +2239,14 @@ var SettingsController = (function() {
                         });
                     })
                     .catch(function(error) {
+                        isAuthenticating = false;
+                        
+                        var saveBtn = document.getElementById('saveJellyseerrJellyfinAuthBtn');
+                        if (saveBtn) {
+                            saveBtn.disabled = false;
+                            saveBtn.style.opacity = '1';
+                        }
+                        
                         console.error('[Settings] Login failed:', error);
                         showAlert('Failed to authenticate with Jellyseerr. Please check your password and try again.', 'Authentication Failed');
                         inputs[0].value = '';

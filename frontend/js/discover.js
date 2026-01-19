@@ -11,10 +11,11 @@ var DiscoverController = (function() {
     var auth = null;
     var isLoading = false;
     
-    // Focus management for row-based navigation
     var focusManager = {
         inNavBar: false,
         inRows: true,
+        inModal: false, // Track if we're in a modal (connection/auth required)
+        modalButtonIndex: 0, // Track which button is focused in modal
         navBarIndex: 0,
         currentRowIndex: 0,
         currentItemIndex: 0,
@@ -25,7 +26,6 @@ var DiscoverController = (function() {
 
     var elements = {};
     
-    // Row configuration
     var rowConfigs = [
         { id: 'trending', title: 'Trending Now', apiMethod: 'getTrending', type: 'all' },
         { id: 'popularMovies', title: 'Popular Movies', apiMethod: 'getTrendingMovies', type: 'movie' },
@@ -39,13 +39,9 @@ var DiscoverController = (function() {
         { id: 'requests', title: 'My Requests', apiMethod: 'getRequests', type: 'requests' }
     ];
     
-    // Store loaded data
     var rowData = {};
-    
-    // Pagination state for each row
     var rowPagination = {};
     
-    // Popular streaming networks (hardcoded)
     var streamingNetworks = [
         { id: 213, name: 'Netflix', logo: 'wwemzKWzjKYJFfCeiB57q3r4Bcm.png' },
         { id: 2739, name: 'Disney+', logo: 'gJ8VX6JSu3ciXHuC2dDGAo2lvwM.png' },
@@ -70,7 +66,6 @@ var DiscoverController = (function() {
         { id: 3353, name: 'Peacock', logo: 'gIAcGTjKKr0KOHL5s4O36roJ8p7.png' }
     ];
     
-    // Popular movie studios (hardcoded)
     var movieStudios = [
         { id: 2, name: 'Disney', logo: 'wdrCwmRnLFJhEoH8GSfymY85KHT.png' },
         { id: 127928, name: '20th Century Studios', logo: 'h0rjX5vjW5r8yEnUBStFarjcLT4.png' },
@@ -85,17 +80,12 @@ var DiscoverController = (function() {
         { id: 41077, name: 'A24', logo: '1ZXsGaFPgrgS6ZZGS37AqD5uU12.png' }
     ];
     
-    // Track rows currently loading more content
     var rowsLoadingMore = {};
-    
-    // Backdrop update debouncing
     var backdropUpdateTimer = null;
     var BACKDROP_UPDATE_DELAY = 300;
     var SCROLL_ANIMATION_DURATION_MS = 250;
     var SCROLL_THRESHOLD_PX = 2;
     var ROW_VERTICAL_POSITION = 0.45;
-    
-    // Horizontal scroll cooldown tracking
     var lastHorizontalScrollTime = 0;
     var SCROLL_COOLDOWN_MS = 300;
 
@@ -203,6 +193,9 @@ var DiscoverController = (function() {
         elements.goBackBtn = document.getElementById('goBackBtn');
         elements.goToSettingsForAuthBtn = document.getElementById('goToSettingsForAuthBtn');
         elements.goBackFromAuthBtn = document.getElementById('goBackFromAuthBtn');
+        elements.authRequiredModal = document.getElementById('authRequiredModal');
+        elements.authNowBtn = document.getElementById('authNowBtn');
+        elements.authCancelBtn = document.getElementById('authCancelBtn');
         elements.globalBackdropImage = document.getElementById('globalBackdropImage');
         elements.detailSection = document.getElementById('detailSection');
         elements.detailTitle = document.getElementById('detailTitle');
@@ -320,6 +313,11 @@ var DiscoverController = (function() {
             elements.connectionRequired.style.display = 'flex';
         }
         
+        focusManager.inModal = true;
+        focusManager.inRows = false;
+        focusManager.inNavBar = false;
+        focusManager.modalButtonIndex = 0;
+        
         setTimeout(function() {
             if (elements.goToSettingsBtn) {
                 elements.goToSettingsBtn.focus();
@@ -335,6 +333,11 @@ var DiscoverController = (function() {
             elements.authRequired.style.display = 'flex';
         }
         
+        focusManager.inModal = true;
+        focusManager.inRows = false;
+        focusManager.inNavBar = false;
+        focusManager.modalButtonIndex = 0;
+        
         setTimeout(function() {
             if (elements.goToSettingsForAuthBtn) {
                 elements.goToSettingsForAuthBtn.focus();
@@ -348,7 +351,6 @@ var DiscoverController = (function() {
     function attachEventListeners() {
         document.addEventListener('keydown', handleKeyPress);
         
-        // Connection required buttons
         if (elements.goToSettingsBtn) {
             elements.goToSettingsBtn.addEventListener('click', function() {
                 window.location.href = 'settings.html';
@@ -360,7 +362,6 @@ var DiscoverController = (function() {
             });
         }
         
-        // Auth required buttons
         if (elements.goToSettingsForAuthBtn) {
             elements.goToSettingsForAuthBtn.addEventListener('click', function() {
                 window.location.href = 'settings.html';
@@ -372,7 +373,22 @@ var DiscoverController = (function() {
             });
         }
         
-        // Retry button
+        if (elements.authNowBtn) {
+            elements.authNowBtn.addEventListener('click', function() {
+                window.location.href = 'settings.html';
+            });
+        }
+        if (elements.authCancelBtn) {
+            elements.authCancelBtn.addEventListener('click', function() {
+                if (elements.authRequiredModal) {
+                    elements.authRequiredModal.style.display = 'none';
+                    focusManager.inModal = false;
+                    focusManager.inRows = true;
+                }
+                window.location.href = 'browse.html';
+            });
+        }
+        
         if (elements.retryBtn) {
             elements.retryBtn.addEventListener('click', function() {
                 loadAllRows();
@@ -1532,7 +1548,9 @@ var DiscoverController = (function() {
     function handleKeyPress(evt) {
         if (evt.keyCode === KeyCodes.BACK) {
             evt.preventDefault();
-            if (focusManager.inRows) {
+            if (focusManager.inModal) {
+                window.location.href = 'browse.html';
+            } else if (focusManager.inRows) {
                 focusToNavBar();
             } else if (focusManager.inNavBar) {
                 window.history.back();
@@ -1540,10 +1558,55 @@ var DiscoverController = (function() {
             return;
         }
         
-        if (focusManager.inNavBar) {
+        if (focusManager.inModal) {
+            handleModalNavigation(evt);
+        } else if (focusManager.inNavBar) {
             handleNavBarNavigation(evt);
         } else if (focusManager.inRows) {
             handleRowNavigation(evt);
+        }
+    }
+
+    /**
+     * Handle modal navigation (connection/auth required dialogs)
+     */
+    function handleModalNavigation(evt) {
+        var buttons = [];
+        
+        if (elements.authRequiredModal && elements.authRequiredModal.style.display !== 'none') {
+            buttons = [elements.authNowBtn, elements.authCancelBtn];
+        } else if (elements.connectionRequired && elements.connectionRequired.style.display === 'flex') {
+            buttons = [elements.goToSettingsBtn, elements.goBackBtn];
+        } else if (elements.authRequired && elements.authRequired.style.display === 'flex') {
+            buttons = [elements.goToSettingsForAuthBtn, elements.goBackFromAuthBtn];
+        }
+        
+        if (buttons.length === 0) return;
+        
+        switch (evt.keyCode) {
+            case KeyCodes.LEFT:
+                evt.preventDefault();
+                if (focusManager.modalButtonIndex > 0) {
+                    focusManager.modalButtonIndex--;
+                    buttons[focusManager.modalButtonIndex].focus();
+                }
+                break;
+                
+            case KeyCodes.RIGHT:
+                evt.preventDefault();
+                if (focusManager.modalButtonIndex < buttons.length - 1) {
+                    focusManager.modalButtonIndex++;
+                    buttons[focusManager.modalButtonIndex].focus();
+                }
+                break;
+                
+            case KeyCodes.ENTER:
+                evt.preventDefault();
+                var currentBtn = buttons[focusManager.modalButtonIndex];
+                if (currentBtn) {
+                    currentBtn.click();
+                }
+                break;
         }
     }
 

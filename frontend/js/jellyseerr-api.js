@@ -246,12 +246,26 @@ var JellyseerrAPI = (function() {
                     params.body = body;
                 }
                 
-                Logger.debug('Luna service request: ' + method + ' ' + url);
+                Logger.info('Luna service request: ' + method + ' ' + url);
+                Logger.info('Request params:', JSON.stringify(params).substring(0, 500));
+                
+                var timedOut = false;
+                var requestTimeout = setTimeout(function() {
+                    timedOut = true;
+                    Logger.error('Luna service request timed out after 30s');
+                    reject(new Error('Request timeout after 30s'));
+                }, 30000);
                 
                 webOS.service.request('luna://org.moonfin.webos.service/', {
                     method: 'jellyseerrRequest',
                     parameters: params,
                     onSuccess: function(response) {
+                        if (timedOut) return;
+                        clearTimeout(requestTimeout);
+                        
+                        Logger.info('Luna service request onSuccess');
+                        Logger.info('Response:', JSON.stringify(response).substring(0, 500));
+                        
                         if (response.success) {
                             resolve({
                                 status: response.status,
@@ -263,6 +277,11 @@ var JellyseerrAPI = (function() {
                         }
                     },
                     onFailure: function(error) {
+                        if (timedOut) return;
+                        clearTimeout(requestTimeout);
+                        
+                        Logger.error('Luna service request onFailure');
+                        Logger.error('Error:', JSON.stringify(error));
                         reject(new Error(error.errorText || error.message || 'Service call failed'));
                     }
                 });
@@ -1342,6 +1361,16 @@ var JellyseerrAPI = (function() {
             var localEmail = storage.getJellyseerrUserSetting(currentUserId, 'localEmail', null);
             var localPassword = storage.getJellyseerrUserSetting(currentUserId, 'localPassword', null);
             
+            if (!username || !jellyfinUrl) {
+                var jellyfinAuth = typeof JellyfinAPI !== 'undefined' ? JellyfinAPI.getStoredAuth() : null;
+                if (jellyfinAuth && jellyfinAuth.userId === currentUserId) {
+                    jellyfinUrl = jellyfinUrl || jellyfinAuth.serverAddress;
+                    username = username || jellyfinAuth.username;
+                    
+                    Logger.info('Using Jellyfin session info - username:', username, 'url:', jellyfinUrl);
+                }
+            }
+            
             // Try Jellyfin SSO first (password can be empty string for passwordless users)
             if (username && jellyfinUrl && password !== null && password !== undefined) {
                 Logger.info('Attempting auto-login with Jellyfin credentials...');
@@ -1547,37 +1576,44 @@ var JellyseerrAPI = (function() {
          * @returns {Promise<Object>} User object with authentication details
          */
         loginWithJellyfin: function(username, password, jellyfinUrl) {
-            // Clear any existing cookies to prevent stale sessions
+            Logger.info('Starting loginWithJellyfin for user:', username);
+            
+            var clearPromise = Promise.resolve();
+            
             if (currentUserId) {
                 CookieStorage.clearCookies(currentUserId);
             }
+            
             if (proxyServiceAvailable) {
-                LunaServiceBridge.clearCookies();
+                Logger.info('Clearing cookies via Luna service before login');
+                clearPromise = LunaServiceBridge.clearCookies();
             }
 
-            // First try without hostname (for already-configured Jellyfin server)
-            var loginBody = {
-                username: username,
-                password: password
-            };
+            return clearPromise.then(function() {
+                Logger.info('Cookies cleared, proceeding with login request');
+                
+                var loginBody = {
+                    username: username,
+                    password: password
+                };
 
-            // Use service for login if available to capture cookies
-            var loginPromise;
-            if (proxyServiceAvailable) {
-                Logger.info('LoginWithJellyfin using Luna proxy service');
-                loginPromise = makeRequest('/auth/jellyfin', {
-                    method: 'POST',
-                    body: loginBody
-                });
-            } else {
-                Logger.info('LoginWithJellyfin using direct XHR (no proxy service)');
-                loginPromise = makeUnauthenticatedRequest('/auth/jellyfin', {
-                    method: 'POST',
-                    body: loginBody
-                });
-            }
-
-            return loginPromise.then(function(response) {
+                var loginPromise;
+                if (proxyServiceAvailable) {
+                    Logger.info('LoginWithJellyfin using Luna proxy service');
+                    loginPromise = makeRequest('/auth/jellyfin', {
+                        method: 'POST',
+                        body: loginBody
+                    });
+                } else {
+                    Logger.info('LoginWithJellyfin using direct XHR (no proxy service)');
+                    loginPromise = makeUnauthenticatedRequest('/auth/jellyfin', {
+                        method: 'POST',
+                        body: loginBody
+                    });
+                }
+                
+                return loginPromise;
+            }).then(function(response) {
                 var user = response.data || response;
                 
                 // Success - return user
@@ -1633,9 +1669,14 @@ var JellyseerrAPI = (function() {
                         });
                 }
             }).catch(function(error) {
-                // 401 - Server not configured yet, retry with hostname
+                Logger.error('Login request failed, error:', error);
+                
                 if (error && error.status === 401) {
-                    loginBody.hostname = jellyfinUrl;
+                    var loginBody = {
+                        username: username,
+                        password: password,
+                        hostname: jellyfinUrl
+                    };
                     Logger.warn('401 on Jellyfin SSO without hostname; retrying with hostname:', jellyfinUrl);
                     
                     var retryPromise;

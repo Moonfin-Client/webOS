@@ -1457,7 +1457,7 @@ var DetailsController = (function() {
                 parameters: {
                     id: 'youtube.leanback.v4',
                     params: {
-                        contentTarget: videoId
+                        contentTarget: 'https://www.youtube.com/watch?v=' + videoId
                     }
                 },
                 onSuccess: function(response) {
