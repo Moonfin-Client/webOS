@@ -69,6 +69,10 @@ const AppContent = (props) => {
 		navigateTo(PANELS.PLAYER);
 	}, [navigateTo]);
 
+	const handlePlayNext = useCallback((item) => {
+		setPlayingItem(item);
+	}, []);
+
 	const handlePlayerEnd = useCallback(() => {
 		setPlayingItem(null);
 		handleBack();
@@ -116,6 +120,7 @@ const AppContent = (props) => {
 						item={playingItem}
 						onEnded={handlePlayerEnd}
 						onBack={handlePlayerEnd}
+						onPlayNext={handlePlayNext}
 					/>
 				)}
 			</Panels>
