@@ -28,12 +28,64 @@
 	color: #aaa;
 }
 
-.error button {
-	padding: 12px 32px;
+.skipButton {
+	position: absolute;
+	bottom: 200px;
+	right: 48px;
+	z-index: 1001;
+	animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+	from {
+		opacity: 0;
+		transform: translateY(20px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+.trackPopup {
+	min-width: 400px;
+	max-height: 500px;
+	padding: 24px;
+}
+
+.trackPopup h3 {
+	font-size: 32px;
+	margin: 0 0 16px 0;
+	padding-bottom: 12px;
+	border-bottom: 1px solid #444;
+}
+
+.nextEpisodeOverlay {
+	position: absolute;
+	bottom: 200px;
+	right: 48px;
+	background: rgba(0, 0, 0, 0.85);
+	border-radius: 12px;
+	padding: 24px;
+	z-index: 1001;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	animation: fadeIn 0.3s ease-out;
+}
+
+.nextLabel {
 	font-size: 20px;
-	background: #0070f3;
-	border: none;
-	border-radius: 8px;
+	color: #aaa;
+	text-transform: uppercase;
+}
+
+.nextTitle {
+	font-size: 28px;
 	color: #fff;
-	cursor: pointer;
+}
+
+.nextMeta {
+	font-size: 22px;
+	color: #888;
 }
