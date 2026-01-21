@@ -28,9 +28,9 @@ const Browse = ({
 	onOpenFavorites,
 	onOpenJellyseerr,
 	onOpenGenres,
-	onLogout
+	onSwitchUser
 }) => {
-	const {api, serverUrl} = useAuth();
+	const {api, serverUrl, isAuthenticated} = useAuth();
 	const [rows, setRows] = useState([]);
 	const [libraries, setLibraries] = useState([]);
 	const [isLoading, setIsLoading] = useState(true);
@@ -43,6 +43,12 @@ const Browse = ({
 	const mainContentRef = useRef(null);
 	const backdropTimeoutRef = useRef(null);
 	const pendingBackdropRef = useRef(null);
+
+	useEffect(() => {
+		if (!isAuthenticated) {
+			onSwitchUser?.();
+		}
+	}, [isAuthenticated, onSwitchUser]);
 
 	const handleNavigateUp = useCallback((fromRowIndex) => {
 		if (fromRowIndex === 0) {
@@ -319,7 +325,7 @@ const Browse = ({
 				onDiscover={onOpenJellyseerr}
 				onSettings={onOpenSettings}
 				onSelectLibrary={handleSelectLibrary}
-				onUserMenu={onLogout}
+				onUserMenu={onSwitchUser}
 			/>
 
 			<div className={css.mainContent} ref={mainContentRef}>

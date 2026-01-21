@@ -73,7 +73,7 @@ const AUTH_METHODS = {
 	LOCAL: 'local'
 };
 
-const Settings = ({onBack}) => {
+const Settings = ({onBack, onLogout}) => {
 	const {user, serverUrl, logout, accessToken} = useAuth();
 	const {settings, updateSetting} = useSettings();
 	const {capabilities} = useDeviceInfo();
@@ -167,9 +167,10 @@ const Settings = ({onBack}) => {
 		}
 	}, [activeCategory]);
 
-	const handleLogout = useCallback(() => {
-		logout();
-	}, [logout]);
+	const handleLogout = useCallback(async () => {
+		await logout();
+		onLogout?.();
+	}, [logout, onLogout]);
 
 	const toggleSetting = useCallback((key) => {
 		updateSetting(key, !settings[key]);

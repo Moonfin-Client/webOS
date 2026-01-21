@@ -37,7 +37,7 @@ const PANELS = {
 };
 
 const AppContent = (props) => {
-	const {isAuthenticated, isLoading} = useAuth();
+	const {isAuthenticated, isLoading, logout} = useAuth();
 	const [panelIndex, setPanelIndex] = useState(PANELS.LOGIN);
 	const [selectedItem, setSelectedItem] = useState(null);
 	const [selectedLibrary, setSelectedLibrary] = useState(null);
@@ -155,6 +155,12 @@ const AppContent = (props) => {
 		navigateTo(PANELS.JELLYSEERR_REQUESTS);
 	}, [navigateTo]);
 
+	const handleSwitchUser = useCallback(async () => {
+		await logout();
+		setPanelHistory([]);
+		setPanelIndex(PANELS.LOGIN);
+	}, [logout]);
+
 	const handleSelectJellyseerrItem = useCallback((item) => {
 		setJellyseerrItem(item);
 		navigateTo(PANELS.JELLYSEERR_DETAILS);
@@ -180,6 +186,7 @@ const AppContent = (props) => {
 						onOpenFavorites={handleOpenFavorites}
 						onOpenLiveTV={handleOpenLiveTV}
 						onOpenJellyseerr={handleOpenJellyseerr}
+						onSwitchUser={handleSwitchUser}
 					/>
 				);
 			case PANELS.DETAILS:
@@ -203,7 +210,7 @@ const AppContent = (props) => {
 			case PANELS.SEARCH:
 				return <Search onSelectItem={handleSelectItem} onBack={handleBack} />;
 			case PANELS.SETTINGS:
-				return <Settings onBack={handleBack} />;
+				return <Settings onBack={handleBack} onLogout={handleSwitchUser} />;
 			case PANELS.PLAYER:
 				return playingItem ? (
 					<Player
