@@ -99,11 +99,11 @@ const Details = ({itemId, onPlay, onSelectItem, onSelectPerson}) => {
 	}
 
 	const backdropUrl = item.BackdropImageTags?.[0]
-		? getImageUrl(serverUrl, item.Id, 'Backdrop', {maxWidth: 1920, quality: 90})
+		? getImageUrl(serverUrl, item.Id, 'Backdrop', {maxWidth: 1920, quality: 100})
 		: null;
 
 	const posterUrl = item.ImageTags?.Primary
-		? getImageUrl(serverUrl, item.Id, 'Primary', {maxHeight: 600, quality: 90})
+		? getImageUrl(serverUrl, item.Id, 'Primary', {maxHeight: 600, quality: 100})
 		: null;
 
 	const year = item.ProductionYear || '';

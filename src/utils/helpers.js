@@ -21,6 +21,12 @@ export const getImageUrl = (serverUrl, itemId, imageType = 'Primary', options = 
 	if (options.maxWidth) params.set('maxWidth', options.maxWidth);
 	if (options.maxHeight) params.set('maxHeight', options.maxHeight);
 	if (options.quality) params.set('quality', options.quality);
+	if (options.tag) params.set('tag', options.tag);
 	const queryString = params.toString();
 	return `${serverUrl}/Items/${itemId}/Images/${imageType}${queryString ? '?' + queryString : ''}`;
+};
+
+export const getBackdropId = (item) => {
+	if (!item) return null;
+	return item.BackdropImageTags?.length > 0 ? item.Id : (item.ParentBackdropItemId || item.Id);
 };

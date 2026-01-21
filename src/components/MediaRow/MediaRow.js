@@ -1,33 +1,87 @@
-import {useCallback} from 'react';
-import Scroller from '@enact/sandstone/Scroller';
+import {useCallback, useRef, memo} from 'react';
+import SpotlightContainerDecorator from '@enact/spotlight/SpotlightContainerDecorator';
 import MediaCard from '../MediaCard';
 
 import css from './MediaRow.module.less';
 
-const MediaRow = ({title, items, serverUrl, onSelectItem}) => {
+const RowContainer = SpotlightContainerDecorator({
+	enterTo: 'last-focused',
+	restrict: 'self-first'
+}, 'div');
+
+const MediaRow = ({
+	title,
+	items,
+	serverUrl,
+	cardType = 'portrait',
+	onSelectItem,
+	onFocus,
+	onFocusItem,
+	rowIndex,
+	onNavigateUp,
+	onNavigateDown
+}) => {
+	const scrollerRef = useRef(null);
+
 	const handleSelect = useCallback((item) => {
 		onSelectItem?.(item);
 	}, [onSelectItem]);
 
+	const handleFocus = useCallback((e) => {
+		onFocus?.();
+
+		const card = e.target.closest('.spottable');
+		const scroller = scrollerRef.current;
+		if (card && scroller) {
+			const cardRect = card.getBoundingClientRect();
+			const scrollerRect = scroller.getBoundingClientRect();
+
+			if (cardRect.left < scrollerRect.left) {
+				scroller.scrollLeft -= (scrollerRect.left - cardRect.left + 50);
+			} else if (cardRect.right > scrollerRect.right) {
+				scroller.scrollLeft += (cardRect.right - scrollerRect.right + 50);
+			}
+		}
+	}, [onFocus]);
+
+	const handleKeyDown = useCallback((e) => {
+		if (e.keyCode === 38) {
+			e.preventDefault();
+			e.stopPropagation();
+			onNavigateUp?.(rowIndex);
+		} else if (e.keyCode === 40) {
+			e.preventDefault();
+			e.stopPropagation();
+			onNavigateDown?.(rowIndex);
+		}
+	}, [rowIndex, onNavigateUp, onNavigateDown]);
+
 	if (!items || items.length === 0) return null;
 
 	return (
-		<div className={css.row}>
+		<RowContainer
+			className={css.row}
+			spotlightId={`row-${rowIndex}`}
+			data-row-index={rowIndex}
+			onKeyDown={handleKeyDown}
+		>
 			<h2 className={css.title}>{title}</h2>
-			<Scroller direction="horizontal" className={css.scroller}>
+			<div className={css.scroller} ref={scrollerRef} onFocus={handleFocus}>
 				<div className={css.items}>
 					{items.map((item) => (
 						<MediaCard
 							key={item.Id}
 							item={item}
 							serverUrl={serverUrl}
+							cardType={cardType}
 							onSelect={handleSelect}
+							onFocusItem={onFocusItem}
 						/>
 					))}
 				</div>
-			</Scroller>
-		</div>
+			</div>
+		</RowContainer>
 	);
 };
 
-export default MediaRow;
+export default memo(MediaRow);

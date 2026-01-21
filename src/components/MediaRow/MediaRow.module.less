@@ -1,19 +1,35 @@
 .row {
-	margin-bottom: 48px;
+	margin-bottom: 30px;
+	overflow: visible;
+
+	&:first-child {
+		margin-top: 40px;
+	}
 }
 
 .title {
-	font-size: 32px;
-	margin-bottom: 16px;
-	padding-left: 8px;
+	font-size: 28px;
+	font-weight: 600;
+	margin: 0 0 20px 0;
+	padding-left: 60px;
+	color: #ffffff;
 }
 
 .scroller {
-	height: 360px;
+	overflow-x: auto;
+	overflow-y: hidden;
+	padding-left: 60px;
+	padding-right: 60px;
+	scrollbar-width: none;
+
+	&::-webkit-scrollbar {
+		display: none;
+	}
 }
 
 .items {
 	display: flex;
 	gap: 16px;
-	padding: 8px;
+	padding: 10px 0;
+	width: max-content;
 }

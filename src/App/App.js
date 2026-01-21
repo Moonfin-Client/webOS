@@ -38,13 +38,24 @@ const PANELS = {
 
 const AppContent = (props) => {
 	const {isAuthenticated, isLoading} = useAuth();
-	const [panelIndex, setPanelIndex] = useState(isAuthenticated ? PANELS.BROWSE : PANELS.LOGIN);
+	const [panelIndex, setPanelIndex] = useState(PANELS.LOGIN);
 	const [selectedItem, setSelectedItem] = useState(null);
 	const [selectedLibrary, setSelectedLibrary] = useState(null);
 	const [selectedPerson, setSelectedPerson] = useState(null);
 	const [playingItem, setPlayingItem] = useState(null);
 	const [panelHistory, setPanelHistory] = useState([]);
 	const [jellyseerrItem, setJellyseerrItem] = useState(null);
+	const [authChecked, setAuthChecked] = useState(false);
+
+	// Update panel when auth state is determined
+	useEffect(() => {
+		if (!isLoading && !authChecked) {
+			setAuthChecked(true);
+			if (isAuthenticated) {
+				setPanelIndex(PANELS.BROWSE);
+			}
+		}
+	}, [isLoading, isAuthenticated, authChecked]);
 
 	const navigateTo = useCallback((panel, addToHistory = true) => {
 		if (addToHistory && panelIndex !== PANELS.LOGIN) {
@@ -149,8 +160,9 @@ const AppContent = (props) => {
 		navigateTo(PANELS.JELLYSEERR_DETAILS);
 	}, [navigateTo]);
 
-	if (isLoading) {
-		return <div className={css.loading}>Loading...</div>;
+	// Show loading screen while auth state is being determined
+	if (isLoading || !authChecked) {
+		return <div className={css.loading} />;
 	}
 
 	// Render only the active view - no Panels overhead
