@@ -4,18 +4,53 @@ var dgram = require('dgram');
 var http = require('http');
 var https = require('https');
 var url = require('url');
+var fs = require('fs');
 
 var service = new Service(pkgInfo.name);
 
 var JELLYFIN_DISCOVERY_PORT = 7359;
 var JELLYFIN_DISCOVERY_MESSAGE = 'who is JellyfinServer?';
 var SCAN_INTERVAL = 15000;
+var COOKIE_FILE = '/tmp/moonfin-cookies.json';
 
 var scanResult = {};
 var subscriptions = {};
 var interval = null;
 var client4 = null;
 var cookieJars = {};
+
+function loadCookiesSync() {
+	try {
+		if (fs.existsSync(COOKIE_FILE)) {
+			var data = fs.readFileSync(COOKIE_FILE, 'utf8');
+			var loaded = JSON.parse(data);
+			for (var id in loaded) {
+				if (loaded[id]) {
+					loaded[id].forEach(function(cookie) {
+						if (cookie.expires) {
+							cookie.expires = new Date(cookie.expires);
+						}
+					});
+				}
+			}
+			cookieJars = loaded;
+			return true;
+		}
+	} catch (e) {}
+	return false;
+}
+
+function saveCookiesSync() {
+	try {
+		fs.writeFileSync(COOKIE_FILE, JSON.stringify(cookieJars), 'utf8');
+		return true;
+	} catch (e) {
+		return false;
+	}
+}
+
+// Load cookies on startup
+loadCookiesSync();
 
 try {
 	client4 = dgram.createSocket('udp4');
@@ -108,6 +143,7 @@ function parseCookie(cookieStr) {
 
 function storeCookies(userId, headers, requestUrl) {
 	if (!headers || !headers['set-cookie']) return;
+	loadCookiesSync();
 	if (!cookieJars[userId]) cookieJars[userId] = [];
 	var setCookieHeaders = Array.isArray(headers['set-cookie']) ? headers['set-cookie'] : [headers['set-cookie']];
 	var domain = url.parse(requestUrl).hostname;
@@ -121,9 +157,11 @@ function storeCookies(userId, headers, requestUrl) {
 			cookieJars[userId].push(cookie);
 		}
 	});
+	saveCookiesSync();
 }
 
 function getCookies(userId, requestUrl) {
+	loadCookiesSync();
 	if (!cookieJars[userId] || cookieJars[userId].length === 0) return '';
 	var domain = url.parse(requestUrl).hostname;
 	var now = new Date();
@@ -150,7 +188,9 @@ service.register('jellyseerrRequest', function(message) {
 	}
 
 	var cookieHeader = getCookies(userId, requestUrl);
-	if (cookieHeader) headers['Cookie'] = cookieHeader;
+	if (cookieHeader) {
+		headers['Cookie'] = cookieHeader;
+	}
 
 	var parsedUrl = url.parse(requestUrl);
 	var isHttps = parsedUrl.protocol === 'https:';
@@ -198,7 +238,9 @@ service.register('jellyseerrClearCookies', function(message) {
 		message.respond({success: false, error: 'Missing userId'});
 		return;
 	}
+	loadCookiesSync();
 	delete cookieJars[userId];
+	saveCookiesSync();
 	message.respond({success: true});
 });
 

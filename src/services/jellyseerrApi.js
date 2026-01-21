@@ -42,12 +42,14 @@ const request = async (endpoint, options = {}) => {
 		headers['X-Api-Key'] = apiKey;
 	}
 
+	const bodyStr = options.body ? JSON.stringify(options.body) : undefined;
+
 	const result = await lunaRequest('jellyseerrRequest', {
 		userId,
 		url,
 		method: options.method || 'GET',
 		headers,
-		body: options.body ? JSON.stringify(options.body) : undefined,
+		body: bodyStr,
 		timeout: 30000
 	});
 
@@ -56,7 +58,14 @@ const request = async (endpoint, options = {}) => {
 	}
 
 	if (result.status >= 400) {
-		const error = new Error(`Jellyseerr API error: ${result.status}`);
+		let errorMessage = `Jellyseerr API error: ${result.status}`;
+		if (result.body) {
+			try {
+				const errorBody = JSON.parse(result.body);
+				errorMessage = errorBody.message || errorBody.error || errorMessage;
+			} catch (e) {}
+		}
+		const error = new Error(errorMessage);
 		error.status = result.status;
 		throw error;
 	}
@@ -91,11 +100,22 @@ export const login = async (email, password) => {
 };
 
 export const loginWithJellyfin = async (username, password, jellyfinHost) => {
-	const result = await request('/auth/jellyfin', {
-		method: 'POST',
-		body: {username, password, hostname: jellyfinHost}
-	});
-	return result;
+	try {
+		const result = await request('/auth/jellyfin', {
+			method: 'POST',
+			body: {username, password}
+		});
+		return result;
+	} catch (err) {
+		if (err.status === 401) {
+			const result = await request('/auth/jellyfin', {
+				method: 'POST',
+				body: {username, password, hostname: jellyfinHost}
+			});
+			return result;
+		}
+		throw err;
+	}
 };
 
 export const getUser = async () => {
@@ -175,7 +195,7 @@ export const getMediaStatus = async (mediaType, tmdbId) => {
 
 export const getImageUrl = (path, size = 'w500') => {
 	if (!path) return null;
-	return `https://image.tmdb.org/t/p/${size}${path}`;
+	return `http://image.tmdb.org/t/p/${size}${path}`;
 };
 
 export const proxyImage = async (imageUrl) => {

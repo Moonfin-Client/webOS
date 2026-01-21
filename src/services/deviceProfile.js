@@ -1,5 +1,28 @@
 let cachedCapabilities = null;
 
+// Map Chrome version to webOS version for display purposes
+const getWebOSVersionFromChrome = (chromeVersion) => {
+	if (chromeVersion >= 94) return '23';
+	if (chromeVersion >= 87) return '22';
+	if (chromeVersion >= 79) return '6';
+	if (chromeVersion >= 68) return '5';
+	if (chromeVersion >= 53) return '4';
+	if (chromeVersion >= 38) return '3';
+	if (chromeVersion >= 34) return '2';
+	if (chromeVersion >= 26) return '1';
+	return 'Unknown';
+};
+
+// Detect webOS version from user agent
+const detectWebOSVersion = () => {
+	const ua = navigator.userAgent.toLowerCase();
+	const chromeMatch = /chrome\/(\d+)/.exec(ua);
+	if (chromeMatch) {
+		return getWebOSVersionFromChrome(parseInt(chromeMatch[1], 10));
+	}
+	return 'Unknown';
+};
+
 export const getDeviceCapabilities = async () => {
 	if (cachedCapabilities) return cachedCapabilities;
 
@@ -9,9 +32,7 @@ export const getDeviceCapabilities = async () => {
 	try {
 		const deviceInfo = await import('@enact/webos/deviceInfo');
 		deviceInfoData = await new Promise(resolve => deviceInfo.default(resolve));
-	} catch (e) {
-		// Not on webOS
-	}
+	} catch (e) {}
 
 	try {
 		const LS2Request = (await import('@enact/webos/LS2Request')).default;
@@ -30,34 +51,43 @@ export const getDeviceCapabilities = async () => {
 						'tv.hw.panelResolution',
 						'tv.hw.ddrSize',
 						'tv.conti.supportDolbyAtmos',
-						'tv.config.supportDolbyAtmos'
+						'tv.config.supportDolbyAtmos',
+						'tv.model.oled'
 					]
 				},
 				onSuccess: resolve,
 				onFailure: () => resolve({configs: {}})
 			});
 		});
-	} catch (e) {
-		// Not on webOS
-	}
+	} catch (e) {}
 
 	const cfg = configData.configs || {};
-	const webosVersion = parseFloat(deviceInfoData.sdkVersion) || 4;
+
+	// Get numeric webOS version from SDK version or Chrome UA detection
+	const sdkVersionString = deviceInfoData.sdkVersion || '';
+	const webosVersionNumeric = parseFloat(sdkVersionString) || 4;
+
+	// Get friendly webOS version name (e.g., "webOS 23" for 2023 TVs)
+	const webosVersionDisplay = detectWebOSVersion();
 
 	cachedCapabilities = {
 		modelName: deviceInfoData.modelName || cfg['tv.model.modelName'] || 'Unknown',
-		sdkVersion: deviceInfoData.sdkVersion || '0',
-		webosVersion,
+		modelNameAscii: deviceInfoData.modelNameAscii || '',
+		sdkVersion: sdkVersionString || 'Unknown',
+		webosVersion: webosVersionNumeric,
+		webosVersionDisplay: webosVersionDisplay,
+		firmwareVersion: deviceInfoData.version || '',
 		screenWidth: deviceInfoData.screenWidth || 1920,
 		screenHeight: deviceInfoData.screenHeight || 1080,
 		uhd: cfg['tv.hw.panelResolution'] === 'UD' || deviceInfoData.uhd || false,
 		uhd8K: cfg['tv.hw.panelResolution'] === '8K' || deviceInfoData.uhd8K || false,
+		oled: cfg['tv.model.oled'] === true || deviceInfoData.oled || false,
 		hdr10: cfg['tv.model.supportHDR'] === true,
 		dolbyVision: cfg['tv.config.supportDolbyHDRContents'] === true,
 		dolbyAtmos: cfg['tv.conti.supportDolbyAtmos'] === true || cfg['tv.config.supportDolbyAtmos'] === true,
 		hevc: cfg['tv.hw.supportCodecH265'] !== false,
 		av1: cfg['tv.hw.supportCodecAV1'] === true,
-		vp9: cfg['tv.hw.supportCodecVP9'] === true || webosVersion >= 5,
+		vp9: cfg['tv.hw.supportCodecVP9'] === true || webosVersionNumeric >= 5,
 		ddrSize: cfg['tv.hw.ddrSize'] || 0
 	};
 

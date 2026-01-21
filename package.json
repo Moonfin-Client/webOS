@@ -61,6 +61,7 @@
 		"web-vitals": "^3.5.1"
 	},
 	"devDependencies": {
+		"baseline-browser-mapping": "^2.9.17",
 		"eslint-config-enact-proxy": "^1.0.7"
 	}
 }
