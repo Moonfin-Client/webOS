@@ -179,6 +179,9 @@ export const api = {
 	getFavorites: (limit = 50) =>
 		request(`/Users/${currentUser}/Items?IsFavorite=true&Recursive=true&Limit=${limit}&Fields=PrimaryImageAspectRatio,ProductionYear`),
 
+	getRandomItem: (includeTypes = 'Movie,Series') =>
+		request(`/Items?UserId=${currentUser}&IncludeItemTypes=${includeTypes}&Recursive=true&SortBy=Random&Limit=1&Fields=PrimaryImageAspectRatio,Overview`),
+
 	setFavorite: (itemId, isFavorite) => request(`/Users/${currentUser}/FavoriteItems/${itemId}`, {
 		method: isFavorite ? 'POST' : 'DELETE'
 	}),

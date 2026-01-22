@@ -186,14 +186,13 @@ const Browse = ({
 
 	const handleShuffle = useCallback(async () => {
 		try {
-			const items = await api.getItems({
-				Recursive: true,
-				IncludeItemTypes: 'Movie,Episode',
-				SortBy: 'Random',
-				Limit: 1
-			});
+			const items = await api.getRandomItem('Movie,Series');
 			if (items.Items?.length > 0) {
-				onSelectItem?.(items.Items[0]);
+				const item = items.Items[0];
+				console.log('[Shuffle] Got random item:', item.Type, item.Name, item.Id);
+				onSelectItem?.(item);
+			} else {
+				console.warn('[Shuffle] No items returned');
 			}
 		} catch (err) {
 			console.error('Shuffle failed:', err);
