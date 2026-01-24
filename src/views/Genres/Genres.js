@@ -1,6 +1,8 @@
 import {useState, useEffect, useCallback, useMemo, useRef} from 'react';
 import Spottable from '@enact/spotlight/Spottable';
 import {VirtualGridList} from '@enact/sandstone/VirtualList';
+import Popup from '@enact/sandstone/Popup';
+import Button from '@enact/sandstone/Button';
 import {useAuth} from '../../context/AuthContext';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import {getImageUrl, getBackdropId} from '../../utils/helpers';
@@ -153,6 +155,29 @@ const Genres = ({onSelectGenre, onBack}) => {
 		}
 	}, [onSelectGenre, selectedLibrary]);
 
+	const handleOpenLibraryModal = useCallback(() => {
+		setShowLibraryModal(true);
+	}, []);
+
+	const handleOpenSortModal = useCallback(() => {
+		setShowSortModal(true);
+	}, []);
+
+	const handleCloseModal = useCallback(() => {
+		setShowSortModal(false);
+		setShowLibraryModal(false);
+	}, []);
+
+	const handlePopupKeyDown = useCallback((ev) => {
+		const keyCode = ev.keyCode;
+		if (keyCode === 461 || keyCode === 27) {
+			ev.preventDefault();
+			ev.stopPropagation();
+			setShowSortModal(false);
+			setShowLibraryModal(false);
+		}
+	}, []);
+
 	const handleSortSelect = useCallback((ev) => {
 		const key = ev.currentTarget?.dataset?.sortKey;
 		if (key) {
@@ -167,19 +192,11 @@ const Genres = ({onSelectGenre, onBack}) => {
 			setSelectedLibrary(null);
 		} else if (libData) {
 			try {
-				const library = JSON.parse(libData);
-				setSelectedLibrary(library);
-			} catch (err) { /* ignore */ }
+				const lib = JSON.parse(libData);
+				setSelectedLibrary(lib);
+			} catch (e) { /* ignore */ }
 		}
 		setShowLibraryModal(false);
-	}, []);
-
-	const handleOpenLibraryModal = useCallback(() => {
-		setShowLibraryModal(true);
-	}, []);
-
-	const handleOpenSortModal = useCallback(() => {
-		setShowSortModal(true);
 	}, []);
 
 	const renderGenreCard = useCallback(({index, ...rest}) => {
@@ -275,48 +292,61 @@ const Genres = ({onSelectGenre, onBack}) => {
 				</div>
 			</div>
 
-			{showSortModal && (
-				<div className={css.modal}>
-					<div className={css.modalContent}>
-						<div className={css.modalTitle}>Sort By</div>
-						{SORT_OPTIONS.map(option => (
-							<SpottableButton
-								key={option.key}
-								className={`${css.modalOption} ${sortOrder === option.key ? css.selected : ''}`}
-								onClick={handleSortSelect}
-								data-sort-key={option.key}
-							>
-								{option.label}
-							</SpottableButton>
-						))}
-					</div>
-				</div>
-			)}
-
-			{showLibraryModal && (
-				<div className={css.modal}>
-					<div className={css.modalContent}>
-						<div className={css.modalTitle}>Select Library</div>
-						<SpottableButton
-							className={`${css.modalOption} ${!selectedLibrary ? css.selected : ''}`}
-							onClick={handleLibrarySelect}
-							data-library="null"
+			<Popup
+				open={showSortModal}
+				onClose={handleCloseModal}
+				position="center"
+				scrimType="translucent"
+				noAutoDismiss
+				onKeyDown={handlePopupKeyDown}
+			>
+				<div className={css.popupContent}>
+					<div className={css.modalTitle}>Sort By</div>
+					{SORT_OPTIONS.map((option) => (
+						<Button
+							key={option.key}
+							className={css.popupOption}
+							selected={sortOrder === option.key}
+							onClick={handleSortSelect}
+							data-sort-key={option.key}
 						>
-							All Libraries
-						</SpottableButton>
-						{libraries.map(lib => (
-							<SpottableButton
-								key={lib.Id}
-								className={`${css.modalOption} ${selectedLibrary?.Id === lib.Id ? css.selected : ''}`}
-								onClick={handleLibrarySelect}
-								data-library={JSON.stringify(lib)}
-							>
-								{lib.Name}
-							</SpottableButton>
-						))}
-					</div>
+							{option.label}
+						</Button>
+					))}
 				</div>
-			)}
+			</Popup>
+
+			<Popup
+				open={showLibraryModal}
+				onClose={handleCloseModal}
+				position="center"
+				scrimType="translucent"
+				noAutoDismiss
+				onKeyDown={handlePopupKeyDown}
+			>
+				<div className={css.popupContent}>
+					<div className={css.modalTitle}>Select Library</div>
+					<Button
+						className={css.popupOption}
+						selected={!selectedLibrary}
+						onClick={handleLibrarySelect}
+						data-library="null"
+					>
+						All Libraries
+					</Button>
+					{libraries.map(lib => (
+						<Button
+							key={lib.Id}
+							className={css.popupOption}
+							selected={selectedLibrary?.Id === lib.Id}
+							onClick={handleLibrarySelect}
+							data-library={JSON.stringify(lib)}
+						>
+							{lib.Name}
+						</Button>
+					))}
+				</div>
+			</Popup>
 		</div>
 	);
 };

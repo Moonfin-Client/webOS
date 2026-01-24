@@ -1,6 +1,8 @@
 import {useState, useEffect, useCallback, useRef} from 'react';
 import Spottable from '@enact/spotlight/Spottable';
 import {VirtualGridList} from '@enact/sandstone/VirtualList';
+import Popup from '@enact/sandstone/Popup';
+import Button from '@enact/sandstone/Button';
 import {useAuth} from '../../context/AuthContext';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import {getImageUrl, getBackdropId, getPrimaryImageId} from '../../utils/helpers';
@@ -81,7 +83,6 @@ const GenreBrowse = ({genre, libraryId, onSelectItem, onBack}) => {
 
 			if (startLetter) {
 				if (startLetter === '#') {
-					// Numbers and special characters
 					params.NameLessThan = 'A';
 				} else {
 					params.NameStartsWith = startLetter;
@@ -163,6 +164,36 @@ const GenreBrowse = ({genre, libraryId, onSelectItem, onBack}) => {
 		}
 	}, [totalCount, isLoading, loadItems]);
 
+	const handleLetterSelect = useCallback((ev) => {
+		const letter = ev.currentTarget?.dataset?.letter;
+		if (letter) {
+			setStartLetter(letter === startLetter ? null : letter);
+		}
+	}, [startLetter]);
+
+	const handleOpenSortModal = useCallback(() => {
+		setShowSortModal(true);
+	}, []);
+
+	const handleOpenFilterModal = useCallback(() => {
+		setShowFilterModal(true);
+	}, []);
+
+	const handleCloseModal = useCallback(() => {
+		setShowSortModal(false);
+		setShowFilterModal(false);
+	}, []);
+
+	const handlePopupKeyDown = useCallback((ev) => {
+		const keyCode = ev.keyCode;
+		if (keyCode === 461 || keyCode === 27) {
+			ev.preventDefault();
+			ev.stopPropagation();
+			setShowSortModal(false);
+			setShowFilterModal(false);
+		}
+	}, []);
+
 	const handleSortSelect = useCallback((ev) => {
 		const key = ev.currentTarget?.dataset?.sortKey;
 		if (key) {
@@ -177,21 +208,6 @@ const GenreBrowse = ({genre, libraryId, onSelectItem, onBack}) => {
 			setFilterType(key);
 			setShowFilterModal(false);
 		}
-	}, []);
-
-	const handleLetterSelect = useCallback((ev) => {
-		const letter = ev.currentTarget?.dataset?.letter;
-		if (letter) {
-			setStartLetter(letter === startLetter ? null : letter);
-		}
-	}, [startLetter]);
-
-	const handleOpenSortModal = useCallback(() => {
-		setShowSortModal(true);
-	}, []);
-
-	const handleOpenFilterModal = useCallback(() => {
-		setShowFilterModal(true);
 	}, []);
 
 	const renderItem = useCallback(({index, ...rest}) => {
@@ -325,41 +341,53 @@ const GenreBrowse = ({genre, libraryId, onSelectItem, onBack}) => {
 				</div>
 			</div>
 
-			{showSortModal && (
-				<div className={css.modal}>
-					<div className={css.modalContent}>
-						<div className={css.modalTitle}>Sort By</div>
-						{SORT_OPTIONS.map(option => (
-							<SpottableButton
-								key={option.key}
-								className={`${css.modalOption} ${sortBy === option.key ? css.selected : ''}`}
-								onClick={handleSortSelect}
-								data-sort-key={option.key}
-							>
-								{option.label}
-							</SpottableButton>
-						))}
-					</div>
+			<Popup
+				open={showSortModal}
+				onClose={handleCloseModal}
+				position="center"
+				scrimType="translucent"
+				noAutoDismiss
+				onKeyDown={handlePopupKeyDown}
+			>
+				<div className={css.popupContent}>
+					<div className={css.modalTitle}>Sort By</div>
+					{SORT_OPTIONS.map((option) => (
+						<Button
+							key={option.key}
+							className={css.popupOption}
+							selected={sortBy === option.key}
+							onClick={handleSortSelect}
+							data-sort-key={option.key}
+						>
+							{option.label}
+						</Button>
+					))}
 				</div>
-			)}
+			</Popup>
 
-			{showFilterModal && (
-				<div className={css.modal}>
-					<div className={css.modalContent}>
-						<div className={css.modalTitle}>Filter</div>
-						{FILTER_OPTIONS.map(option => (
-							<SpottableButton
-								key={option.key}
-								className={`${css.modalOption} ${filterType === option.key ? css.selected : ''}`}
-								onClick={handleFilterSelect}
-								data-filter-key={option.key}
-							>
-								{option.label}
-							</SpottableButton>
-						))}
-					</div>
+			<Popup
+				open={showFilterModal}
+				onClose={handleCloseModal}
+				position="center"
+				scrimType="translucent"
+				noAutoDismiss
+				onKeyDown={handlePopupKeyDown}
+			>
+				<div className={css.popupContent}>
+					<div className={css.modalTitle}>Filter</div>
+					{FILTER_OPTIONS.map((option) => (
+						<Button
+							key={option.key}
+							className={css.popupOption}
+							selected={filterType === option.key}
+							onClick={handleFilterSelect}
+							data-filter-key={option.key}
+						>
+							{option.label}
+						</Button>
+					))}
 				</div>
-			)}
+			</Popup>
 		</div>
 	);
 };
