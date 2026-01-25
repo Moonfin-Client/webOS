@@ -16,6 +16,7 @@ import Genres from '../views/Genres';
 import GenreBrowse from '../views/GenreBrowse';
 import Person from '../views/Person';
 import LiveTV from '../views/LiveTV';
+import Recordings from '../views/Recordings';
 import JellyseerrDiscover from '../views/JellyseerrDiscover';
 import JellyseerrDetails from '../views/JellyseerrDetails';
 import JellyseerrRequests from '../views/JellyseerrRequests';
@@ -37,7 +38,8 @@ const PANELS = {
 	JELLYSEERR_DISCOVER: 11,
 	JELLYSEERR_DETAILS: 12,
 	JELLYSEERR_REQUESTS: 13,
-	GENRE_BROWSE: 14
+	GENRE_BROWSE: 14,
+	RECORDINGS: 15
 };
 
 const AppContent = (props) => {
@@ -107,6 +109,11 @@ const AppContent = (props) => {
 	}, [navigateTo]);
 
 	const handleSelectLibrary = useCallback((library) => {
+		// Check if this is a Live TV library - redirect to Live TV view
+		if (library.CollectionType === 'livetv') {
+			navigateTo(PANELS.LIVETV);
+			return;
+		}
 		setSelectedLibrary(library);
 		navigateTo(PANELS.LIBRARY);
 	}, [navigateTo]);
@@ -152,12 +159,17 @@ const AppContent = (props) => {
 		navigateTo(PANELS.PERSON);
 	}, [navigateTo]);
 
-	const handleOpenLiveTV = useCallback(() => {
-		navigateTo(PANELS.LIVETV);
-	}, [navigateTo]);
-
 	const handlePlayChannel = useCallback((channel) => {
 		setPlayingItem(channel);
+		navigateTo(PANELS.PLAYER);
+	}, [navigateTo]);
+
+	const handleOpenRecordings = useCallback(() => {
+		navigateTo(PANELS.RECORDINGS);
+	}, [navigateTo]);
+
+	const handlePlayRecording = useCallback((recording) => {
+		setPlayingItem(recording);
 		navigateTo(PANELS.PLAYER);
 	}, [navigateTo]);
 
@@ -199,7 +211,6 @@ const AppContent = (props) => {
 						onOpenSettings={handleOpenSettings}
 						onOpenFavorites={handleOpenFavorites}
 						onOpenGenres={handleOpenGenres}
-						onOpenLiveTV={handleOpenLiveTV}
 						onOpenJellyseerr={handleOpenJellyseerr}
 						onSwitchUser={handleSwitchUser}
 					/>
@@ -251,7 +262,9 @@ const AppContent = (props) => {
 			case PANELS.PERSON:
 				return <Person personId={selectedPerson?.Id} onSelectItem={handleSelectItem} onBack={handleBack} />;
 			case PANELS.LIVETV:
-				return <LiveTV onPlayChannel={handlePlayChannel} onBack={handleBack} />;
+				return <LiveTV onPlayChannel={handlePlayChannel} onRecordings={handleOpenRecordings} onBack={handleBack} />;
+			case PANELS.RECORDINGS:
+				return <Recordings onPlayRecording={handlePlayRecording} onBack={handleBack} />;
 			case PANELS.JELLYSEERR_DISCOVER:
 				return (
 					<JellyseerrDiscover

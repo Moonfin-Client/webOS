@@ -215,14 +215,40 @@ export const api = {
 	getSpecialFeatures: (itemId) =>
 		request(`/Users/${currentUser}/Items/${itemId}/SpecialFeatures`),
 
-	getLiveTvChannels: () =>
-		request(`/LiveTv/Channels?UserId=${currentUser}&EnableFavoriteSorting=true`),
+	getLiveTvChannels: (startIndex = 0, limit = 50) =>
+		request(`/LiveTv/Channels?UserId=${currentUser}&EnableFavoriteSorting=true&StartIndex=${startIndex}&Limit=${limit}`),
 
-	getLiveTvPrograms: (channelId) =>
-		request(`/LiveTv/Programs?UserId=${currentUser}&ChannelIds=${channelId}&EnableTotalRecordCount=false`),
+	getLiveTvPrograms: (channelIds, startDate, endDate) => {
+		const channelParam = Array.isArray(channelIds) ? channelIds.join(',') : channelIds;
+		const start = startDate instanceof Date ? startDate.toISOString() : startDate;
+		const end = endDate instanceof Date ? endDate.toISOString() : endDate;
+		return request(`/LiveTv/Programs?UserId=${currentUser}&ChannelIds=${channelParam}&MinStartDate=${start}&MaxEndDate=${end}&EnableTotalRecordCount=false`);
+	},
+
+	getLiveTvProgram: (programId) =>
+		request(`/LiveTv/Programs/${programId}?UserId=${currentUser}`),
 
 	getLiveTvRecordings: () =>
 		request(`/LiveTv/Recordings?UserId=${currentUser}`),
+
+	getLiveTvTimers: () =>
+		request(`/LiveTv/Timers`),
+
+	createLiveTvTimer: (programId) =>
+		request(`/LiveTv/Timers`, {
+			method: 'POST',
+			body: {ProgramId: programId}
+		}),
+
+	cancelLiveTvTimer: (timerId) =>
+		request(`/LiveTv/Timers/${timerId}`, {
+			method: 'DELETE'
+		}),
+
+	deleteItem: (itemId) =>
+		request(`/Items/${itemId}`, {
+			method: 'DELETE'
+		}),
 
 	getMediaStreams: (itemId) =>
 		request(`/Items/${itemId}?Fields=MediaStreams`),
