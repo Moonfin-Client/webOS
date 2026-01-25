@@ -274,24 +274,29 @@
 .btnAction {
 	width: 80px;
 	height: 80px;
-	border-radius: 50%;
+	border-radius: 12px;
 	border: none;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	cursor: pointer;
 	transition: all 0.2s ease;
-	background: rgba(255, 255, 255, 0.1);
+	background: rgba(255, 255, 255, 0.15);
 
 	&:focus {
 		outline: none;
-		transform: scale(1.1);
-		box-shadow: 0 0 0 4px rgba(0, 164, 220, 0.5);
+		transform: scale(1.05);
+		background: white;
+		
+		.btnIcon {
+			color: #0a0a0a;
+			fill: #0a0a0a;
+		}
 	}
 }
 
 .btnPrimary {
-	background: linear-gradient(135deg, #00a4dc 0%, #0077a3 100%);
+	background: rgba(255, 255, 255, 0.15);
 }
 
 .btnSecondary {
@@ -301,9 +306,19 @@
 .btnIcon {
 	font-size: 32px;
 	color: white;
+	width: 32px;
+	height: 32px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	fill: currentColor;
 }
 
 .favorited {
+	color: #ff4757;
+}
+
+.watched {
 	color: #ff4757;
 }
 

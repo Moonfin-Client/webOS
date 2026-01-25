@@ -1,6 +1,6 @@
 import {useState, useEffect, useCallback, useRef} from 'react';
+import Spotlight from '@enact/spotlight';
 import Spottable from '@enact/spotlight/Spottable';
-import SpotlightContainerDecorator from '@enact/spotlight/SpotlightContainerDecorator';
 import {Scroller} from '@enact/sandstone/Scroller';
 import Button from '@enact/sandstone/Button';
 import {useAuth} from '../../context/AuthContext';
@@ -12,11 +12,6 @@ import css from './Details.module.less';
 
 const SpottableDiv = Spottable('div');
 const SpottableButton = Spottable('button');
-
-const CastRowContainer = SpotlightContainerDecorator({
-	enterTo: 'last-focused',
-	restrict: 'self-first'
-}, 'div');
 
 const getResolutionName = (width, height) => {
 	if (width >= 3800 && height >= 2100) return '4K';
@@ -41,6 +36,7 @@ const Details = ({itemId, onPlay, onSelectItem, onSelectPerson, onBack}) => {
 	const [isLoading, setIsLoading] = useState(true);
 
 	const castScrollerRef = useRef(null);
+	const primaryButtonRef = useRef(null);
 
 	useEffect(() => {
 		const loadItem = async () => {
@@ -126,6 +122,17 @@ const Details = ({itemId, onPlay, onSelectItem, onSelectPerson, onBack}) => {
 		};
 		loadItem();
 	}, [api, itemId]);
+
+	// Auto-focus the primary button (Resume or Play) when content loads
+	useEffect(() => {
+		if (!isLoading && item && primaryButtonRef.current) {
+			// Small delay to ensure DOM is ready
+			const timer = setTimeout(() => {
+				Spotlight.focus(primaryButtonRef.current);
+			}, 100);
+			return () => clearTimeout(timer);
+		}
+	}, [isLoading, item]);
 
 	useEffect(() => {
 		if (!selectedSeason || !item || item.Type !== 'Series') return;
@@ -424,22 +431,30 @@ const Details = ({itemId, onPlay, onSelectItem, onSelectPerson, onBack}) => {
 						<div className={css.actionButtons}>
 							{hasPlaybackPosition && (
 								<div className={css.btnWrapper}>
-									<SpottableButton className={`${css.btnAction} ${css.btnPrimary}`} onClick={handleResume}>
-										<span className={css.btnIcon}>▶</span>
-									</SpottableButton>
-									<span className={css.btnLabel}>Resume {resumeTimeText}</span>
-								</div>
-							)}
-							<div className={css.btnWrapper}>
-								<SpottableButton className={`${css.btnAction} ${hasPlaybackPosition ? css.btnSecondary : css.btnPrimary}`} onClick={handlePlay}>
-									<span className={css.btnIcon}>{hasPlaybackPosition ? '↺' : '▶'}</span>
+								<SpottableButton ref={primaryButtonRef} className={`${css.btnAction} ${css.btnPrimary}`} onClick={handleResume}>
+									<span className={css.btnIcon}>▶</span>
 								</SpottableButton>
-								<span className={css.btnLabel}>{hasPlaybackPosition ? 'Restart' : 'Play'}</span>
+								<span className={css.btnLabel}>Resume {resumeTimeText}</span>
+							</div>
+						)}
+						<div className={css.btnWrapper}>
+							<SpottableButton ref={hasPlaybackPosition ? null : primaryButtonRef} className={`${css.btnAction} ${hasPlaybackPosition ? css.btnSecondary : css.btnPrimary}`} onClick={handlePlay}>
+									{hasPlaybackPosition ? (
+									<svg className={css.btnIcon} viewBox="0 -960 960 960">
+											<path d="M480-80q-75 0-140.5-28.5t-114-77q-48.5-48.5-77-114T120-440h80q0 117 81.5 198.5T480-160q117 0 198.5-81.5T760-440q0-117-81.5-198.5T480-720h-6l62 62-56 58-160-160 160-160 56 58-62 62h6q75 0 140.5 28.5t114 77q48.5 48.5 77 114T840-440q0 75-28.5 140.5t-77 114q-48.5 48.5-114 77T480-80Z"/>
+										</svg>
+									) : (
+										<span className={css.btnIcon}>▶</span>
+									)}
+								</SpottableButton>
+								<span className={css.btnLabel}>{hasPlaybackPosition ? 'Restart from beginning' : 'Play'}</span>
 							</div>
 							{(isSeries || isSeason) && (
 								<div className={css.btnWrapper}>
 									<SpottableButton className={css.btnAction} onClick={handleShuffle}>
-										<span className={css.btnIcon}>🔀</span>
+									<svg className={css.btnIcon} viewBox="0 -960 960 960">
+										<path d="M560-160v-80h104L537-367l57-57 126 126v-102h80v240H560Zm-344 0-56-56 504-504H560v-80h240v240h-80v-104L216-160Zm151-377L160-744l56-56 207 207-56 56Z"/>
+									</svg>
 									</SpottableButton>
 									<span className={css.btnLabel}>Shuffle</span>
 								</div>
@@ -447,31 +462,41 @@ const Details = ({itemId, onPlay, onSelectItem, onSelectPerson, onBack}) => {
 							{(item.LocalTrailerCount > 0 || item.RemoteTrailers?.length > 0) && (
 								<div className={css.btnWrapper}>
 									<SpottableButton className={css.btnAction} onClick={handleTrailer}>
-										<span className={css.btnIcon}>🎬</span>
+									<svg className={css.btnIcon} viewBox="0 -960 960 960">
+										<path d="M160-120v-720h80v80h80v-80h320v80h80v-80h80v720h-80v-80h-80v80H320v-80h-80v80h-80Zm80-160h80v-80h-80v80Zm0-160h80v-80h-80v80Zm0-160h80v-80h-80v80Zm400 320h80v-80h-80v80Zm0-160h80v-80h-80v80Zm0-160h80v-80h-80v80ZM400-200h160v-560H400v560Zm0-560h160-160Z"/>
+									</svg>
 									</SpottableButton>
 									<span className={css.btnLabel}>Trailer</span>
 								</div>
 							)}
 							<div className={css.btnWrapper}>
 								<SpottableButton className={css.btnAction} onClick={handleToggleFavorite}>
-									<span className={`${css.btnIcon} ${item.UserData?.IsFavorite ? css.favorited : ''}`}>
-										{item.UserData?.IsFavorite ? '❤️' : '🤍'}
-									</span>
+								<svg className={`${css.btnIcon} ${item.UserData?.IsFavorite ? css.favorited : ''}`} viewBox="0 -960 960 960">
+									<path d="m480-120-58-52q-101-91-167-157T150-447.5Q111-500 95.5-544T80-634q0-94 63-157t157-63q52 0 99 22t81 62q34-40 81-62t99-22q94 0 157 63t63 157q0 46-15.5 90T810-447.5Q771-395 705-329T538-172l-58 52Zm0-108q96-86 158-147.5t98-107q36-45.5 50-81t14-70.5q0-60-40-100t-100-40q-47 0-87 26.5T518-680h-76q-15-41-55-67.5T300-774q-60 0-100 40t-40 100q0 35 14 70.5t50 81q36 45.5 98 107T480-228Zm0-273Z"/>
+								</svg>
 								</SpottableButton>
 								<span className={css.btnLabel}>{item.UserData?.IsFavorite ? 'Favorited' : 'Favorite'}</span>
 							</div>
 							<div className={css.btnWrapper}>
 								<SpottableButton className={css.btnAction} onClick={handleToggleWatched}>
-									<span className={css.btnIcon}>
-										{item.UserData?.Played ? '✓' : '○'}
-									</span>
+								{item.UserData?.Played ? (
+									<svg className={`${css.btnIcon} ${css.watched}`} viewBox="0 -960 960 960">
+										<path d="M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z"/>
+									</svg>
+								) : (
+									<svg className={css.btnIcon} viewBox="0 -960 960 960">
+										<path d="M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z"/>
+									</svg>
+								)}
 								</SpottableButton>
 								<span className={css.btnLabel}>{item.UserData?.Played ? 'Watched' : 'Mark Watched'}</span>
 							</div>
 							{isEpisode && item.SeriesId && (
 								<div className={css.btnWrapper}>
 									<SpottableButton className={css.btnAction} onClick={handleGoToSeries}>
-										<span className={css.btnIcon}>📺</span>
+									<svg className={css.btnIcon} viewBox="0 -960 960 960">
+										<path d="M240-120v-80l40-40H160q-33 0-56.5-23.5T80-320v-440q0-33 23.5-56.5T160-840h640q33 0 56.5 23.5T880-760v440q0 33-23.5 56.5T800-240H680l40 40v80H240Zm-80-200h640v-440H160v440Zm0 0v-440 440Z"/>
+									</svg>
 									</SpottableButton>
 									<span className={css.btnLabel}>Go to Series</span>
 								</div>
@@ -536,7 +561,7 @@ const Details = ({itemId, onPlay, onSelectItem, onSelectPerson, onBack}) => {
 						)}
 
 						{cast.length > 0 && !isPerson && (
-							<CastRowContainer className={css.castSection}>
+							<div className={css.castSection}>
 								<h2 className={css.sectionTitle}>Cast & Crew</h2>
 								<div className={css.castScroller} ref={castScrollerRef} onFocus={handleCastFocus}>
 									<div className={css.castList}>
@@ -566,7 +591,7 @@ const Details = ({itemId, onPlay, onSelectItem, onSelectPerson, onBack}) => {
 										))}
 									</div>
 								</div>
-							</CastRowContainer>
+							</div>
 						)}
 
 						{similar.length > 0 && (
