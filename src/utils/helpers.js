@@ -68,3 +68,27 @@ export const hasImage = (item, imageType = 'Primary') => {
 	}
 	return !!item.ImageTags?.[imageType];
 };
+
+export const getLogoUrl = (serverUrl, item, options = {}) => {
+	if (!serverUrl || !item) return null;
+
+	const maxWidth = options.maxWidth || 600;
+	const quality = options.quality || 90;
+
+	if (item.ImageTags?.Logo) {
+		return getImageUrl(serverUrl, item.Id, 'Logo', {
+			maxWidth,
+			quality
+		});
+	}
+
+	if (item.ParentLogoImageTag && item.ParentLogoItemId) {
+		return getImageUrl(serverUrl, item.ParentLogoItemId, 'Logo', {
+			maxWidth,
+			quality,
+			tag: item.ParentLogoImageTag
+		});
+	}
+
+	return null;
+};

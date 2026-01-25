@@ -131,7 +131,7 @@ export const api = {
 	getItem: (itemId) => request(`/Users/${currentUser}/Items/${itemId}`),
 
 	getLatest: (libraryId, limit = 20) =>
-		request(`/Users/${currentUser}/Items/Latest?ParentId=${libraryId}&Limit=${limit}`),
+		request(`/Users/${currentUser}/Items/Latest?ParentId=${libraryId}&Limit=${limit}&Fields=Overview,Genres,OfficialRating,ImageTags,ParentLogoImageTag&ImageTypeLimit=1`),
 
 	getResumeItems: (limit = 12) =>
 		request(`/Users/${currentUser}/Items/Resume?Limit=${limit}&MediaTypes=Video`),

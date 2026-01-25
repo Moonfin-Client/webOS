@@ -5,7 +5,7 @@ import {useAuth} from '../../context/AuthContext';
 import NavBar from '../../components/NavBar';
 import MediaRow from '../../components/MediaRow';
 import LoadingSpinner from '../../components/LoadingSpinner';
-import {getImageUrl, getBackdropId} from '../../utils/helpers';
+import {getImageUrl, getBackdropId, getLogoUrl} from '../../utils/helpers';
 
 import css from './Browse.module.less';
 
@@ -124,7 +124,11 @@ const Browse = ({
 
 				const allLatest = rowData.filter(r => r.library).flatMap(r => r.items);
 				if (allLatest.length > 0) {
-					setFeaturedItems(allLatest.slice(0, FEATURED_ITEMS_LIMIT));
+					const featuredWithLogos = allLatest.slice(0, FEATURED_ITEMS_LIMIT).map(item => ({
+						...item,
+						LogoUrl: getLogoUrl(serverUrl, item, {maxWidth: 800, quality: 90})
+					}));
+					setFeaturedItems(featuredWithLogos);
 				}
 			} catch (err) {
 				console.error('Failed to load browse data:', err);
@@ -134,7 +138,7 @@ const Browse = ({
 		};
 
 		loadData();
-	}, [api]);
+	}, [api, serverUrl]);
 
 	useEffect(() => {
 		if (featuredItems.length <= 1 || !featuredFocused) return;
@@ -388,6 +392,15 @@ const Browse = ({
 									<p className={css.featuredOverview}>
 										{currentFeatured.Overview || 'No description available.'}
 									</p>
+								</div>
+
+								<div className={css.featuredLogoContainer}>
+									{currentFeatured.LogoUrl && (
+										<img
+											src={currentFeatured.LogoUrl}
+											alt={`${currentFeatured.Name} logo`}
+										/>
+									)}
 								</div>
 							</div>
 

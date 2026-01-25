@@ -6,7 +6,7 @@ import Button from '@enact/sandstone/Button';
 import {useAuth} from '../../context/AuthContext';
 import MediaRow from '../../components/MediaRow';
 import LoadingSpinner from '../../components/LoadingSpinner';
-import {formatDuration, getImageUrl, getBackdropId} from '../../utils/helpers';
+import {formatDuration, getImageUrl, getBackdropId, getLogoUrl} from '../../utils/helpers';
 
 import css from './Details.module.less';
 
@@ -265,11 +265,7 @@ const Details = ({itemId, onPlay, onSelectItem, onSelectPerson, onBack}) => {
 		? getImageUrl(serverUrl, backdropId, 'Backdrop', {maxWidth: 1920, quality: 90})
 		: null;
 
-	const logoUrl = item.ImageTags?.Logo
-		? getImageUrl(serverUrl, item.Id, 'Logo', {maxWidth: 600, quality: 90})
-		: item.ParentLogoImageTag && item.ParentLogoItemId
-			? getImageUrl(serverUrl, item.ParentLogoItemId, 'Logo', {maxWidth: 600, quality: 90, tag: item.ParentLogoImageTag})
-			: null;
+	const logoUrl = getLogoUrl(serverUrl, item, {maxWidth: 600, quality: 90});
 
 	const year = item.ProductionYear || '';
 	const runtime = item.RunTimeTicks ? formatDuration(item.RunTimeTicks) : '';
