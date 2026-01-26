@@ -66,6 +66,7 @@ export const initDeviceId = async () => {
 
 export const getServerUrl = () => currentServer;
 export const getUserId = () => currentUser;
+export const getApiKey = () => accessToken;
 
 const request = async (endpoint, options = {}) => {
 	const url = `${currentServer}${endpoint}`;

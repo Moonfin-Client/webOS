@@ -823,7 +823,7 @@ const JellyseerrDetails = ({mediaType, mediaId, onClose, onSelectItem, onSelectP
 					</div>
 				</div>
 
-				{/* Overview Section - 2 columns like Android TV */}
+				{/* Overview Section */}
 				<div className={css.overviewSection}>
 					{/* Left side - Overview text and action buttons */}
 					<div className={css.overviewLeft}>
