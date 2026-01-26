@@ -95,8 +95,11 @@ const AppContent = (props) => {
 
 	useEffect(() => {
 		const handleKeyDown = (e) => {
-			if (e.keyCode === 461 || e.keyCode === 27) {
+			if (e.keyCode === 461 || e.keyCode === 27 || e.keyCode === 8) {
 				if (panelIndex === PANELS.BROWSE || panelIndex === PANELS.LOGIN) {
+					return;
+				}
+				if (panelIndex === PANELS.PLAYER || panelIndex === PANELS.SETTINGS) {
 					return;
 				}
 				e.preventDefault();

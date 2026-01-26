@@ -671,15 +671,14 @@ const Player = ({item, onEnded, onBack, onPlayNext}) => {
 		const handleKeyDown = (e) => {
 			const key = e.key || e.keyCode;
 
-			// Back button
-			if (key === 'GoBack' || key === 'Backspace' || e.keyCode === 461 || e.keyCode === 8) {
+			if (key === 'GoBack' || key === 'Backspace' || e.keyCode === 461 || e.keyCode === 8 || e.keyCode === 27) {
+				e.preventDefault();
+				e.stopPropagation();
 				if (activeModal) {
-					e.preventDefault();
 					closeModal();
 					return;
 				}
 				if (controlsVisible) {
-					e.preventDefault();
 					hideControls();
 					return;
 				}
@@ -723,8 +722,8 @@ const Player = ({item, onEnded, onBack, onPlayNext}) => {
 			}
 		};
 
-		window.addEventListener('keydown', handleKeyDown);
-		return () => window.removeEventListener('keydown', handleKeyDown);
+		window.addEventListener('keydown', handleKeyDown, true);
+		return () => window.removeEventListener('keydown', handleKeyDown, true);
 	}, [controlsVisible, activeModal, closeModal, hideControls, handleBack, showControls, handlePlayPause]);
 
 	// Calculate progress

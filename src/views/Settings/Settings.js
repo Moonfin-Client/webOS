@@ -131,6 +131,23 @@ const Settings = ({onBack, onLogout}) => {
 		Spotlight.focus('sidebar-general');
 	}, []);
 
+	// Global back button handler for Settings view
+	useEffect(() => {
+		const handleKeyDown = (e) => {
+			if (e.keyCode === 461 || e.keyCode === 27 || e.keyCode === 8) {
+				if (e.target.tagName === 'INPUT') {
+					return;
+				}
+				e.preventDefault();
+				e.stopPropagation();
+				onBack?.();
+			}
+		};
+
+		window.addEventListener('keydown', handleKeyDown, true);
+		return () => window.removeEventListener('keydown', handleKeyDown, true);
+	}, [onBack]);
+
 	useEffect(() => {
 		if (serverUrl && accessToken) {
 			fetch(`${serverUrl}/System/Info`, {
@@ -176,11 +193,8 @@ const Settings = ({onBack, onLogout}) => {
 			e.preventDefault();
 			e.stopPropagation();
 			Spotlight.focus('settings-content');
-		} else if (e.keyCode === 461 || e.keyCode === 8) {
-			e.preventDefault();
-			onBack?.();
 		}
-	}, [onBack]);
+	}, []);
 
 	const handleContentKeyDown = useCallback((e) => {
 		if (e.keyCode === 37) {
@@ -190,9 +204,6 @@ const Settings = ({onBack, onLogout}) => {
 				e.stopPropagation();
 				Spotlight.focus(`sidebar-${activeCategory}`);
 			}
-		} else if (e.keyCode === 461 || e.keyCode === 8) {
-			e.preventDefault();
-			Spotlight.focus(`sidebar-${activeCategory}`);
 		}
 	}, [activeCategory]);
 
