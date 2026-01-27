@@ -18,6 +18,7 @@ const FILTER_OPTIONS = [
 ];
 
 const BACKDROP_DEBOUNCE_MS = 300;
+const MAX_PAGES = 25;
 
 /**
  * JellyseerrBrowse - Browse Jellyseerr content by genre, studio, or keyword
@@ -42,13 +43,13 @@ const JellyseerrBrowse = ({browseType, item, mediaType: initialMediaType, onSele
 	});
 	const [backdropUrl, setBackdropUrl] = useState('');
 	const [showFilterModal, setShowFilterModal] = useState(false);
-	const [currentPage, setCurrentPage] = useState(1);
 
 	const backdropTimeoutRef = useRef(null);
 	const backdropSetRef = useRef(false);
 	const loadingMoreRef = useRef(false);
 	const itemsRef = useRef([]);
 	const totalPagesRef = useRef(1);
+	const currentPageRef = useRef(1);
 
 	const loadItems = useCallback(async (page = 1, append = false) => {
 		if (!item || !isEnabled) return;
@@ -89,7 +90,7 @@ const JellyseerrBrowse = ({browseType, item, mediaType: initialMediaType, onSele
 				return updatedItems;
 			});
 			setTotalCount(result.totalResults || 0);
-			setCurrentPage(page);
+			currentPageRef.current = page;
 
 			// Set initial backdrop from first item with backdrop
 			if (!append && newItems.length > 0 && !backdropSetRef.current) {
@@ -115,8 +116,15 @@ const JellyseerrBrowse = ({browseType, item, mediaType: initialMediaType, onSele
 			itemsRef.current = [];
 			backdropSetRef.current = false;
 			loadingMoreRef.current = false;
-			setCurrentPage(1);
-			loadItems(1, false);
+			currentPageRef.current = 1;
+
+			const loadInitialPages = async () => {
+				for (let page = 1; page <= 3; page++) {
+					await loadItems(page, page > 1);
+					if (page >= totalPagesRef.current) break;
+				}
+			};
+			loadInitialPages();
 		}
 	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [item, isEnabled, mediaType]);
@@ -155,13 +163,6 @@ const JellyseerrBrowse = ({browseType, item, mediaType: initialMediaType, onSele
 		}
 	}, [onSelectItem]);
 
-	const handleScrollStop = useCallback(() => {
-		const hasMorePages = currentPage < totalPagesRef.current;
-		if (hasMorePages && !isLoading && !loadingMoreRef.current) {
-			loadItems(currentPage + 1, true);
-		}
-	}, [currentPage, isLoading, loadItems]);
-
 	const handleCloseModal = useCallback(() => {
 		setShowFilterModal(false);
 	}, []);
@@ -194,6 +195,16 @@ const JellyseerrBrowse = ({browseType, item, mediaType: initialMediaType, onSele
 
 	const renderItem = useCallback(({index, ...rest}) => {
 		const mediaItem = itemsRef.current[index];
+
+		const itemsLoaded = itemsRef.current.length;
+		const nearEnd = index >= itemsLoaded - 10;
+		const hasMorePages = currentPageRef.current < totalPagesRef.current;
+		const underMaxPages = currentPageRef.current < MAX_PAGES;
+
+		if (nearEnd && hasMorePages && underMaxPages && !loadingMoreRef.current) {
+			loadItems(currentPageRef.current + 1, true);
+		}
+
 		if (!mediaItem) return null;
 
 		const imageUrl = mediaItem.posterPath
@@ -232,7 +243,7 @@ const JellyseerrBrowse = ({browseType, item, mediaType: initialMediaType, onSele
 				</div>
 			</SpottableDiv>
 		);
-	}, [handleItemClick, updateBackdrop]);
+	}, [handleItemClick, updateBackdrop, loadItems]);
 
 	const currentFilter = FILTER_OPTIONS.find(o => o.key === mediaType);
 
@@ -319,7 +330,6 @@ const JellyseerrBrowse = ({browseType, item, mediaType: initialMediaType, onSele
 							itemRenderer={renderItem}
 							itemSize={{minWidth: 180, minHeight: 340}}
 							spacing={20}
-							onScrollStop={handleScrollStop}
 						/>
 					)}
 				</div>

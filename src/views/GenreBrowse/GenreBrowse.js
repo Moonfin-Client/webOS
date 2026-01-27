@@ -35,7 +35,7 @@ const GenreBrowse = ({genre, libraryId, onSelectItem, onBack}) => {
 	const {api, serverUrl} = useAuth();
 	const [items, setItems] = useState([]);
 	const [isLoading, setIsLoading] = useState(true);
-	const [totalCount, setTotalCount] = useState(0);
+	const [serverTotalCount, setServerTotalCount] = useState(0);
 	const [sortBy, setSortBy] = useState('SortName,Ascending');
 	const [filterType, setFilterType] = useState('all');
 	const [startLetter, setStartLetter] = useState(null);
@@ -45,30 +45,70 @@ const GenreBrowse = ({genre, libraryId, onSelectItem, onBack}) => {
 
 	const backdropTimeoutRef = useRef(null);
 	const backdropSetRef = useRef(false);
-	const loadingMoreRef = useRef(false);
-	const itemsLengthRef = useRef(0);
+	const pendingBatchesRef = useRef(new Set());
 	const itemsRef = useRef([]);
+	const loadedRangesRef = useRef([]);
+	const currentIndexRef = useRef(0);
 
-	const loadItems = useCallback(async (startIndex = 0, append = false) => {
+	const isRangeLoaded = useCallback((start, end) => {
+		return loadedRangesRef.current.some(range =>
+			range.start <= start && range.end >= end
+		);
+	}, []);
+
+	const unloadDistantItems = useCallback((currentIndex) => {
+		if (pendingBatchesRef.current.size > 0) return;
+
+		const bufferSize = 300;
+		const windowStart = Math.max(0, currentIndex - bufferSize);
+		const windowEnd = Math.min(itemsRef.current.length - 1, currentIndex + bufferSize);
+
+		const loadedCount = itemsRef.current.filter(item => item !== null).length;
+		if (loadedCount < 600) return;
+
+		let unloadedCount = 0;
+		itemsRef.current.forEach((item, index) => {
+			if (item && (index < windowStart || index > windowEnd)) {
+				itemsRef.current[index] = null;
+				unloadedCount++;
+			}
+		});
+
+		if (unloadedCount > 0) {
+			loadedRangesRef.current = loadedRangesRef.current.filter(range =>
+				!(range.end < windowStart || range.start > windowEnd)
+			).map(range => ({
+				start: Math.max(range.start, windowStart),
+				end: Math.min(range.end, windowEnd)
+			}));
+		}
+	}, []);
+
+	const loadItems = useCallback(async (startIndex = 0, isReset = false) => {
 		if (!genre) return;
 
-		if (append && loadingMoreRef.current) return;
-
-		if (append) {
-			loadingMoreRef.current = true;
+		if (!isReset) {
+			if (isRangeLoaded(startIndex, startIndex + 99)) {
+				return;
+			}
+			if (pendingBatchesRef.current.has(startIndex)) {
+				return;
+			}
+			pendingBatchesRef.current.add(startIndex);
 		}
 
 		try {
 			const [sortField, sortOrder] = sortBy.split(',');
 			const params = {
 				StartIndex: startIndex,
-				Limit: 25,
+				Limit: 100,
 				SortBy: sortField,
 				SortOrder: sortOrder,
 				Recursive: true,
 				Genres: genre.name,
 				EnableTotalRecordCount: true,
-				Fields: 'PrimaryImageAspectRatio,ProductionYear,Overview,ImageTags,BackdropImageTags,ParentBackdropImageTags,ParentBackdropItemId,SeriesId,SeriesPrimaryImageTag'
+				CollapseBoxSetItems: false,
+				Fields: 'PrimaryImageAspectRatio,ProductionYear,ImageTags,BackdropImageTags,ParentBackdropImageTags,ParentBackdropItemId,SeriesId,SeriesPrimaryImageTag'
 			};
 
 			if (libraryId) {
@@ -92,15 +132,26 @@ const GenreBrowse = ({genre, libraryId, onSelectItem, onBack}) => {
 			const result = await api.getItems(params);
 			const newItems = result.Items || [];
 
-			setItems(prev => {
-				const updatedItems = append ? [...prev, ...newItems] : newItems;
-				itemsLengthRef.current = updatedItems.length;
-				itemsRef.current = updatedItems;
-				return updatedItems;
-			});
-			setTotalCount(result.TotalRecordCount || 0);
+			setServerTotalCount(result.TotalRecordCount || 0);
 
-			if (!append && newItems.length > 0 && !backdropSetRef.current) {
+			if (isReset) {
+				const sparseArray = new Array(result.TotalRecordCount || 0).fill(null);
+				newItems.forEach((item, i) => {
+					sparseArray[startIndex + i] = item;
+				});
+				itemsRef.current = sparseArray;
+				loadedRangesRef.current = [{start: startIndex, end: startIndex + newItems.length - 1}];
+				setItems([...sparseArray]);
+			} else {
+				newItems.forEach((item, i) => {
+					itemsRef.current[startIndex + i] = item;
+				});
+				loadedRangesRef.current.push({start: startIndex, end: startIndex + newItems.length - 1});
+				loadedRangesRef.current.sort((a, b) => a.start - b.start);
+				setItems([...itemsRef.current]);
+			}
+
+			if (isReset && newItems.length > 0 && !backdropSetRef.current) {
 				const firstItemWithBackdrop = newItems.find(item => getBackdropId(item));
 				if (firstItemWithBackdrop) {
 					const url = getImageUrl(serverUrl, getBackdropId(firstItemWithBackdrop), 'Backdrop', {maxWidth: 1920, quality: 100});
@@ -111,22 +162,26 @@ const GenreBrowse = ({genre, libraryId, onSelectItem, onBack}) => {
 		} catch (err) {
 			console.error('Failed to load genre items:', err);
 		} finally {
-			setIsLoading(false);
-			loadingMoreRef.current = false;
+			pendingBatchesRef.current.delete(startIndex);
+			if (isReset) {
+				setIsLoading(false);
+			}
 		}
-	}, [api, genre, libraryId, sortBy, filterType, startLetter, serverUrl]);
+	}, [api, genre, libraryId, sortBy, filterType, startLetter, serverUrl, isRangeLoaded]);
 
 	useEffect(() => {
 		if (genre) {
 			setIsLoading(true);
 			setItems([]);
-			itemsLengthRef.current = 0;
+			setServerTotalCount(0);
+			itemsRef.current = [];
+			loadedRangesRef.current = [];
+			pendingBatchesRef.current = new Set();
+			currentIndexRef.current = 0;
 			backdropSetRef.current = false;
-			loadingMoreRef.current = false;
-			loadItems(0, false);
+			loadItems(0, true);
 		}
-	// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [genre, sortBy, filterType, startLetter]);
+	}, [genre, sortBy, filterType, startLetter, loadItems]);
 
 	const updateBackdrop = useCallback((ev) => {
 		const itemIndex = ev.currentTarget?.dataset?.index;
@@ -157,12 +212,6 @@ const GenreBrowse = ({genre, libraryId, onSelectItem, onBack}) => {
 			onSelectItem?.(item);
 		}
 	}, [onSelectItem]);
-
-	const handleScrollStop = useCallback(() => {
-		if (itemsLengthRef.current < totalCount && !isLoading && !loadingMoreRef.current) {
-			loadItems(itemsLengthRef.current, true);
-		}
-	}, [totalCount, isLoading, loadItems]);
 
 	const handleLetterSelect = useCallback((ev) => {
 		const letter = ev.currentTarget?.dataset?.letter;
@@ -217,7 +266,30 @@ const GenreBrowse = ({genre, libraryId, onSelectItem, onBack}) => {
 
 	const renderItem = useCallback(({index, ...rest}) => {
 		const item = itemsRef.current[index];
-		if (!item) return null;
+
+		currentIndexRef.current = index;
+
+		if (!item) {
+			const batchStart = Math.floor(index / 100) * 100;
+			if (!isRangeLoaded(batchStart, batchStart + 99) && !pendingBatchesRef.current.has(batchStart)) {
+				loadItems(batchStart, false);
+			}
+		}
+
+		// Periodically unload distant items to free memory (less frequently)
+		if (index % 500 === 0 && pendingBatchesRef.current.size === 0) {
+			unloadDistantItems(index);
+		}
+
+		if (!item) {
+			return (
+				<div {...rest} className={css.itemCard}>
+					<div className={css.posterPlaceholder}>
+						<div className={css.loadingPlaceholder} />
+					</div>
+				</div>
+			);
+		}
 
 		const imageId = getPrimaryImageId(item);
 		const imageUrl = imageId ? getImageUrl(serverUrl, imageId, 'Primary', {maxHeight: 300, quality: 80}) : null;
@@ -252,7 +324,7 @@ const GenreBrowse = ({genre, libraryId, onSelectItem, onBack}) => {
 				</div>
 			</SpottableDiv>
 		);
-	}, [serverUrl, handleItemClick, updateBackdrop]);
+	}, [serverUrl, handleItemClick, updateBackdrop, loadItems, isRangeLoaded, unloadDistantItems]);
 
 	const currentSort = SORT_OPTIONS.find(o => o.key === sortBy);
 	const currentFilter = FILTER_OPTIONS.find(o => o.key === filterType);
@@ -288,7 +360,7 @@ const GenreBrowse = ({genre, libraryId, onSelectItem, onBack}) => {
 							{startLetter && ` • Starting with "${startLetter}"`}
 						</div>
 					</div>
-					<div className={css.counter}>{totalCount} items</div>
+					<div className={css.counter}>{serverTotalCount} items</div>
 				</div>
 
 				<div className={css.toolbar}>
@@ -313,7 +385,7 @@ const GenreBrowse = ({genre, libraryId, onSelectItem, onBack}) => {
 					</SpottableButton>
 
 					<div className={css.letterNav}>
-						{LETTERS.slice(0, 15).map(letter => (
+						{LETTERS.map(letter => (
 							<SpottableButton
 								key={letter}
 								className={`${css.letterButton} ${startLetter === letter ? css.active : ''}`}
@@ -336,11 +408,10 @@ const GenreBrowse = ({genre, libraryId, onSelectItem, onBack}) => {
 					) : (
 						<VirtualGridList
 							className={css.grid}
-							dataSize={items.length}
+							dataSize={serverTotalCount}
 							itemRenderer={renderItem}
 							itemSize={{minWidth: 180, minHeight: 340}}
 							spacing={20}
-							onScrollStop={handleScrollStop}
 						/>
 					)}
 				</div>
