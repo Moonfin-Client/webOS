@@ -11,10 +11,11 @@ import {getImageUrl, getBackdropId, getLogoUrl} from '../../utils/helpers';
 import css from './Browse.module.less';
 
 const FOCUS_DELAY_MS = 100;
-const BACKDROP_DEBOUNCE_MS = 150;
+const BACKDROP_DEBOUNCE_MS = 300;
 const FEATURED_GENRES_LIMIT = 3;
 const DETAIL_GENRES_LIMIT = 2;
 const TRANSITION_DELAY_MS = 450;
+const PRELOAD_ADJACENT_SLIDES = 2;
 
 // Collection types to exclude from Latest Media rows
 const EXCLUDED_COLLECTION_TYPES = ['playlists', 'livetv', 'boxsets', 'books', 'music', 'musicvideos', 'homevideos', 'photos'];
@@ -46,6 +47,7 @@ const Browse = ({
 	const mainContentRef = useRef(null);
 	const backdropTimeoutRef = useRef(null);
 	const pendingBackdropRef = useRef(null);
+	const preloadedImagesRef = useRef(new Set());
 
 	// Get enabled and sorted home rows from settings
 	const homeRowsConfig = useMemo(() => {
@@ -224,7 +226,8 @@ const Browse = ({
 				setAllRowData(rowData);
 
 				if (randomItems?.Items?.length > 0) {
-					const shuffled = [...randomItems.Items].sort(() => Math.random() - 0.5);
+					const filteredItems = randomItems.Items.filter(item => item.Type !== 'BoxSet');
+					const shuffled = [...filteredItems].sort(() => Math.random() - 0.5);
 					const featuredWithLogos = shuffled.map(item => ({
 						...item,
 						LogoUrl: getLogoUrl(serverUrl, item, {maxWidth: 800, quality: 90})
@@ -240,6 +243,33 @@ const Browse = ({
 
 		loadData();
 	}, [api, serverUrl, settings.featuredContentType, settings.featuredItemCount]);
+
+	// Preload adjacent featured images to prevent flickering during carousel transitions
+	useEffect(() => {
+		if (featuredItems.length === 0) return;
+
+		const preloadImage = (url) => {
+			if (!url || preloadedImagesRef.current.has(url)) return;
+			const img = new window.Image();
+			img.src = url;
+			preloadedImagesRef.current.add(url);
+		};
+
+		// Preload adjacent slides
+		for (let offset = -PRELOAD_ADJACENT_SLIDES; offset <= PRELOAD_ADJACENT_SLIDES; offset++) {
+			const index = (currentFeaturedIndex + offset + featuredItems.length) % featuredItems.length;
+			const item = featuredItems[index];
+			if (item) {
+				const backdropId = getBackdropId(item);
+				if (backdropId) {
+					preloadImage(getImageUrl(serverUrl, backdropId, 'Backdrop', {maxWidth: 1920, quality: 100}));
+				}
+				if (item.LogoUrl) {
+					preloadImage(item.LogoUrl);
+				}
+			}
+		}
+	}, [currentFeaturedIndex, featuredItems, serverUrl]);
 
 	useEffect(() => {
 		const carouselSpeed = settings.carouselSpeed || 8000;
@@ -265,13 +295,16 @@ const Browse = ({
 
 		if (backdropId) {
 			const url = getImageUrl(serverUrl, backdropId, 'Backdrop', {maxWidth: 1920, quality: 100});
+			if (pendingBackdropRef.current === url) return;
 
 			if (backdropTimeoutRef.current) {
 				clearTimeout(backdropTimeoutRef.current);
 			}
 			pendingBackdropRef.current = url;
 			backdropTimeoutRef.current = setTimeout(() => {
-				setBackdropUrl(pendingBackdropRef.current);
+				window.requestAnimationFrame(() => {
+					setBackdropUrl(pendingBackdropRef.current);
+				});
 			}, BACKDROP_DEBOUNCE_MS);
 		}
 
