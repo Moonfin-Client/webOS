@@ -102,17 +102,25 @@ const AppContent = (props) => {
 
 	useEffect(() => {
 		const handleKeyDown = (e) => {
+			// Allow backspace in input fields
 			if (e.keyCode === 8 && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
 				return;
 			}
+			// Handle back button (461 = webOS back, 27 = Escape, 8 = Backspace)
 			if (e.keyCode === 461 || e.keyCode === 27 || e.keyCode === 8) {
+				// Always prevent default to stop webOS from showing home menu
+				e.preventDefault();
+
+				// Don't navigate back from browse or login - already at root
 				if (panelIndex === PANELS.BROWSE || panelIndex === PANELS.LOGIN) {
+					e.stopPropagation();
 					return;
 				}
+				// Player and Settings handle their own back button - let event propagate to them
 				if (panelIndex === PANELS.PLAYER || panelIndex === PANELS.SETTINGS) {
 					return;
 				}
-				e.preventDefault();
+				// For all other panels, stop propagation and handle navigation
 				e.stopPropagation();
 				handleBack();
 			}
