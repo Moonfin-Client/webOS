@@ -36,7 +36,7 @@ const Browse = ({
 	onOpenGenres,
 	onSwitchUser
 }) => {
-	const {api, serverUrl, isAuthenticated} = useAuth();
+	const {api, serverUrl, isAuthenticated, accessToken} = useAuth();
 	const {settings} = useSettings();
 	const [libraries, setLibraries] = useState([]);
 	const [isLoading, setIsLoading] = useState(true);
@@ -132,6 +132,12 @@ const Browse = ({
 	}, [filteredRows.length]);
 
 	useEffect(() => {
+		cachedRowData = null;
+		cachedLibraries = null;
+		cachedFeaturedItems = null;
+	}, [accessToken]);
+
+	useEffect(() => {
 		const loadData = async () => {
 			if (cachedRowData && cachedLibraries && cachedFeaturedItems) {
 				setLibraries(cachedLibraries);
@@ -140,6 +146,8 @@ const Browse = ({
 				setIsLoading(false);
 				return;
 			}
+
+			setIsLoading(true);
 
 			try {
 				const [libResult, resumeItems, nextUp, userConfig, randomItems] = await Promise.all([
@@ -256,7 +264,7 @@ const Browse = ({
 		};
 
 		loadData();
-	}, [api, serverUrl, settings.featuredContentType, settings.featuredItemCount]);
+	}, [api, serverUrl, accessToken, settings.featuredContentType, settings.featuredItemCount]);
 
 	useEffect(() => {
 		if (featuredItems.length === 0) return;
