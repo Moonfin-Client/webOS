@@ -1,520 +1,469 @@
-import {useState, useEffect, useCallback, useRef} from 'react';
+import {useState, useEffect, useCallback, useRef, useMemo} from 'react';
 import Spottable from '@enact/spotlight/Spottable';
+import SpotlightContainerDecorator from '@enact/spotlight/SpotlightContainerDecorator';
 import Spotlight from '@enact/spotlight';
 import {VirtualGridList} from '@enact/sandstone/VirtualList';
 import Popup from '@enact/sandstone/Popup';
 import Button from '@enact/sandstone/Button';
 import {useAuth} from '../../context/AuthContext';
 import LoadingSpinner from '../../components/LoadingSpinner';
-import {getImageUrl, getBackdropId, getPrimaryImageId} from '../../utils/helpers';
+import {getImageUrl, getPrimaryImageId} from '../../utils/helpers';
 
 import css from './Library.module.less';
 
 const SpottableDiv = Spottable('div');
 const SpottableButton = Spottable('button');
+const ToolbarContainer = SpotlightContainerDecorator({enterTo: 'last-focused', restrict: 'self-first'}, 'div');
+const GridContainer = SpotlightContainerDecorator({enterTo: 'last-focused', restrict: 'self-only'}, 'div');
 
 const SORT_OPTIONS = [
-	{key: 'SortName,Ascending', label: 'Name (A-Z)'},
-	{key: 'SortName,Descending', label: 'Name (Z-A)'},
-	{key: 'CommunityRating,Descending', label: 'Rating'},
-	{key: 'DateCreated,Descending', label: 'Date Added'},
-	{key: 'PremiereDate,Descending', label: 'Release Date'},
-	{key: 'Random,Ascending', label: 'Random'}
+{key: 'SortName,Ascending', label: 'Name (A-Z)'},
+{key: 'SortName,Descending', label: 'Name (Z-A)'},
+{key: 'CommunityRating,Descending', label: 'Rating'},
+{key: 'DateCreated,Descending', label: 'Date Added'},
+{key: 'PremiereDate,Descending', label: 'Release Date'},
+{key: 'Random,Ascending', label: 'Random'}
 ];
 
 const FILTER_OPTIONS = [
-	{key: 'all', label: 'All'},
-	{key: 'Favorites', label: 'Favorites'},
-	{key: 'Unplayed', label: 'Unplayed'},
-	{key: 'Played', label: 'Played'},
-	{key: 'Resumable', label: 'Resumable'}
+{key: 'all', label: 'All'},
+{key: 'Favorites', label: 'Favorites'},
+{key: 'Unplayed', label: 'Unplayed'},
+{key: 'Played', label: 'Played'},
+{key: 'Resumable', label: 'Resumable'}
 ];
 
 const LETTERS = ['#', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
 
-const BACKDROP_DEBOUNCE_MS = 500;
-
 const Library = ({library, onSelectItem, onBack}) => {
-	const {api, serverUrl} = useAuth();
-	const [allItems, setAllItems] = useState([]);
-	const [items, setItems] = useState([]);
-	const [isLoading, setIsLoading] = useState(true);
-	const [totalCount, setTotalCount] = useState(0);
-	const [sortBy, setSortBy] = useState('SortName,Ascending');
-	const [filter, setFilter] = useState('all');
-	const [startLetter, setStartLetter] = useState(null);
-	const [backdropUrl, setBackdropUrl] = useState('');
-	const [showSortModal, setShowSortModal] = useState(false);
-	const [showFilterModal, setShowFilterModal] = useState(false);
+const {api, serverUrl} = useAuth();
+const [allItems, setAllItems] = useState([]);
+const [isLoading, setIsLoading] = useState(true);
+const [totalCount, setTotalCount] = useState(0);
+const [sortBy, setSortBy] = useState('SortName,Ascending');
+const [filter, setFilter] = useState('all');
+const [startLetter, setStartLetter] = useState(null);
+const [showSortModal, setShowSortModal] = useState(false);
+const [showFilterModal, setShowFilterModal] = useState(false);
 
-	const backdropTimeoutRef = useRef(null);
-	const backdropSetRef = useRef(false);
-	const pendingBackdropUrlRef = useRef(null);
-	const loadingMoreRef = useRef(false);
-	const itemsRef = useRef([]);
-	const apiFetchIndexRef = useRef(0);
+const loadingMoreRef = useRef(false);
+const apiFetchIndexRef = useRef(0);
+const initialFocusDoneRef = useRef(false);
 
-	const getItemTypeForLibrary = useCallback(() => {
-		if (!library) return 'Movie,Series';
-		const collectionType = library.CollectionType?.toLowerCase();
+const items = useMemo(() => {
+if (!startLetter) {
+return allItems;
+}
+return allItems.filter(item => {
+const name = item.Name || '';
+const firstChar = name.charAt(0).toUpperCase();
+if (startLetter === '#') {
+return !/[A-Z]/.test(firstChar);
+}
+return firstChar === startLetter;
+});
+}, [allItems, startLetter]);
 
-		switch (collectionType) {
-			case 'movies':
-				return 'Movie';
-			case 'tvshows':
-				return 'Series';
-			case 'boxsets':
-				return 'BoxSet';
-			case 'homevideos':
-				return 'Video';
-			case 'music':
-				return 'MusicAlbum,MusicArtist';
-			default:
-				return 'Movie,Series';
-		}
-	}, [library]);
+const itemsRef = useRef(items);
+itemsRef.current = items;
 
-	const getExcludeItemTypes = useCallback(() => {
-		if (!library) return '';
-		const collectionType = library.CollectionType?.toLowerCase();
+const getItemTypeForLibrary = useCallback(() => {
+if (!library) return 'Movie,Series';
+const collectionType = library.CollectionType?.toLowerCase();
 
-		if (collectionType === 'movies' || collectionType === 'tvshows') {
-			return 'BoxSet';
-		}
-		return '';
-	}, [library]);
+switch (collectionType) {
+case 'movies':
+return 'Movie';
+case 'tvshows':
+return 'Series';
+case 'boxsets':
+return 'BoxSet';
+case 'homevideos':
+return 'Video';
+case 'music':
+return 'MusicAlbum,MusicArtist';
+default:
+return 'Movie,Series';
+}
+}, [library]);
 
-	const loadItems = useCallback(async (startIndex = 0, append = false) => {
-		if (!library) return;
+const getExcludeItemTypes = useCallback(() => {
+if (!library) return '';
+const collectionType = library.CollectionType?.toLowerCase();
 
-		if (append && loadingMoreRef.current) return;
+if (collectionType === 'movies' || collectionType === 'tvshows') {
+return 'BoxSet';
+}
+return '';
+}, [library]);
 
-		if (append) {
-			loadingMoreRef.current = true;
-		}
+const loadItems = useCallback(async (startIndex = 0, append = false) => {
+if (!library) return;
 
-		try {
-			const [sortField, sortOrder] = sortBy.split(',');
-			const collectionType = library.CollectionType?.toLowerCase();
+if (append && loadingMoreRef.current) return;
 
-			const params = {
-				ParentId: library.Id,
-				StartIndex: startIndex,
-				Limit: 150,
-				SortBy: sortField,
-				SortOrder: sortOrder,
-				Recursive: true,
-				IncludeItemTypes: getItemTypeForLibrary(),
-				EnableTotalRecordCount: true,
-				Fields: 'PrimaryImageAspectRatio,ProductionYear,Overview,ImageTags,BackdropImageTags,ParentBackdropImageTags,ParentBackdropItemId,SeriesId,SeriesPrimaryImageTag'
-			};
+if (append) {
+loadingMoreRef.current = true;
+}
 
-			const excludeTypes = getExcludeItemTypes();
-			if (excludeTypes) {
-				params.ExcludeItemTypes = excludeTypes;
-			}
+try {
+const [sortField, sortOrder] = sortBy.split(',');
+const collectionType = library.CollectionType?.toLowerCase();
 
-			// For movie libraries: CollapseBoxSetItems=false ensures movies that are part of
-			// BoxSets are still shown individually (not collapsed/hidden). Combined with
-			// ExcludeItemTypes=BoxSet, this shows all movies without showing BoxSet containers.
-			if (collectionType === 'movies') {
-				params.CollapseBoxSetItems = false;
-			}
+const params = {
+ParentId: library.Id,
+StartIndex: startIndex,
+Limit: 150,
+SortBy: sortField,
+SortOrder: sortOrder,
+Recursive: true,
+IncludeItemTypes: getItemTypeForLibrary(),
+EnableTotalRecordCount: true,
+Fields: 'ProductionYear,ImageTags'
+};
 
-			if (filter !== 'all') {
-				if (filter === 'Favorites') {
-					params.Filters = 'IsFavorite';
-				} else if (filter === 'Unplayed') {
-					params.Filters = 'IsUnplayed';
-				} else if (filter === 'Played') {
-					params.Filters = 'IsPlayed';
-				} else if (filter === 'Resumable') {
-					params.Filters = 'IsResumable';
-				}
-			}
+const excludeTypes = getExcludeItemTypes();
+if (excludeTypes) {
+params.ExcludeItemTypes = excludeTypes;
+}
 
-			// NOTE: We do NOT use NameStartsWith server-side because Jellyfin's API
-			// ignores type filters when NameStartsWith is used, returning BoxSets
-			// even when excluded. Letter filtering is done client-side instead.
+if (collectionType === 'movies') {
+params.CollapseBoxSetItems = false;
+}
 
-			console.log('[Library] loadItems called, startIndex:', startIndex, 'params:', JSON.stringify(params));
-			const result = await api.getItems(params);
-			console.log('[Library] API returned:', result.TotalRecordCount, 'total,', result.Items?.length, 'items');
-			let newItems = result.Items || [];
+if (filter !== 'all') {
+if (filter === 'Favorites') {
+params.Filters = 'IsFavorite';
+} else if (filter === 'Unplayed') {
+params.Filters = 'IsUnplayed';
+} else if (filter === 'Played') {
+params.Filters = 'IsPlayed';
+} else if (filter === 'Resumable') {
+params.Filters = 'IsResumable';
+}
+}
 
-			// Filter out BoxSets client-side (Jellyfin API often ignores ExcludeItemTypes)
-			if (excludeTypes && newItems.length > 0) {
-				const before = newItems.length;
-				newItems = newItems.filter(item => item.Type !== 'BoxSet');
-				const filtered = before - newItems.length;
-				if (filtered > 0) {
-					console.log('[Library] Filtered out', filtered, 'BoxSets');
-				}
-			}
+const result = await api.getItems(params);
+let newItems = result.Items || [];
 
-			console.log('[Library] After BoxSet filter:', newItems.length, 'items');
+if (excludeTypes && newItems.length > 0) {
+newItems = newItems.filter(item => item.Type !== 'BoxSet');
+}
 
-			apiFetchIndexRef.current = append ? apiFetchIndexRef.current + (result.Items?.length || 0) : (result.Items?.length || 0);
+apiFetchIndexRef.current = append ? apiFetchIndexRef.current + (result.Items?.length || 0) : (result.Items?.length || 0);
 
-			setAllItems(prev => append ? [...prev, ...newItems] : newItems);
-			setTotalCount(result.TotalRecordCount || 0);
+setAllItems(prev => append ? [...prev, ...newItems] : newItems);
+setTotalCount(result.TotalRecordCount || 0);
+} catch (err) {
+// Silent fail
+} finally {
+setIsLoading(false);
+loadingMoreRef.current = false;
+}
+}, [api, library, sortBy, filter, getItemTypeForLibrary, getExcludeItemTypes]);
 
-			if (!append && newItems.length > 0 && !backdropSetRef.current) {
-				const firstItemWithBackdrop = newItems.find(item => getBackdropId(item));
-				if (firstItemWithBackdrop) {
-					const url = getImageUrl(serverUrl, getBackdropId(firstItemWithBackdrop), 'Backdrop', {maxWidth: 1920, quality: 100});
-					setBackdropUrl(url);
-					backdropSetRef.current = true;
-				}
-			}
-		} catch (err) {
-			console.error('Failed to load library items:', err);
-		} finally {
-			setIsLoading(false);
-			loadingMoreRef.current = false;
-		}
-	}, [api, library, sortBy, filter, serverUrl, getItemTypeForLibrary, getExcludeItemTypes]);
+useEffect(() => {
+if (library) {
+setIsLoading(true);
+setAllItems([]);
+loadingMoreRef.current = false;
+apiFetchIndexRef.current = 0;
+initialFocusDoneRef.current = false;
+loadItems(0, false);
+}
+}, [library, sortBy, filter, loadItems]);
 
-	useEffect(() => {
-		console.log('[Library] useEffect triggered - library:', library?.Name);
-		if (library) {
-			setIsLoading(true);
-			setAllItems([]);
-			setItems([]);
-			backdropSetRef.current = false;
-			loadingMoreRef.current = false;
-			apiFetchIndexRef.current = 0;
-			loadItems(0, false);
-		}
-	}, [library, sortBy, filter, loadItems]);
+useEffect(() => {
+if (items.length > 0 && !isLoading && !initialFocusDoneRef.current) {
+setTimeout(() => {
+Spotlight.focus('library-grid');
+initialFocusDoneRef.current = true;
+}, 100);
+}
+}, [items.length, isLoading]);
 
-	useEffect(() => {
-		if (!startLetter) {
-			setItems(allItems);
-			itemsRef.current = allItems;
-		} else {
-			const filtered = allItems.filter(item => {
-				const name = item.Name || '';
-				const firstChar = name.charAt(0).toUpperCase();
-				if (startLetter === '#') {
-					return !/[A-Z]/.test(firstChar);
-				}
-				return firstChar === startLetter;
-			});
-			console.log('[Library] Filtered by letter', startLetter, ':', filtered.length, 'items');
-			setItems(filtered);
-			itemsRef.current = filtered;
-		}
+useEffect(() => {
+if (startLetter && items.length > 0 && !isLoading) {
+setTimeout(() => {
+Spotlight.focus('library-grid');
+}, 100);
+}
+}, [startLetter, items.length, isLoading]);
 
-		if (allItems.length > 0 && !isLoading) {
-			setTimeout(() => {
-				const firstItem = document.querySelector(`.${css.grid} .spottable`);
-				if (firstItem) {
-					firstItem.focus();
-				}
-			}, 100);
-		}
-	}, [allItems, startLetter, isLoading]);
+const handleItemClick = useCallback((ev) => {
+const itemIndex = ev.currentTarget?.dataset?.index;
+if (itemIndex === undefined) return;
 
-	const updateBackdrop = useCallback((ev) => {
-		const itemIndex = ev.currentTarget?.dataset?.index;
-		if (itemIndex === undefined) return;
+const item = itemsRef.current[parseInt(itemIndex, 10)];
+if (item) {
+onSelectItem?.(item);
+}
+}, [onSelectItem]);
 
-		const item = itemsRef.current[parseInt(itemIndex, 10)];
-		if (!item) return;
+const handleScrollStop = useCallback(() => {
+if (apiFetchIndexRef.current < totalCount && !isLoading && !loadingMoreRef.current) {
+loadItems(apiFetchIndexRef.current, true);
+}
+}, [totalCount, isLoading, loadItems]);
 
-		const backdropId = getBackdropId(item);
-		if (backdropId) {
-			const url = getImageUrl(serverUrl, backdropId, 'Backdrop', {maxWidth: 1280, quality: 80});
-			if (pendingBackdropUrlRef.current === url) return;
-			pendingBackdropUrlRef.current = url;
+const handleLetterSelect = useCallback((ev) => {
+const letter = ev.currentTarget?.dataset?.letter;
+if (letter) {
+setStartLetter(letter === startLetter ? null : letter);
+}
+}, [startLetter]);
 
-			if (backdropTimeoutRef.current) {
-				clearTimeout(backdropTimeoutRef.current);
-			}
-			backdropTimeoutRef.current = setTimeout(() => {
-				window.requestAnimationFrame(() => {
-					setBackdropUrl(url);
-				});
-			}, BACKDROP_DEBOUNCE_MS);
-		}
-	}, [serverUrl]);
+const handleToolbarKeyDown = useCallback((e) => {
+if (e.keyCode === 38) {
+e.preventDefault();
+e.stopPropagation();
+Spotlight.focus('navbar');
+} else if (e.keyCode === 40) {
+e.preventDefault();
+e.stopPropagation();
+Spotlight.focus('library-grid');
+}
+}, []);
 
-	const handleItemClick = useCallback((ev) => {
-		const itemIndex = ev.currentTarget?.dataset?.index;
-		if (itemIndex === undefined) return;
+const handleGridKeyDown = useCallback((e) => {
+if (e.keyCode === 38) {
+const grid = document.querySelector(`.${css.grid}`);
+if (grid) {
+const scrollTop = grid.scrollTop || 0;
+if (scrollTop < 50) {
+e.preventDefault();
+e.stopPropagation();
+Spotlight.focus('library-letter-hash');
+}
+}
+}
+}, []);
 
-		const item = itemsRef.current[parseInt(itemIndex, 10)];
-		if (item) {
-			onSelectItem?.(item);
-		}
-	}, [onSelectItem]);
+const handleOpenSortModal = useCallback(() => {
+setShowSortModal(true);
+}, []);
 
-	const handleScrollStop = useCallback(() => {
-		console.log('[Library] onScrollStop - apiFetchIndex:', apiFetchIndexRef.current, 'totalCount:', totalCount, 'isLoading:', isLoading);
-		if (apiFetchIndexRef.current < totalCount && !isLoading && !loadingMoreRef.current) {
-			console.log('[Library] Loading more items from index:', apiFetchIndexRef.current);
-			loadItems(apiFetchIndexRef.current, true);
-		}
-	}, [totalCount, isLoading, loadItems]);
+const handleOpenFilterModal = useCallback(() => {
+setShowFilterModal(true);
+}, []);
 
-	const handleLetterSelect = useCallback((ev) => {
-		const letter = ev.currentTarget?.dataset?.letter;
-		if (letter) {
-			setStartLetter(letter === startLetter ? null : letter);
-		}
-	}, [startLetter]);
+const handleCloseModal = useCallback(() => {
+setShowSortModal(false);
+setShowFilterModal(false);
+}, []);
 
-	const handleLetterKeyDown = useCallback((e) => {
-		if (e.keyCode === 40) {
-			e.preventDefault();
-			e.stopPropagation();
-			const focused = Spotlight.focus('.spottable');
-			if (!focused) {
-				const grid = document.querySelector(`.${css.grid}`);
-				if (grid) {
-					const firstItem = grid.querySelector('.spottable');
-					if (firstItem) {
-						firstItem.focus();
-					}
-				}
-			}
-		}
-	}, []);
+useEffect(() => {
+const handleKeyDown = (e) => {
+if (e.keyCode === 461 || e.keyCode === 27) {
+if (showSortModal || showFilterModal) {
+setShowSortModal(false);
+setShowFilterModal(false);
+} else {
+onBack?.();
+}
+}
+};
+document.addEventListener('keydown', handleKeyDown);
+return () => document.removeEventListener('keydown', handleKeyDown);
+}, [showSortModal, showFilterModal, onBack]);
 
-	const handleOpenSortModal = useCallback(() => {
-		setShowSortModal(true);
-	}, []);
+const handleSortSelect = useCallback((ev) => {
+const key = ev.currentTarget?.dataset?.sortKey;
+if (key) {
+setSortBy(key);
+setShowSortModal(false);
+}
+}, []);
 
-	const handleOpenFilterModal = useCallback(() => {
-		setShowFilterModal(true);
-	}, []);
+const handleFilterSelect = useCallback((ev) => {
+const key = ev.currentTarget?.dataset?.filterKey;
+if (key) {
+setFilter(key);
+setShowFilterModal(false);
+}
+}, []);
 
-	const handleCloseModal = useCallback(() => {
-		setShowSortModal(false);
-		setShowFilterModal(false);
-	}, []);
+const renderItem = useCallback(({index, ...rest}) => {
+const item = itemsRef.current[index];
+const isNearEnd = index >= items.length - 50;
+if (isNearEnd && apiFetchIndexRef.current < totalCount && !isLoading && !loadingMoreRef.current) {
+loadItems(apiFetchIndexRef.current, true);
+}
 
-	useEffect(() => {
-		const handleKeyDown = (e) => {
-			if (e.keyCode === 461 || e.keyCode === 27) {
-				if (showSortModal || showFilterModal) {
-					setShowSortModal(false);
-					setShowFilterModal(false);
-				} else {
-					onBack?.();
-				}
-			}
-		};
-		document.addEventListener('keydown', handleKeyDown);
-		return () => document.removeEventListener('keydown', handleKeyDown);
-	}, [showSortModal, showFilterModal, onBack]);
+if (!item) {
+return (
+<div {...rest} className={css.itemCard}>
+<div className={css.posterPlaceholder}>
+<div className={css.loadingPlaceholder} />
+</div>
+</div>
+);
+}
 
-	const handleSortSelect = useCallback((ev) => {
-		const key = ev.currentTarget?.dataset?.sortKey;
-		if (key) {
-			setSortBy(key);
-			setShowSortModal(false);
-		}
-	}, []);
+const imageId = getPrimaryImageId(item);
+const imageUrl = imageId ? getImageUrl(serverUrl, imageId, 'Primary', {maxHeight: 300, quality: 80}) : null;
 
-	const handleFilterSelect = useCallback((ev) => {
-		const key = ev.currentTarget?.dataset?.filterKey;
-		if (key) {
-			setFilter(key);
-			setShowFilterModal(false);
-		}
-	}, []);
+return (
+<SpottableDiv
+{...rest}
+className={css.itemCard}
+onClick={handleItemClick}
+data-index={index}
+>
+{imageUrl ? (
+<img
+className={css.poster}
+src={imageUrl}
+alt={item.Name}
+loading="lazy"
+/>
+) : (
+<div className={css.posterPlaceholder}>
+<svg viewBox="0 0 24 24" className={css.placeholderIcon}>
+<path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z" />
+</svg>
+</div>
+)}
+<div className={css.itemInfo}>
+<div className={css.itemName}>{item.Name}</div>
+{item.ProductionYear && (
+<div className={css.itemYear}>{item.ProductionYear}</div>
+)}
+</div>
+</SpottableDiv>
+);
+}, [serverUrl, handleItemClick, items.length, totalCount, isLoading, loadItems]);
 
-	const renderItem = useCallback(({index, ...rest}) => {
-		const item = itemsRef.current[index];
-		const isNearEnd = index >= items.length - 50;
-		if (isNearEnd && apiFetchIndexRef.current < totalCount && !isLoading && !loadingMoreRef.current) {
-			console.log('[Library] Near end of items, loading more from index:', apiFetchIndexRef.current);
-			loadItems(apiFetchIndexRef.current, true);
-		}
+const currentSort = SORT_OPTIONS.find(o => o.key === sortBy);
+const currentFilter = FILTER_OPTIONS.find(o => o.key === filter);
 
-		if (!item) {
-			return (
-				<div {...rest} className={css.itemCard}>
-					<div className={css.posterPlaceholder}>
-						<div className={css.loadingPlaceholder} />
-					</div>
-				</div>
-			);
-		}
+if (!library) {
+return (
+<div className={css.page}>
+<div className={css.empty}>No library selected</div>
+</div>
+);
+}
 
-		const imageId = getPrimaryImageId(item);
-		const imageUrl = imageId ? getImageUrl(serverUrl, imageId, 'Primary', {maxHeight: 300, quality: 80}) : null;
+return (
+<div className={css.page}>
+<div className={css.content}>
+<div className={css.header}>
+<div className={css.titleSection}>
+<div className={css.title}>{library.Name}</div>
+<div className={css.subtitle}>
+{currentSort?.label} • {currentFilter?.label}
+{startLetter && ` • Starting with "${startLetter}"`}
+</div>
+</div>
+<div className={css.counter}>{totalCount} items</div>
+</div>
 
-		return (
-			<SpottableDiv
-				{...rest}
-				className={css.itemCard}
-				onClick={handleItemClick}
-				onFocus={updateBackdrop}
-				data-index={index}
-			>
-				{imageUrl ? (
-					<img
-						className={css.poster}
-						src={imageUrl}
-						alt={item.Name}
-						loading="lazy"
-					/>
-				) : (
-					<div className={css.posterPlaceholder}>
-						<svg viewBox="0 0 24 24" className={css.placeholderIcon}>
-							<path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4z" />
-						</svg>
-					</div>
-				)}
-				<div className={css.itemInfo}>
-					<div className={css.itemName}>{item.Name}</div>
-					{item.ProductionYear && (
-						<div className={css.itemYear}>{item.ProductionYear}</div>
-					)}
-				</div>
-			</SpottableDiv>
-		);
-	}, [serverUrl, handleItemClick, updateBackdrop, items.length, totalCount, isLoading, loadItems]);
+<ToolbarContainer className={css.toolbar} spotlightId="library-toolbar" onKeyDown={handleToolbarKeyDown}>
+<SpottableButton
+className={css.sortButton}
+onClick={handleOpenSortModal}
+>
+<svg viewBox="0 0 24 24">
+<path d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z" />
+</svg>
+{currentSort?.label}
+</SpottableButton>
 
-	const currentSort = SORT_OPTIONS.find(o => o.key === sortBy);
-	const currentFilter = FILTER_OPTIONS.find(o => o.key === filter);
+<SpottableButton
+className={css.filterButton}
+onClick={handleOpenFilterModal}
+>
+<svg viewBox="0 0 24 24">
+<path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z" />
+</svg>
+{currentFilter?.label}
+</SpottableButton>
 
-	if (!library) {
-		return (
-			<div className={css.page}>
-				<div className={css.empty}>No library selected</div>
-			</div>
-		);
-	}
+<div className={css.letterNav}>
+{LETTERS.map((letter, index) => (
+<SpottableButton
+key={letter}
+className={`${css.letterButton} ${startLetter === letter ? css.active : ''}`}
+onClick={handleLetterSelect}
+data-letter={letter}
+spotlightId={index === 0 ? 'library-letter-hash' : undefined}
+>
+{letter}
+</SpottableButton>
+))}
+</div>
+</ToolbarContainer>
 
-	return (
-		<div className={css.page}>
-			<div className={css.backdrop}>
-				{backdropUrl && (
-					<img className={css.backdropImage} src={backdropUrl} alt="" />
-				)}
-				<div className={css.backdropOverlay} />
-			</div>
+<GridContainer className={css.gridContainer}>
+{isLoading && items.length === 0 ? (
+<div className={css.loading}>
+<LoadingSpinner />
+</div>
+) : items.length === 0 ? (
+<div className={css.empty}>No items found</div>
+) : (
+<VirtualGridList
+className={css.grid}
+dataSize={items.length}
+itemRenderer={renderItem}
+itemSize={{minWidth: 180, minHeight: 340}}
+spacing={20}
+onScrollStop={handleScrollStop}
+onKeyDown={handleGridKeyDown}
+spotlightId="library-grid"
+/>
+)}
+</GridContainer>
+</div>
 
-			<div className={css.content}>
-				<div className={css.header}>
-					<div className={css.titleSection}>
-						<div className={css.title}>{library.Name}</div>
-						<div className={css.subtitle}>
-							{currentSort?.label} • {currentFilter?.label}
-							{startLetter && ` • Starting with "${startLetter}"`}
-						</div>
-					</div>
-					<div className={css.counter}>{totalCount} items</div>
-				</div>
+<Popup
+open={showSortModal}
+onClose={handleCloseModal}
+position="center"
+scrimType="translucent"
+noAutoDismiss
+>
+<div className={css.popupContent}>
+<div className={css.modalTitle}>Sort By</div>
+{SORT_OPTIONS.map((option) => (
+<Button
+key={option.key}
+className={css.popupOption}
+selected={sortBy === option.key}
+onClick={handleSortSelect}
+data-sort-key={option.key}
+>
+{option.label}
+</Button>
+))}
+</div>
+</Popup>
 
-				<div className={css.toolbar}>
-					<SpottableButton
-						className={css.sortButton}
-						onClick={handleOpenSortModal}
-					>
-						<svg viewBox="0 0 24 24">
-							<path d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z" />
-						</svg>
-						{currentSort?.label}
-					</SpottableButton>
-
-					<SpottableButton
-						className={css.filterButton}
-						onClick={handleOpenFilterModal}
-					>
-						<svg viewBox="0 0 24 24">
-							<path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z" />
-						</svg>
-						{currentFilter?.label}
-					</SpottableButton>
-
-					<div className={css.letterNav}>
-						{LETTERS.map(letter => (
-							<SpottableButton
-								key={letter}
-								className={`${css.letterButton} ${startLetter === letter ? css.active : ''}`}
-								onClick={handleLetterSelect}
-								onKeyDown={handleLetterKeyDown}
-								data-letter={letter}
-							>
-								{letter}
-							</SpottableButton>
-						))}
-					</div>
-				</div>
-
-				<div className={css.gridContainer}>
-					{isLoading && items.length === 0 ? (
-						<div className={css.loading}>
-							<LoadingSpinner />
-						</div>
-					) : items.length === 0 ? (
-						<div className={css.empty}>No items found</div>
-					) : (
-						<VirtualGridList
-							className={css.grid}
-							dataSize={items.length}
-							itemRenderer={renderItem}
-							itemSize={{minWidth: 180, minHeight: 340}}
-							spacing={20}
-							onScrollStop={handleScrollStop}
-							spotlightId="library-grid"
-						/>
-					)}
-				</div>
-			</div>
-
-			<Popup
-				open={showSortModal}
-				onClose={handleCloseModal}
-				position="center"
-				scrimType="translucent"
-				noAutoDismiss
-			>
-				<div className={css.popupContent}>
-					<div className={css.modalTitle}>Sort By</div>
-					{SORT_OPTIONS.map((option) => (
-						<Button
-							key={option.key}
-							className={css.popupOption}
-							selected={sortBy === option.key}
-							onClick={handleSortSelect}
-							data-sort-key={option.key}
-						>
-							{option.label}
-						</Button>
-					))}
-				</div>
-			</Popup>
-
-			<Popup
-				open={showFilterModal}
-				onClose={handleCloseModal}
-				position="center"
-				scrimType="translucent"
-				noAutoDismiss
-			>
-				<div className={css.popupContent}>
-					<div className={css.modalTitle}>Filter</div>
-					{FILTER_OPTIONS.map((option) => (
-						<Button
-							key={option.key}
-							className={css.popupOption}
-							selected={filter === option.key}
-							onClick={handleFilterSelect}
-							data-filter-key={option.key}
-						>
-							{option.label}
-						</Button>
-					))}
-				</div>
-			</Popup>
-		</div>
-	);
+<Popup
+open={showFilterModal}
+onClose={handleCloseModal}
+position="center"
+scrimType="translucent"
+noAutoDismiss
+>
+<div className={css.popupContent}>
+<div className={css.modalTitle}>Filter</div>
+{FILTER_OPTIONS.map((option) => (
+<Button
+key={option.key}
+className={css.popupOption}
+selected={filter === option.key}
+onClick={handleFilterSelect}
+data-filter-key={option.key}
+>
+{option.label}
+</Button>
+))}
+</div>
+</Popup>
+</div>
+);
 };
 
 export default Library;

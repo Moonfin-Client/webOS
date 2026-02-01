@@ -72,13 +72,13 @@ const NavBar = ({
 		if (e.keyCode === 40) {
 			e.preventDefault();
 			e.stopPropagation();
-			// Try to focus specific content areas based on current view
 			const focusTargets = [
 				'featured-banner',
 				'settings-sidebar',
 				'favorites-row-0',
 				'genres-grid',
 				'genre-browse-grid',
+				'library-letter-hash',
 				'library-grid',
 				'discover-row-0',
 				'jellyseerr-browse-grid',
@@ -89,7 +89,6 @@ const NavBar = ({
 			for (const target of focusTargets) {
 				if (Spotlight.focus(target)) return;
 			}
-			// Last resort: move down
 			Spotlight.setPointerMode(false);
 			Spotlight.move('down');
 		}
