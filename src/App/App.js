@@ -28,7 +28,7 @@ import JellyseerrPerson from '../views/JellyseerrPerson';
 
 import css from './App.module.less';
 
-const EXCLUDED_COLLECTION_TYPES = ['playlists', 'livetv', 'books', 'music', 'musicvideos', 'homevideos', 'photos'];
+const EXCLUDED_COLLECTION_TYPES = ['playlists', 'books', 'music', 'musicvideos', 'homevideos', 'photos'];
 
 const PANELS = {
 	LOGIN: 0,
