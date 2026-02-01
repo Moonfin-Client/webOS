@@ -6,6 +6,7 @@ import {SettingsProvider} from '../context/SettingsContext';
 import {JellyseerrProvider} from '../context/JellyseerrContext';
 import {useVersionCheck} from '../hooks/useVersionCheck';
 import UpdateNotification from '../components/UpdateNotification';
+import NavBar from '../components/NavBar';
 import Login from '../views/Login';
 import Browse from '../views/Browse';
 import Details from '../views/Details';
@@ -26,6 +27,8 @@ import JellyseerrBrowse from '../views/JellyseerrBrowse';
 import JellyseerrPerson from '../views/JellyseerrPerson';
 
 import css from './App.module.less';
+
+const EXCLUDED_COLLECTION_TYPES = ['playlists', 'livetv', 'boxsets', 'books', 'music', 'musicvideos', 'homevideos', 'photos'];
 
 const PANELS = {
 	LOGIN: 0,
@@ -51,7 +54,7 @@ const PANELS = {
 };
 
 const AppContent = (props) => {
-	const {isAuthenticated, isLoading, logout, serverUrl, serverName} = useAuth();
+	const {isAuthenticated, isLoading, logout, serverUrl, serverName, api} = useAuth();
 	const [panelIndex, setPanelIndex] = useState(PANELS.LOGIN);
 	const [selectedItem, setSelectedItem] = useState(null);
 	const [selectedLibrary, setSelectedLibrary] = useState(null);
@@ -64,11 +67,25 @@ const AppContent = (props) => {
 	const [jellyseerrBrowse, setJellyseerrBrowse] = useState(null);
 	const [jellyseerrPerson, setJellyseerrPerson] = useState(null);
 	const [authChecked, setAuthChecked] = useState(false);
+	const [libraries, setLibraries] = useState([]);
 
-	// Version check - only after authenticated
+	useEffect(() => {
+		const fetchLibraries = async () => {
+			if (isAuthenticated && api) {
+				try {
+					const result = await api.getLibraries();
+					const libs = result.Items || [];
+					const filtered = libs.filter(lib => !EXCLUDED_COLLECTION_TYPES.includes(lib.CollectionType?.toLowerCase()));
+					setLibraries(filtered);
+				} catch (err) {
+					console.error('Failed to fetch libraries:', err);
+				}
+			}
+		};
+		fetchLibraries();
+	}, [isAuthenticated, api]);
+
 	const {updateInfo, formattedNotes, dismiss: dismissUpdate} = useVersionCheck(isAuthenticated ? 3000 : null);
-
-	// Update panel when auth state is determined
 	useEffect(() => {
 		if (!isLoading && !authChecked) {
 			setAuthChecked(true);
@@ -102,25 +119,19 @@ const AppContent = (props) => {
 
 	useEffect(() => {
 		const handleKeyDown = (e) => {
-			// Allow backspace in input fields
 			if (e.keyCode === 8 && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
 				return;
 			}
-			// Handle back button (461 = webOS back, 27 = Escape, 8 = Backspace)
 			if (e.keyCode === 461 || e.keyCode === 27 || e.keyCode === 8) {
-				// Always prevent default to stop webOS from showing home menu
 				e.preventDefault();
 
-				// Don't navigate back from browse or login - already at root
 				if (panelIndex === PANELS.BROWSE || panelIndex === PANELS.LOGIN) {
 					e.stopPropagation();
 					return;
 				}
-				// Player and Settings handle their own back button - let event propagate to them
 				if (panelIndex === PANELS.PLAYER || panelIndex === PANELS.SETTINGS) {
 					return;
 				}
-				// For all other panels, stop propagation and handle navigation
 				e.stopPropagation();
 				handleBack();
 			}
@@ -134,6 +145,19 @@ const AppContent = (props) => {
 		setPanelHistory([]);
 		navigateTo(PANELS.BROWSE, false);
 	}, [navigateTo]);
+
+	const handleShuffle = useCallback(async () => {
+		try {
+			const items = await api.getRandomItem('Movie,Series');
+			if (items.Items?.length > 0) {
+				const item = items.Items[0];
+				setSelectedItem(item);
+				navigateTo(PANELS.DETAILS);
+			}
+		} catch (err) {
+			console.error('Shuffle failed:', err);
+		}
+	}, [api, navigateTo]);
 
 	const handleSelectItem = useCallback((item) => {
 		setSelectedItem(item);
@@ -209,6 +233,11 @@ const AppContent = (props) => {
 		navigateTo(PANELS.JELLYSEERR_DISCOVER);
 	}, [navigateTo]);
 
+	const handleHome = useCallback(() => {
+		setPanelHistory([]);
+		setPanelIndex(PANELS.BROWSE);
+	}, []);
+
 	const handleOpenJellyseerrRequests = useCallback(() => {
 		navigateTo(PANELS.JELLYSEERR_REQUESTS);
 	}, [navigateTo]);
@@ -269,12 +298,9 @@ const AppContent = (props) => {
 		navigateTo(PANELS.JELLYSEERR_PERSON);
 	}, [navigateTo]);
 
-	// Show loading screen while auth state is being determined
 	if (isLoading || !authChecked) {
 		return <div className={css.loading} />;
 	}
-
-	// Render only the active view - no Panels overhead
 	const renderView = () => {
 		switch (panelIndex) {
 			case PANELS.LOGIN:
@@ -284,12 +310,6 @@ const AppContent = (props) => {
 					<Browse
 						onSelectItem={handleSelectItem}
 						onSelectLibrary={handleSelectLibrary}
-						onOpenSearch={handleOpenSearch}
-						onOpenSettings={handleOpenSettings}
-						onOpenFavorites={handleOpenFavorites}
-						onOpenGenres={handleOpenGenres}
-						onOpenJellyseerr={handleOpenJellyseerr}
-						onSwitchUser={handleSwitchUser}
 					/>
 				);
 			case PANELS.DETAILS:
@@ -409,12 +429,55 @@ const AppContent = (props) => {
 					/>
 				);
 			default:
-				return <Browse onSelectItem={handleSelectItem} />;
+				return (
+					<Browse
+						onSelectItem={handleSelectItem}
+						onSelectLibrary={handleSelectLibrary}
+					/>
+				);
 		}
 	};
 
+	const getActiveView = () => {
+		switch (panelIndex) {
+			case PANELS.BROWSE: return 'home';
+			case PANELS.SEARCH: return 'search';
+			case PANELS.SETTINGS: return 'settings';
+			case PANELS.FAVORITES: return 'favorites';
+			case PANELS.GENRES: return 'genres';
+			case PANELS.JELLYSEERR_DISCOVER:
+			case PANELS.JELLYSEERR_DETAILS:
+			case PANELS.JELLYSEERR_REQUESTS:
+			case PANELS.JELLYSEERR_BROWSE:
+			case PANELS.JELLYSEERR_PERSON:
+				return 'discover';
+			case PANELS.LIBRARY: return selectedLibrary?.Id || '';
+			default: return '';
+		}
+	};
+
+	const showNavBar = panelIndex !== PANELS.LOGIN &&
+		panelIndex !== PANELS.PLAYER &&
+		panelIndex !== PANELS.ADD_SERVER &&
+		panelIndex !== PANELS.ADD_USER;
+
 	return (
 		<div className={css.app} {...props}>
+			{showNavBar && (
+				<NavBar
+					activeView={getActiveView()}
+					libraries={libraries}
+					onHome={handleHome}
+					onSearch={handleOpenSearch}
+					onShuffle={handleShuffle}
+					onGenres={handleOpenGenres}
+					onFavorites={handleOpenFavorites}
+					onDiscover={handleOpenJellyseerr}
+					onSettings={handleOpenSettings}
+					onSelectLibrary={handleSelectLibrary}
+					onUserMenu={handleOpenSettings}
+				/>
+			)}
 			{renderView()}
 			<UpdateNotification
 				updateInfo={updateInfo}

@@ -336,17 +336,6 @@ const Details = ({itemId, onPlay, onSelectItem, onSelectPerson, onBack}) => {
 				verticalScrollbar="hidden"
 			>
 				<div className={css.content}>
-					<div className={css.header}>
-						<SpottableButton
-							className={css.backButton}
-							onClick={onBack}
-						>
-							<svg viewBox="0 0 24 24">
-								<path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
-							</svg>
-						</SpottableButton>
-					</div>
-
 					<div className={css.detailsHeader}>
 						<div className={css.infoSection}>
 							<h1 className={css.title}>{item.Name}</h1>
@@ -434,14 +423,14 @@ const Details = ({itemId, onPlay, onSelectItem, onSelectPerson, onBack}) => {
 						<div className={css.actionButtons}>
 							{hasPlaybackPosition && (
 								<div className={css.btnWrapper}>
-								<SpottableButton ref={primaryButtonRef} className={`${css.btnAction} ${css.btnPrimary}`} onClick={handleResume}>
+								<SpottableButton ref={primaryButtonRef} className={`${css.btnAction} ${css.btnPrimary}`} onClick={handleResume} spotlightId="details-primary-btn">
 									<span className={css.btnIcon}>▶</span>
 								</SpottableButton>
 								<span className={css.btnLabel}>Resume {resumeTimeText}</span>
 							</div>
 						)}
 						<div className={css.btnWrapper}>
-							<SpottableButton ref={hasPlaybackPosition ? null : primaryButtonRef} className={`${css.btnAction} ${hasPlaybackPosition ? css.btnSecondary : css.btnPrimary}`} onClick={handlePlay}>
+							<SpottableButton ref={hasPlaybackPosition ? null : primaryButtonRef} className={`${css.btnAction} ${hasPlaybackPosition ? css.btnSecondary : css.btnPrimary}`} onClick={handlePlay} spotlightId={hasPlaybackPosition ? undefined : 'details-primary-btn'}>
 									{hasPlaybackPosition ? (
 									<svg className={css.btnIcon} viewBox="0 -960 960 960">
 											<path d="M480-80q-75 0-140.5-28.5t-114-77q-48.5-48.5-77-114T120-440h80q0 117 81.5 198.5T480-160q117 0 198.5-81.5T760-440q0-117-81.5-198.5T480-720h-6l62 62-56 58-160-160 160-160 56 58-62 62h6q75 0 140.5 28.5t114 77q48.5 48.5 77 114T840-440q0 75-28.5 140.5t-77 114q-48.5 48.5-114 77T480-80Z"/>

@@ -3,7 +3,6 @@ import Spottable from '@enact/spotlight/Spottable';
 import Spotlight from '@enact/spotlight';
 import {useAuth} from '../../context/AuthContext';
 import {useSettings} from '../../context/SettingsContext';
-import NavBar from '../../components/NavBar';
 import MediaRow from '../../components/MediaRow';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import {getImageUrl, getBackdropId, getLogoUrl} from '../../utils/helpers';
@@ -28,13 +27,7 @@ const SpottableButton = Spottable('button');
 
 const Browse = ({
 	onSelectItem,
-	onSelectLibrary,
-	onOpenSearch,
-	onOpenSettings,
-	onOpenFavorites,
-	onOpenJellyseerr,
-	onOpenGenres,
-	onSwitchUser
+	onSelectLibrary
 }) => {
 	const {api, serverUrl, isAuthenticated, accessToken} = useAuth();
 	const {settings} = useSettings();
@@ -101,12 +94,6 @@ const Browse = ({
 			return enabledRowIds.includes(row.id);
 		});
 	}, [allRowData, homeRowsConfig, settings.mergeContinueWatchingNextUp]);
-
-	useEffect(() => {
-		if (!isAuthenticated) {
-			onSwitchUser?.();
-		}
-	}, [isAuthenticated, onSwitchUser]);
 
 	const handleNavigateUp = useCallback((fromRowIndex) => {
 		if (fromRowIndex === 0) {
@@ -343,21 +330,6 @@ const Browse = ({
 		onSelectLibrary?.(library);
 	}, [onSelectLibrary]);
 
-	const handleShuffle = useCallback(async () => {
-		try {
-			const items = await api.getRandomItem('Movie,Series');
-			if (items.Items?.length > 0) {
-				const item = items.Items[0];
-				console.log('[Shuffle] Got random item:', item.Type, item.Name, item.Id);
-				onSelectItem?.(item);
-			} else {
-				console.warn('[Shuffle] No items returned');
-			}
-		} catch (err) {
-			console.error('Shuffle failed:', err);
-		}
-	}, [api, onSelectItem]);
-
 	const handleHome = useCallback(() => {
 		setBrowseMode('featured');
 		if (mainContentRef.current) {
@@ -476,20 +448,6 @@ const Browse = ({
 				)}
 				<div className={css.globalBackdropOverlay} />
 			</div>
-
-			<NavBar
-				activeView="home"
-				libraries={libraries}
-				onHome={handleHome}
-				onSearch={onOpenSearch}
-				onShuffle={handleShuffle}
-				onGenres={onOpenGenres}
-				onFavorites={onOpenFavorites}
-				onDiscover={onOpenJellyseerr}
-				onSettings={onOpenSettings}
-				onSelectLibrary={handleSelectLibrary}
-				onUserMenu={onSwitchUser}
-			/>
 
 			<div className={css.mainContent} ref={mainContentRef}>
 				{currentFeatured && (

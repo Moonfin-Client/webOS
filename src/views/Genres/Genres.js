@@ -242,11 +242,6 @@ const Genres = ({onSelectGenre, onBack}) => {
 		<div className={css.page}>
 			<div className={css.content}>
 				<div className={css.header}>
-					<SpottableButton className={css.backButton} onClick={onBack}>
-						<svg viewBox="0 0 24 24">
-							<path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
-						</svg>
-					</SpottableButton>
 					<div className={css.titleSection}>
 						<div className={css.title}>Genres</div>
 						{selectedLibrary && (
@@ -292,6 +287,7 @@ const Genres = ({onSelectGenre, onBack}) => {
 							itemRenderer={renderGenreCard}
 							itemSize={{minWidth: 320, minHeight: 180}}
 							spacing={20}
+							spotlightId="genres-grid"
 						/>
 					)}
 				</div>
