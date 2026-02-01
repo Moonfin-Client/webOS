@@ -41,7 +41,7 @@
 }
 
 .content {
-	padding: 30px 60px 60px;
+	padding: 95px 60px 60px;
 }
 
 .header {
@@ -250,62 +250,68 @@
 	display: flex;
 	margin-bottom: 50px;
 	flex-wrap: wrap;
-	margin-left: -16px;
-	margin-top: -16px;
-
-	> * {
-		margin-left: 16px;
-		margin-top: 16px;
-	}
+	gap: 20px;
+	justify-content: center;
+	max-width: 1400px;
+	margin-left: auto;
+	margin-right: auto;
 }
 
 .btnWrapper {
-	display: flex;
+	display: inline-flex;
 	flex-direction: column;
 	align-items: center;
-
-	> * + * {
-		margin-top: 12px;
-	}
-}
-
-.btnAction {
-	width: 80px;
-	height: 80px;
-	border-radius: 12px;
+	gap: 16px;
+	background: transparent;
 	border: none;
-	display: flex;
-	align-items: center;
-	justify-content: center;
+	padding: 0;
 	cursor: pointer;
-	transition: all 0.2s ease;
-	background: rgba(255, 255, 255, 0.15);
+	transition: transform 0.2s ease;
 
 	&:focus {
 		outline: none;
 		transform: scale(1.05);
-		background: white;
-		
+
+		.btnAction {
+			background: rgba(96, 96, 96, 0.9);
+		}
+
 		.btnIcon {
-			color: #0a0a0a;
-			fill: #0a0a0a;
+			color: #333333;
+			fill: #333333;
 		}
 	}
 }
 
+.btnAction {
+	width: 120px;
+	height: 120px;
+	border-radius: 16px;
+	border: none;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: transparent;
+	transition: background 0.2s ease;
+}
+
 .btnPrimary {
-	background: rgba(255, 255, 255, 0.15);
+	.btnAction {
+		background: transparent;
+	}
 }
 
 .btnSecondary {
-	background: rgba(255, 255, 255, 0.15);
+	.btnAction {
+		background: transparent;
+	}
 }
 
 .btnIcon {
-	font-size: 32px;
+	font-size: 56px;
 	color: white;
-	width: 32px;
-	height: 32px;
+	width: 56px;
+	height: 56px;
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -314,17 +320,21 @@
 
 .favorited {
 	color: #ff4757;
+	fill: #ff4757;
 }
 
 .watched {
 	color: #ff4757;
+	fill: #ff4757;
 }
 
 .btnLabel {
-	font-size: 14px;
-	color: rgba(255, 255, 255, 0.8);
+	font-size: 16px;
+	font-weight: 600;
+	color: rgba(255, 255, 255, 0.9);
 	text-align: center;
-	max-width: 100px;
+	max-width: 140px;
+	line-height: 1.3;
 }
 
 .sectionsContainer {
@@ -347,6 +357,101 @@
 
 .seasonsSection {
 	margin-bottom: 20px;
+}
+
+.seasonsScroller {
+	overflow-x: auto;
+	overflow-y: visible;
+	padding-left: 60px;
+	padding-right: 60px;
+	scrollbar-width: none;
+	margin-left: -60px;
+	margin-right: -60px;
+	margin-bottom: 24px;
+	position: relative;
+
+	&::-webkit-scrollbar {
+		display: none;
+	}
+}
+
+.seasonsList {
+	display: flex;
+	padding: 20px 0;
+	width: max-content;
+	gap: 24px;
+}
+
+.seasonCard {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	cursor: pointer;
+	transition: transform 0.2s ease;
+	outline: none;
+	position: relative;
+	z-index: 1;
+
+	&:focus {
+		transform: scale(1.05);
+		z-index: 10;
+
+		.seasonPosterWrapper {
+			border-color: #ffffff;
+			box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+		}
+	}
+}
+
+.seasonCardSelected {
+	.seasonPosterWrapper {
+		border-color: rgba(255, 255, 255, 0.6);
+	}
+
+	.seasonName {
+		color: #ffffff;
+		font-weight: 600;
+	}
+}
+
+.seasonPosterWrapper {
+	width: 240px;
+	height: 360px;
+	border-radius: 8px;
+	overflow: hidden;
+	border: 3px solid transparent;
+	transition: border-color 0.2s ease, box-shadow 0.2s ease;
+	background: rgba(255, 255, 255, 0.1);
+}
+
+.seasonPoster {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.seasonPosterPlaceholder {
+	width: 100%;
+	height: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	text-align: center;
+	padding: 12px;
+	font-size: 14px;
+	color: rgba(255, 255, 255, 0.7);
+	background: linear-gradient(135deg, rgba(60, 60, 60, 0.8), rgba(40, 40, 40, 0.8));
+}
+
+.seasonName {
+	margin-top: 12px;
+	font-size: 18px;
+	color: rgba(255, 255, 255, 0.8);
+	text-align: center;
+	max-width: 240px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .seasonTabs {
@@ -399,8 +504,8 @@
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	min-width: 160px;
-	max-width: 160px;
+	min-width: 200px;
+	max-width: 200px;
 	cursor: pointer;
 	transition: transform 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
 	outline: none;
@@ -417,11 +522,11 @@
 }
 
 .castImageWrapper {
-	width: 140px;
-	height: 140px;
+	width: 180px;
+	height: 180px;
 	border-radius: 50%;
 	overflow: hidden;
-	margin-bottom: 12px;
+	margin-bottom: 14px;
 	background: rgba(255, 255, 255, 0.1);
 	border: 4px solid transparent;
 	transition: border-color 0.2s;
@@ -439,7 +544,7 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	font-size: 48px;
+	font-size: 56px;
 	font-weight: 600;
 	color: rgba(255, 255, 255, 0.5);
 	background: rgba(255, 255, 255, 0.1);

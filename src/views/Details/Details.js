@@ -1,8 +1,8 @@
 import {useState, useEffect, useCallback, useRef} from 'react';
 import Spotlight from '@enact/spotlight';
 import Spottable from '@enact/spotlight/Spottable';
+import SpotlightContainerDecorator from '@enact/spotlight/SpotlightContainerDecorator';
 import {Scroller} from '@enact/sandstone/Scroller';
-import Button from '@enact/sandstone/Button';
 import {useAuth} from '../../context/AuthContext';
 import {useSettings} from '../../context/SettingsContext';
 import MediaRow from '../../components/MediaRow';
@@ -12,7 +12,12 @@ import {formatDuration, getImageUrl, getBackdropId, getLogoUrl} from '../../util
 import css from './Details.module.less';
 
 const SpottableDiv = Spottable('div');
-const SpottableButton = Spottable('button');
+
+// Spotlight container for horizontal navigation (buttons, seasons)
+const HorizontalContainer = SpotlightContainerDecorator({
+	enterTo: 'last-focused',
+	preserve5WayFocus: true
+}, 'div');
 
 const getResolutionName = (width, height) => {
 	if (width >= 3800 && height >= 2100) return '4K';
@@ -36,9 +41,13 @@ const Details = ({itemId, onPlay, onSelectItem, onSelectPerson, onBack}) => {
 	const [collectionItems, setCollectionItems] = useState([]);
 	const [selectedSeason, setSelectedSeason] = useState(null);
 	const [isLoading, setIsLoading] = useState(true);
+	const [selectedAudioIndex, setSelectedAudioIndex] = useState(0);
+	const [selectedSubtitleIndex, setSelectedSubtitleIndex] = useState(-1);
 
 	const castScrollerRef = useRef(null);
+	const seasonsScrollerRef = useRef(null);
 	const primaryButtonRef = useRef(null);
+	const pageScrollerRef = useRef(null);
 
 	useEffect(() => {
 		const loadItem = async () => {
@@ -127,11 +136,11 @@ const Details = ({itemId, onPlay, onSelectItem, onSelectPerson, onBack}) => {
 
 	// Auto-focus the primary button (Resume or Play) when content loads
 	useEffect(() => {
-		if (!isLoading && item && primaryButtonRef.current) {
+		if (!isLoading && item) {
 			// Small delay to ensure DOM is ready
 			const timer = setTimeout(() => {
-				Spotlight.focus(primaryButtonRef.current);
-			}, 100);
+				Spotlight.focus('details-primary-btn');
+			}, 150);
 			return () => clearTimeout(timer);
 		}
 	}, [isLoading, item]);
@@ -151,28 +160,68 @@ const Details = ({itemId, onPlay, onSelectItem, onSelectPerson, onBack}) => {
 
 	const handlePlay = useCallback(() => {
 		if (!item) return;
+
+		// Only pass audio/subtitle options for items that support media source selection
+		// (Movies, Episodes with their own MediaSources). For Series/Season, let the Player
+		// decide based on its settings since the parent's streams don't apply to episodes.
+		const supportsSelection = item.MediaType === 'Video' &&
+			item.MediaSources?.length > 0 &&
+			item.MediaSources[0].Type !== 'Placeholder';
+
+		let playbackOptions = {};
+		if (supportsSelection) {
+			const playMediaSource = item.MediaSources[0];
+			const audioStreamsList = playMediaSource?.MediaStreams?.filter(s => s.Type === 'Audio') || [];
+			const subtitleStreamsList = playMediaSource?.MediaStreams?.filter(s => s.Type === 'Subtitle') || [];
+			const selectedAudio = audioStreamsList[selectedAudioIndex];
+			const subtitleStream = selectedSubtitleIndex >= 0 ? subtitleStreamsList[selectedSubtitleIndex] : null;
+			playbackOptions = {
+				audioStreamIndex: selectedAudio?.Index ?? selectedAudioIndex,
+				subtitleStreamIndex: subtitleStream?.Index ?? selectedSubtitleIndex
+			};
+		}
+
 		if (item.Type === 'Series') {
 			if (nextUp.length > 0) {
-				onPlay?.(nextUp[0]);
+				onPlay?.(nextUp[0], false, {}); // Don't pass parent's stream options
 			} else if (episodes.length > 0) {
 				const unwatched = episodes.find(ep => !ep.UserData?.Played);
-				onPlay?.(unwatched || episodes[0]);
+				onPlay?.(unwatched || episodes[0], false, {}); // Don't pass parent's stream options
 			}
 		} else if (item.Type === 'Season') {
 			if (episodes.length > 0) {
 				const unwatched = episodes.find(ep => !ep.UserData?.Played);
-				onPlay?.(unwatched || episodes[0]);
+				onPlay?.(unwatched || episodes[0], false, {}); // Don't pass parent's stream options
 			}
 		} else {
-			onPlay?.(item);
+			onPlay?.(item, false, playbackOptions);
 		}
-	}, [item, episodes, nextUp, onPlay]);
+	}, [item, episodes, nextUp, onPlay, selectedAudioIndex, selectedSubtitleIndex]);
 
 	const handleResume = useCallback(() => {
-		if (item) {
-			onPlay?.(item, true);
+		if (!item) return;
+
+		// Resume only applies to items that have their own playback position (Movies, Episodes)
+		// These items should support media source selection
+		const supportsSelection = item.MediaType === 'Video' &&
+			item.MediaSources?.length > 0 &&
+			item.MediaSources[0].Type !== 'Placeholder';
+
+		let playbackOptions = {};
+		if (supportsSelection) {
+			const resumeMediaSource = item.MediaSources[0];
+			const audioStreamsList = resumeMediaSource?.MediaStreams?.filter(s => s.Type === 'Audio') || [];
+			const subtitleStreamsList = resumeMediaSource?.MediaStreams?.filter(s => s.Type === 'Subtitle') || [];
+			const selectedAudio = audioStreamsList[selectedAudioIndex];
+			const subtitleStream = selectedSubtitleIndex >= 0 ? subtitleStreamsList[selectedSubtitleIndex] : null;
+			playbackOptions = {
+				audioStreamIndex: selectedAudio?.Index ?? selectedAudioIndex,
+				subtitleStreamIndex: subtitleStream?.Index ?? selectedSubtitleIndex
+			};
 		}
-	}, [item, onPlay]);
+
+		onPlay?.(item, true, playbackOptions);
+	}, [item, onPlay, selectedAudioIndex, selectedSubtitleIndex]);
 
 	const handleShuffle = useCallback(() => {
 		if (item) {
@@ -217,13 +266,47 @@ const Details = ({itemId, onPlay, onSelectItem, onSelectPerson, onBack}) => {
 		}
 	}, [item, onSelectItem]);
 
+	const handleSelectAudioTrack = useCallback(() => {
+		const availableAudioStreams = item?.MediaSources?.[0]?.MediaStreams?.filter(s => s.Type === 'Audio') || [];
+		if (availableAudioStreams.length <= 1) return;
+
+		const currentIndex = selectedAudioIndex;
+		const nextIndex = (currentIndex + 1) % availableAudioStreams.length;
+		setSelectedAudioIndex(nextIndex);
+	}, [item, selectedAudioIndex]);
+
+	const handleSelectSubtitleTrack = useCallback(() => {
+		const availableSubtitleStreams = item?.MediaSources?.[0]?.MediaStreams?.filter(s => s.Type === 'Subtitle') || [];
+		if (availableSubtitleStreams.length === 0) return;
+
+		const currentIndex = selectedSubtitleIndex;
+		const nextIndex = currentIndex >= availableSubtitleStreams.length - 1 ? -1 : currentIndex + 1;
+		setSelectedSubtitleIndex(nextIndex);
+	}, [item, selectedSubtitleIndex]);
+
 	const handleSeasonSelect = useCallback((ev) => {
 		const seasonId = ev.currentTarget.dataset.seasonId;
 		const season = seasons.find(s => s.Id === seasonId);
 		if (season) {
-			setSelectedSeason(season);
+			// Navigate to the season's details page
+			onSelectItem?.(season);
 		}
-	}, [seasons]);
+	}, [seasons, onSelectItem]);
+
+	const handleSeasonFocus = useCallback((e) => {
+		const card = e.target.closest('.spottable');
+		const scroller = seasonsScrollerRef.current;
+		if (card && scroller) {
+			const cardRect = card.getBoundingClientRect();
+			const scrollerRect = scroller.getBoundingClientRect();
+
+			if (cardRect.left < scrollerRect.left) {
+				scroller.scrollLeft -= (scrollerRect.left - cardRect.left + 50);
+			} else if (cardRect.right > scrollerRect.right) {
+				scroller.scrollLeft += (cardRect.right - scrollerRect.right + 50);
+			}
+		}
+	}, []);
 
 	const handleCastSelect = useCallback((ev) => {
 		const personId = ev.currentTarget.dataset.personId;
@@ -244,6 +327,30 @@ const Details = ({itemId, onPlay, onSelectItem, onSelectPerson, onBack}) => {
 			} else if (cardRect.right > scrollerRect.right) {
 				scroller.scrollLeft += (cardRect.right - scrollerRect.right + 50);
 			}
+		}
+	}, []);
+
+	// Handle down key in button row to move focus to next section
+	const handleButtonRowKeyDown = useCallback((ev) => {
+		if (ev.keyCode === 40) { // Down arrow
+			ev.preventDefault();
+			ev.stopPropagation();
+			// Find the next focusable element below the button row
+			const sectionsContainer = document.querySelector(`.${css.sectionsContainer}`);
+			if (sectionsContainer) {
+				const firstSpottable = sectionsContainer.querySelector('.spottable');
+				if (firstSpottable) {
+					Spotlight.focus(firstSpottable);
+				}
+			}
+		}
+	}, []);
+
+	// Scroll to top when button row receives focus
+	const handleButtonRowFocus = useCallback(() => {
+		const scroller = pageScrollerRef.current;
+		if (scroller && scroller.scrollTo) {
+			scroller.scrollTo({position: {y: 0}, animate: true});
 		}
 	}, []);
 
@@ -301,6 +408,20 @@ const Details = ({itemId, onPlay, onSelectItem, onSelectPerson, onBack}) => {
 	const directors = item.People?.filter(p => p.Type === 'Director') || [];
 	const writers = item.People?.filter(p => p.Type === 'Writer') || [];
 	const studios = item.Studios || [];
+
+	const audioStreams = mediaSource?.MediaStreams?.filter(s => s.Type === 'Audio') || [];
+	const subtitleStreams = mediaSource?.MediaStreams?.filter(s => s.Type === 'Subtitle') || [];
+
+	// Only show audio/subtitle selection for items that have their own MediaSources (Movies, Episodes)
+	// Series/Season items don't have MediaSources - their children (Episodes) do
+	const supportsMediaSourceSelection = item.MediaType === 'Video' &&
+		item.MediaSources?.length > 0 &&
+		item.MediaSources[0].Type !== 'Placeholder';
+	const hasMultipleAudio = supportsMediaSourceSelection && audioStreams.length > 1;
+	const hasSubtitles = supportsMediaSourceSelection && subtitleStreams.length > 0;
+
+	const currentAudioStream = audioStreams[selectedAudioIndex];
+	const currentSubtitleStream = selectedSubtitleIndex >= 0 ? subtitleStreams[selectedSubtitleIndex] : null;
 	const genres = item.Genres || [];
 	const tagline = item.Taglines?.[0];
 
@@ -330,6 +451,7 @@ const Details = ({itemId, onPlay, onSelectItem, onSelectPerson, onBack}) => {
 			)}
 
 			<Scroller
+				ref={pageScrollerRef}
 				className={css.scroller}
 				direction="vertical"
 				horizontalScrollbar="hidden"
@@ -420,82 +542,109 @@ const Details = ({itemId, onPlay, onSelectItem, onSelectPerson, onBack}) => {
 					</div>
 
 					{!isPerson && !isBoxSet && (
-						<div className={css.actionButtons}>
+						<HorizontalContainer className={css.actionButtons} onKeyDown={handleButtonRowKeyDown}>
 							{hasPlaybackPosition && (
-								<div className={css.btnWrapper}>
-								<SpottableButton ref={primaryButtonRef} className={`${css.btnAction} ${css.btnPrimary}`} onClick={handleResume} spotlightId="details-primary-btn">
-									<span className={css.btnIcon}>▶</span>
-								</SpottableButton>
-								<span className={css.btnLabel}>Resume {resumeTimeText}</span>
-							</div>
-						)}
-						<div className={css.btnWrapper}>
-							<SpottableButton ref={hasPlaybackPosition ? null : primaryButtonRef} className={`${css.btnAction} ${hasPlaybackPosition ? css.btnSecondary : css.btnPrimary}`} onClick={handlePlay} spotlightId={hasPlaybackPosition ? undefined : 'details-primary-btn'}>
+								<SpottableDiv ref={primaryButtonRef} className={css.btnWrapper} onClick={handleResume} spotlightId="details-primary-btn">
+									<div className={css.btnAction}>
+										<span className={css.btnIcon}>▶</span>
+									</div>
+									<span className={css.btnLabel}>Resume {resumeTimeText}</span>
+								</SpottableDiv>
+							)}
+							<SpottableDiv ref={hasPlaybackPosition ? null : primaryButtonRef} className={css.btnWrapper} onClick={handlePlay} onFocus={handleButtonRowFocus} spotlightId={hasPlaybackPosition ? undefined : 'details-primary-btn'}>
+								<div className={css.btnAction}>
 									{hasPlaybackPosition ? (
-									<svg className={css.btnIcon} viewBox="0 -960 960 960">
+										<svg className={css.btnIcon} viewBox="0 -960 960 960">
 											<path d="M480-80q-75 0-140.5-28.5t-114-77q-48.5-48.5-77-114T120-440h80q0 117 81.5 198.5T480-160q117 0 198.5-81.5T760-440q0-117-81.5-198.5T480-720h-6l62 62-56 58-160-160 160-160 56 58-62 62h6q75 0 140.5 28.5t114 77q48.5 48.5 77 114T840-440q0 75-28.5 140.5t-77 114q-48.5 48.5-114 77T480-80Z"/>
 										</svg>
 									) : (
 										<span className={css.btnIcon}>▶</span>
 									)}
-								</SpottableButton>
-								<span className={css.btnLabel}>{hasPlaybackPosition ? 'Restart from beginning' : 'Play'}</span>
-							</div>
+								</div>
+								<span className={css.btnLabel}>{hasPlaybackPosition ? 'Restart' : 'Play'}</span>
+							</SpottableDiv>
 							{(isSeries || isSeason) && (
-								<div className={css.btnWrapper}>
-									<SpottableButton className={css.btnAction} onClick={handleShuffle}>
-									<svg className={css.btnIcon} viewBox="0 -960 960 960">
-										<path d="M560-160v-80h104L537-367l57-57 126 126v-102h80v240H560Zm-344 0-56-56 504-504H560v-80h240v240h-80v-104L216-160Zm151-377L160-744l56-56 207 207-56 56Z"/>
-									</svg>
-									</SpottableButton>
+								<SpottableDiv className={css.btnWrapper} onClick={handleShuffle}>
+									<div className={css.btnAction}>
+									<svg className={css.btnIcon} viewBox="0 -960 960 960" fill="currentColor">
+											<path d="M560-160v-80h104L537-367l57-57 126 126v-102h80v240H560Zm-344 0-56-56 504-504H560v-80h240v240h-80v-104L216-160Zm151-377L160-744l56-56 207 207-56 56Z"/>
+										</svg>
+									</div>
 									<span className={css.btnLabel}>Shuffle</span>
-								</div>
+								</SpottableDiv>
 							)}
-							{(item.LocalTrailerCount > 0 || item.RemoteTrailers?.length > 0) && (
-								<div className={css.btnWrapper}>
-									<SpottableButton className={css.btnAction} onClick={handleTrailer}>
-									<svg className={css.btnIcon} viewBox="0 -960 960 960">
-										<path d="M160-120v-720h80v80h80v-80h320v80h80v-80h80v720h-80v-80h-80v80H320v-80h-80v80h-80Zm80-160h80v-80h-80v80Zm0-160h80v-80h-80v80Zm0-160h80v-80h-80v80Zm400 320h80v-80h-80v80Zm0-160h80v-80h-80v80Zm0-160h80v-80h-80v80ZM400-200h160v-560H400v560Zm0-560h160-160Z"/>
+						{hasMultipleAudio && (
+							<SpottableDiv className={css.btnWrapper} onClick={handleSelectAudioTrack}>
+								<div className={css.btnAction}>
+									<svg className={css.btnIcon} viewBox="0 -960 960 960" fill="currentColor">
+										<path d="M400-120q-66 0-113-47t-47-113q0-66 47-113t113-47q23 0 42.5 5.5T480-418v-422h240v160H560v400q0 66-47 113t-113 47Z"/>
 									</svg>
-									</SpottableButton>
-									<span className={css.btnLabel}>Trailer</span>
 								</div>
+								<span className={css.btnLabel}>
+									{currentAudioStream ?
+										`Select Audio Track: ${currentAudioStream.DisplayTitle || currentAudioStream.Language || 'Track ' + (selectedAudioIndex + 1)}`
+										: 'Audio'}
+								</span>
+							</SpottableDiv>
+						)}
+						{hasSubtitles && (
+							<SpottableDiv className={css.btnWrapper} onClick={handleSelectSubtitleTrack}>
+								<div className={css.btnAction}>
+									<svg className={css.btnIcon} viewBox="0 -960 960 960" fill="currentColor">
+										<path d="M200-160q-33 0-56.5-23.5T120-240v-480q0-33 23.5-56.5T200-800h560q33 0 56.5 23.5T840-720v480q0 33-23.5 56.5T760-160H200Zm0-80h560v-480H200v480Zm80-120h120q17 0 28.5-11.5T440-400v-40h-60v20h-80v-120h80v20h60v-40q0-17-11.5-28.5T400-600H280q-17 0-28.5 11.5T240-560v160q0 17 11.5 28.5T280-360Zm280 0h120q17 0 28.5-11.5T720-400v-40h-60v20h-80v-120h80v20h60v-40q0-17-11.5-28.5T680-600H560q-17 0-28.5 11.5T520-560v160q0 17 11.5 28.5T560-360ZM200-240v-480 480Z"/>
+									</svg>
+								</div>
+								<span className={css.btnLabel}>
+									{currentSubtitleStream ?
+										`Select Subtitle Track: ${currentSubtitleStream.DisplayTitle || currentSubtitleStream.Language || 'Track ' + (selectedSubtitleIndex + 1)}`
+										: 'Subtitle: Off'}
+								</span>
+							</SpottableDiv>
+						)}
+						{(item.LocalTrailerCount > 0 || item.RemoteTrailers?.length > 0) && (
+							<SpottableDiv className={css.btnWrapper} onClick={handleTrailer}>
+								<div className={css.btnAction}>
+									<svg className={css.btnIcon} viewBox="0 -960 960 960" fill="currentColor">
+											<path d="M160-120v-720h80v80h80v-80h320v80h80v-80h80v720h-80v-80h-80v80H320v-80h-80v80h-80Zm80-160h80v-80h-80v80Zm0-160h80v-80h-80v80Zm0-160h80v-80h-80v80Zm400 320h80v-80h-80v80Zm0-160h80v-80h-80v80Zm0-160h80v-80h-80v80ZM400-200h160v-560H400v560Zm0-560h160-160Z"/>
+										</svg>
+									</div>
+									<span className={css.btnLabel}>Play Trailer</span>
+								</SpottableDiv>
 							)}
-							<div className={css.btnWrapper}>
-								<SpottableButton className={css.btnAction} onClick={handleToggleFavorite}>
-								<svg className={`${css.btnIcon} ${item.UserData?.IsFavorite ? css.favorited : ''}`} viewBox="0 -960 960 960">
-									<path d="m480-120-58-52q-101-91-167-157T150-447.5Q111-500 95.5-544T80-634q0-94 63-157t157-63q52 0 99 22t81 62q34-40 81-62t99-22q94 0 157 63t63 157q0 46-15.5 90T810-447.5Q771-395 705-329T538-172l-58 52Zm0-108q96-86 158-147.5t98-107q36-45.5 50-81t14-70.5q0-60-40-100t-100-40q-47 0-87 26.5T518-680h-76q-15-41-55-67.5T300-774q-60 0-100 40t-40 100q0 35 14 70.5t50 81q36 45.5 98 107T480-228Zm0-273Z"/>
+						<SpottableDiv className={css.btnWrapper} onClick={handleToggleWatched}>
+							<div className={css.btnAction}>
+							{item.UserData?.Played ? (
+								<svg className={`${css.btnIcon} ${css.watched}`} viewBox="0 -960 960 960" fill="currentColor">
+									<path d="M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z"/>
 								</svg>
-								</SpottableButton>
-								<span className={css.btnLabel}>{item.UserData?.IsFavorite ? 'Favorited' : 'Favorite'}</span>
-							</div>
-							<div className={css.btnWrapper}>
-								<SpottableButton className={css.btnAction} onClick={handleToggleWatched}>
-								{item.UserData?.Played ? (
-									<svg className={`${css.btnIcon} ${css.watched}`} viewBox="0 -960 960 960">
-										<path d="M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z"/>
-									</svg>
-								) : (
-									<svg className={css.btnIcon} viewBox="0 -960 960 960">
-										<path d="M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z"/>
-									</svg>
-								)}
-								</SpottableButton>
-								<span className={css.btnLabel}>{item.UserData?.Played ? 'Watched' : 'Mark Watched'}</span>
-							</div>
-							{isEpisode && item.SeriesId && (
-								<div className={css.btnWrapper}>
-									<SpottableButton className={css.btnAction} onClick={handleGoToSeries}>
-									<svg className={css.btnIcon} viewBox="0 -960 960 960">
-										<path d="M240-120v-80l40-40H160q-33 0-56.5-23.5T80-320v-440q0-33 23.5-56.5T160-840h640q33 0 56.5 23.5T880-760v440q0 33-23.5 56.5T800-240H680l40 40v80H240Zm-80-200h640v-440H160v440Zm0 0v-440 440Z"/>
-									</svg>
-									</SpottableButton>
-									<span className={css.btnLabel}>Go to Series</span>
-								</div>
+							) : (
+								<svg className={css.btnIcon} viewBox="0 -960 960 960" fill="currentColor">
+									<path d="M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z"/>
+								</svg>
 							)}
+							</div>
+							<span className={css.btnLabel}>{item.UserData?.Played ? 'Watched' : 'Mark Watched'}</span>
+						</SpottableDiv>
+						<SpottableDiv className={css.btnWrapper} onClick={handleToggleFavorite}>
+						<div className={css.btnAction}>
+							<svg className={`${css.btnIcon} ${item.UserData?.IsFavorite ? css.favorited : ''}`} viewBox="0 -960 960 960" fill="currentColor">
+								<path d="m480-120-58-52q-101-91-167-157T150-447.5Q111-500 95.5-544T80-634q0-94 63-157t157-63q52 0 99 22t81 62q34-40 81-62t99-22q94 0 157 63t63 157q0 46-15.5 90T810-447.5Q771-395 705-329T538-172l-58 52Z"/>
+							</svg>
 						</div>
-					)}
-
+						<span className={css.btnLabel}>{item.UserData?.IsFavorite ? 'Favorited' : 'Favorite'}</span>
+						</SpottableDiv>
+						{isEpisode && item.SeriesId && (
+						<SpottableDiv className={css.btnWrapper} onClick={handleGoToSeries}>
+						<div className={css.btnAction}>
+							<svg className={css.btnIcon} viewBox="0 -960 960 960">
+								<path d="M240-120v-80l40-40H160q-33 0-56.5-23.5T80-320v-440q0-33 23.5-56.5T160-840h640q33 0 56.5 23.5T880-760v440q0 33-23.5 56.5T800-240H680l40 40v80H240Zm-80-200h640v-440H160v440Zm0 0v-440 440Z"/>
+							</svg>
+						</div>
+						<span className={css.btnLabel}>Go to Series</span>
+					</SpottableDiv>
+				)}
+			</HorizontalContainer>
+		)}
 					<div className={css.sectionsContainer}>
 						{nextUp.length > 0 && (
 							<MediaRow
@@ -509,20 +658,33 @@ const Details = ({itemId, onPlay, onSelectItem, onSelectPerson, onBack}) => {
 						{isSeries && seasons.length > 0 && (
 							<div className={css.seasonsSection}>
 								<h2 className={css.sectionTitle}>Seasons</h2>
-								<div className={css.seasonTabs}>
-									{seasons.map((season) => (
-										<Button
-											key={season.Id}
-											data-season-id={season.Id}
-											selected={selectedSeason?.Id === season.Id}
-											onClick={handleSeasonSelect}
-											size="small"
-											className={css.seasonTab}
-										>
-											{season.Name}
-										</Button>
+								<HorizontalContainer className={css.seasonsScroller} ref={seasonsScrollerRef} onFocus={handleSeasonFocus}>
+									<div className={css.seasonsList}>
+											{seasons.map((season) => (
+												<SpottableDiv
+													key={season.Id}
+													data-season-id={season.Id}
+													className={`${css.seasonCard} ${selectedSeason?.Id === season.Id ? css.seasonCardSelected : ''}`}
+													onClick={handleSeasonSelect}
+												>
+													<div className={css.seasonPosterWrapper}>
+														{season.ImageTags?.Primary ? (
+															<img
+																src={getImageUrl(serverUrl, season.Id, 'Primary', {maxHeight: 540, quality: 90, tag: season.ImageTags.Primary})}
+																className={css.seasonPoster}
+																alt=""
+															/>
+														) : (
+															<div className={css.seasonPosterPlaceholder}>
+																<span>{season.Name}</span>
+															</div>
+														)}
+													</div>
+													<span className={css.seasonName}>{season.Name}</span>
+										</SpottableDiv>
 									))}
 								</div>
+							</HorizontalContainer>
 								{episodes.length > 0 && (
 									<MediaRow
 										title={selectedSeason?.Name || 'Episodes'}
@@ -557,32 +719,32 @@ const Details = ({itemId, onPlay, onSelectItem, onSelectPerson, onBack}) => {
 								<h2 className={css.sectionTitle}>Cast & Crew</h2>
 								<div className={css.castScroller} ref={castScrollerRef} onFocus={handleCastFocus}>
 									<div className={css.castList}>
-										{cast.map((person) => (
-											<SpottableDiv
-												key={person.Id}
-												data-person-id={person.Id}
-												className={css.castCard}
-												onClick={handleCastSelect}
-											>
-												<div className={css.castImageWrapper}>
-													{person.PrimaryImageTag ? (
-														<img
-															src={getImageUrl(serverUrl, person.Id, 'Primary', {maxHeight: 280, quality: 90, tag: person.PrimaryImageTag})}
-															className={css.castImage}
-															alt=""
-														/>
-													) : (
-														<div className={css.castPlaceholder}>
-															{person.Name?.charAt(0)}
-														</div>
-													)}
-												</div>
-												<span className={css.castName}>{person.Name}</span>
-												<span className={css.castRole}>{person.Role || person.Type}</span>
-											</SpottableDiv>
-										))}
-									</div>
+											{cast.map((person) => (
+												<SpottableDiv
+													key={person.Id}
+													data-person-id={person.Id}
+													className={css.castCard}
+													onClick={handleCastSelect}
+												>
+													<div className={css.castImageWrapper}>
+														{person.PrimaryImageTag ? (
+															<img
+																src={getImageUrl(serverUrl, person.Id, 'Primary', {maxHeight: 360, quality: 90, tag: person.PrimaryImageTag})}
+																className={css.castImage}
+																alt=""
+															/>
+														) : (
+															<div className={css.castPlaceholder}>
+																{person.Name?.charAt(0)}
+															</div>
+														)}
+													</div>
+													<span className={css.castName}>{person.Name}</span>
+													<span className={css.castRole}>{person.Role || person.Type}</span>
+										</SpottableDiv>
+									))}
 								</div>
+							</div>
 							</div>
 						)}
 

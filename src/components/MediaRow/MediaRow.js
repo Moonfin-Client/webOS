@@ -5,8 +5,7 @@ import MediaCard from '../MediaCard';
 import css from './MediaRow.module.less';
 
 const RowContainer = SpotlightContainerDecorator({
-	enterTo: 'last-focused',
-	restrict: 'self-first'
+	enterTo: 'last-focused'
 }, 'div');
 
 const MediaRow = ({
@@ -50,14 +49,14 @@ const MediaRow = ({
 	}, [onFocus]);
 
 	const handleKeyDown = useCallback((e) => {
-		if (e.keyCode === 38) {
+		if (e.keyCode === 38 && onNavigateUp) {
 			e.preventDefault();
 			e.stopPropagation();
-			onNavigateUp?.(rowIndex);
-		} else if (e.keyCode === 40) {
+			onNavigateUp(rowIndex);
+		} else if (e.keyCode === 40 && onNavigateDown) {
 			e.preventDefault();
 			e.stopPropagation();
-			onNavigateDown?.(rowIndex);
+			onNavigateDown(rowIndex);
 		}
 	}, [rowIndex, onNavigateUp, onNavigateDown]);
 

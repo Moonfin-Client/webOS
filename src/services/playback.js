@@ -135,17 +135,25 @@ const extractSubtitleStreams = (mediaSource) => {
 
 	return mediaSource.MediaStreams
 		.filter(s => s.Type === 'Subtitle')
-		.map(s => ({
-			index: s.Index,
-			codec: s.Codec,
-			language: s.Language || 'Unknown',
-			displayTitle: s.DisplayTitle || s.Language || 'Unknown',
-			isExternal: s.IsExternal,
-			isForced: s.IsForced,
-			isDefault: s.IsDefault,
-			isTextBased: ['srt', 'vtt', 'ass', 'ssa', 'sub', 'smi'].includes(s.Codec?.toLowerCase()),
-			deliveryUrl: s.DeliveryUrl ? `${serverUrl}${s.DeliveryUrl}` : null
-		}));
+		.map(s => {
+			let deliveryUrl = null;
+			if (s.DeliveryUrl) {
+				// External URLs are used as-is, internal URLs need server prefix
+				deliveryUrl = s.IsExternalUrl ? s.DeliveryUrl : `${serverUrl}${s.DeliveryUrl}`;
+			}
+			return {
+				index: s.Index,
+				codec: s.Codec,
+				language: s.Language || 'Unknown',
+				displayTitle: s.DisplayTitle || s.Language || 'Unknown',
+				isExternal: s.IsExternal,
+				isForced: s.IsForced,
+				isDefault: s.IsDefault,
+				isTextBased: ['srt', 'vtt', 'ass', 'ssa', 'sub', 'smi'].includes(s.Codec?.toLowerCase()),
+				deliveryUrl: deliveryUrl,
+				deliveryMethod: s.DeliveryMethod
+			};
+		});
 };
 
 const extractChapters = (mediaSource) => {
@@ -232,13 +240,25 @@ export const getPlaybackInfo = async (itemId, options = {}) => {
 
 export const getSubtitleUrl = (subtitleStream) => {
 	if (!subtitleStream || !currentSession) return null;
-	if (subtitleStream.deliveryUrl) return subtitleStream.deliveryUrl;
-
-	const {itemId, mediaSourceId} = currentSession;
+	
+	const {itemId, mediaSourceId, playSessionId} = currentSession;
 	const serverUrl = jellyfinApi.getServerUrl();
 	const apiKey = jellyfinApi.getApiKey();
 
-	return `${serverUrl}/Videos/${itemId}/${mediaSourceId}/Subtitles/${subtitleStream.index}/Stream.vtt?api_key=${apiKey}`;
+	// Only External delivery method subtitles can be loaded as text tracks
+	// Embed and Encode methods require transcoding
+	if (subtitleStream.deliveryMethod === 'External' && subtitleStream.deliveryUrl) {
+		const url = subtitleStream.deliveryUrl;
+		return url.includes('api_key') ? url : `${url}${url.includes('?') ? '&' : '?'}api_key=${apiKey}`;
+	}
+
+	// For text-based subtitles, we can request them directly via the subtitle endpoint
+	if (subtitleStream.isTextBased) {
+		return `${serverUrl}/Videos/${itemId}/${mediaSourceId}/Subtitles/${subtitleStream.index}/Stream.vtt?api_key=${apiKey}`;
+	}
+
+	// Image-based subtitles (PGS, VOBSUB) cannot be delivered as text tracks
+	return null;
 };
 
 export const getChapterImageUrl = (itemId, chapterIndex, width = 320) => {

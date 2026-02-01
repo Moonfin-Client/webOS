@@ -129,7 +129,7 @@ const IconInfo = () => (
 );
 const SKIP_SECONDS = 10;
 
-const Player = ({item, onEnded, onBack, onPlayNext}) => {
+const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack, onPlayNext}) => {
 	const {settings} = useSettings();
 
 	const [mediaUrl, setMediaUrl] = useState(null);
@@ -250,10 +250,26 @@ const Player = ({item, onEnded, onBack, onPlayNext}) => {
 
 				// Default audio
 				const defaultAudio = result.audioStreams?.find(s => s.isDefault);
-				if (defaultAudio) setSelectedAudioIndex(defaultAudio.index);
+				if (initialAudioIndex !== undefined && initialAudioIndex !== null) {
+					setSelectedAudioIndex(initialAudioIndex);
+				} else if (defaultAudio) {
+					setSelectedAudioIndex(defaultAudio.index);
+				}
 
-				// Handle subtitles based on settings
-				if (settings.subtitleMode === 'always') {
+				// Handle subtitles based on settings or initial selection
+				if (initialSubtitleIndex !== undefined && initialSubtitleIndex !== null) {
+					if (initialSubtitleIndex >= 0) {
+						const selectedSub = result.subtitleStreams?.find(s => s.index === initialSubtitleIndex);
+						if (selectedSub) {
+							setSelectedSubtitleIndex(initialSubtitleIndex);
+							setSubtitleUrl(playback.getSubtitleUrl(selectedSub));
+						}
+					} else {
+						// -1 means subtitles off
+						setSelectedSubtitleIndex(-1);
+						setSubtitleUrl(null);
+					}
+				} else if (settings.subtitleMode === 'always') {
 					const defaultSub = result.subtitleStreams?.find(s => s.isDefault);
 					if (defaultSub) {
 						setSelectedSubtitleIndex(defaultSub.index);
