@@ -61,21 +61,17 @@ const getSeasonStatusColor = (status) => {
 };
 
 const getStatusBadge = (hdStatus, status4k, hdDeclined, fourKDeclined) => {
-	// Check for declined states first
 	if (hdDeclined && fourKDeclined) return {text: 'DECLINED', color: 'red'};
 	if (fourKDeclined && hdStatus === STATUS.AVAILABLE) return {text: 'HD AVAILABLE • 4K DECLINED', color: 'mixed'};
 	if (hdDeclined && status4k === STATUS.AVAILABLE) return {text: 'HD DECLINED • 4K AVAILABLE', color: 'mixed'};
 	if (fourKDeclined) return {text: '4K DECLINED', color: 'red'};
 	if (hdDeclined) return {text: 'HD DECLINED', color: 'red'};
 
-	// Both available
 	if (hdStatus === STATUS.AVAILABLE && status4k === STATUS.AVAILABLE) return {text: 'HD + 4K AVAILABLE', color: 'green'};
 
-	// One available
 	if (status4k === STATUS.AVAILABLE) return {text: '4K AVAILABLE', color: 'green'};
 	if (hdStatus === STATUS.AVAILABLE) return {text: 'HD AVAILABLE', color: 'green'};
 
-	// Partially available combinations
 	if (hdStatus === STATUS.PARTIALLY_AVAILABLE && status4k === STATUS.PARTIALLY_AVAILABLE) return {text: 'PARTIALLY AVAILABLE', color: 'purple'};
 	if (hdStatus === STATUS.PARTIALLY_AVAILABLE && status4k === STATUS.PROCESSING) return {text: 'HD PARTIAL • 4K PROCESSING', color: 'mixed'};
 	if (hdStatus === STATUS.PARTIALLY_AVAILABLE && status4k === STATUS.PENDING) return {text: 'HD PARTIAL • 4K PENDING', color: 'mixed'};
@@ -84,37 +80,25 @@ const getStatusBadge = (hdStatus, status4k, hdDeclined, fourKDeclined) => {
 	if (status4k === STATUS.PARTIALLY_AVAILABLE && hdStatus === STATUS.PENDING) return {text: 'HD PENDING • 4K PARTIAL', color: 'mixed'};
 	if (status4k === STATUS.PARTIALLY_AVAILABLE) return {text: '4K PARTIALLY AVAILABLE', color: 'purple'};
 
-	// Processing combinations
 	if (hdStatus === STATUS.PROCESSING && status4k === STATUS.PROCESSING) return {text: 'PROCESSING', color: 'indigo'};
 	if (hdStatus === STATUS.PROCESSING && status4k === STATUS.PENDING) return {text: 'HD PROCESSING • 4K PENDING', color: 'mixed'};
 	if (status4k === STATUS.PROCESSING && hdStatus === STATUS.PENDING) return {text: 'HD PENDING • 4K PROCESSING', color: 'mixed'};
 	if (status4k === STATUS.PROCESSING) return {text: '4K PROCESSING', color: 'indigo'};
 	if (hdStatus === STATUS.PROCESSING) return {text: 'HD PROCESSING', color: 'indigo'};
 
-	// Pending combinations
 	if (hdStatus === STATUS.PENDING && status4k === STATUS.PENDING) return {text: 'PENDING', color: 'yellow'};
 	if (status4k === STATUS.PENDING) return {text: '4K PENDING', color: 'yellow'};
 	if (hdStatus === STATUS.PENDING) return {text: 'HD PENDING', color: 'yellow'};
 
-	// Blacklisted
 	if (hdStatus === STATUS.BLACKLISTED || status4k === STATUS.BLACKLISTED) return {text: 'BLACKLISTED', color: 'red'};
 
-	// Not requested
 	return {text: 'NOT REQUESTED', color: 'gray'};
 };
 
-/**
- * Check if a status blocks new requests
- * Blocked if: pending (2), processing (3), available (5), blacklisted (6)
- * Requestable if: not requested (null/1), or partially available (4)
- */
 const isStatusBlocked = (currentStatus) => {
 	return currentStatus != null && currentStatus >= 2 && currentStatus !== STATUS.PARTIALLY_AVAILABLE;
 };
 
-/**
- * Format date string to readable format
- */
 const formatDate = (dateStr) => {
 	if (!dateStr) return null;
 	try {
@@ -125,17 +109,11 @@ const formatDate = (dateStr) => {
 	}
 };
 
-/**
- * Format currency
- */
 const formatCurrency = (amount) => {
 	if (!amount || amount <= 0) return null;
 	return new Intl.NumberFormat('en-US', {style: 'currency', currency: 'USD', maximumFractionDigits: 0}).format(amount);
 };
 
-/**
- * Format runtime
- */
 const formatRuntime = (minutes) => {
 	if (!minutes) return null;
 	const hours = Math.floor(minutes / 60);
@@ -955,7 +933,7 @@ const JellyseerrDetails = ({mediaType, mediaId, onClose, onSelectItem, onSelectP
 	const handleCancelConfirm = useCallback(async () => {
 		setShowCancelPopup(false);
 		try {
-					for (const req of pendingRequests) {
+			for (const req of pendingRequests) {
 				await jellyseerrApi.cancelRequest(req.id);
 			}
 			const updated = mediaType === 'movie'
@@ -1306,7 +1284,11 @@ const JellyseerrDetails = ({mediaType, mediaId, onClose, onSelectItem, onSelectP
 									onClick={handleRequestClick}
 									disabled={!canRequestAny}
 								>
-									<span className={css.btnIcon}>📥</span>
+									<span className={css.btnIcon}>
+									<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px">
+										<path d="M240-120v-80l40-40H160q-33 0-56.5-23.5T80-320v-440q0-33 23.5-56.5T160-840h640q33 0 56.5 23.5T880-760v440q0 33-23.5 56.5T800-240H680l40 40v80H240Zm-80-200h640v-440H160v440Zm0 0v-440 440Z"/>
+									</svg>
+								</span>
 								</SpottableDiv>
 								<span className={css.btnLabel}>{requestButtonLabel}</span>
 							</div>
@@ -1315,7 +1297,11 @@ const JellyseerrDetails = ({mediaType, mediaId, onClose, onSelectItem, onSelectP
 							{pendingRequests.length > 0 && (
 								<div className={css.btnWrapper}>
 									<SpottableDiv className={css.btnAction} onClick={handleCancelRequestClick}>
-										<span className={css.btnIcon}>🗑️</span>
+										<span className={css.btnIcon}>
+											<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px">
+												<path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/>
+											</svg>
+										</span>
 									</SpottableDiv>
 									<span className={css.btnLabel}>Cancel Request</span>
 								</div>
@@ -1324,7 +1310,11 @@ const JellyseerrDetails = ({mediaType, mediaId, onClose, onSelectItem, onSelectP
 							{/* Watch Trailer Button */}
 							<div className={css.btnWrapper}>
 								<SpottableDiv className={css.btnAction} onClick={handleTrailer}>
-									<span className={css.btnIcon}>▶️</span>
+									<span className={css.btnIcon}>
+										<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px">
+											<path d="M160-120v-720h80v80h80v-80h320v80h80v-80h80v720h-80v-80h-80v80H320v-80h-80v80h-80Zm80-160h80v-80h-80v80Zm0-160h80v-80h-80v80Zm0-160h80v-80h-80v80Zm400 320h80v-80h-80v80Zm0-160h80v-80h-80v80Zm0-160h80v-80h-80v80ZM400-200h160v-560H400v560Zm0-560h160-160Z"/>
+										</svg>
+									</span>
 								</SpottableDiv>
 								<span className={css.btnLabel}>Watch Trailer</span>
 							</div>
@@ -1333,7 +1323,11 @@ const JellyseerrDetails = ({mediaType, mediaId, onClose, onSelectItem, onSelectP
 							{isAvailable && (
 								<div className={css.btnWrapper}>
 									<SpottableDiv className={css.btnAction} onClick={handlePlay}>
-										<span className={css.btnIcon}>🎞️</span>
+										<span className={css.btnIcon}>
+											<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px">
+												<path d="M320-200v-560l440 280-440 280Zm80-280Zm0 134 210-134-210-134v268Z"/>
+											</svg>
+										</span>
 									</SpottableDiv>
 									<span className={css.btnLabel}>Play in Moonfin</span>
 								</div>
