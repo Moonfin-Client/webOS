@@ -229,7 +229,9 @@ const Player = ({item, onEnded, onBack, onPlayNext}) => {
 				const startPosition = item.UserData?.PlaybackPositionTicks || 0;
 				const result = await playback.getPlaybackInfo(item.Id, {
 					startPositionTicks: startPosition,
-					maxBitrate: selectedQuality || settings.maxBitrate
+					maxBitrate: selectedQuality || settings.maxBitrate,
+					enableDirectPlay: !settings.preferTranscode,
+					enableDirectStream: !settings.preferTranscode
 				});
 
 				setMediaUrl(result.url);
@@ -308,7 +310,7 @@ const Player = ({item, onEnded, onBack, onPlayNext}) => {
 				clearTimeout(controlsTimeoutRef.current);
 			}
 		};
-	}, [item, selectedQuality, settings.maxBitrate, settings.subtitleMode, settings.skipIntro]);
+	}, [item, selectedQuality, settings.maxBitrate, settings.preferTranscode, settings.subtitleMode, settings.skipIntro]);
 
 	// Controls auto-hide
 	const showControls = useCallback(() => {
@@ -420,8 +422,15 @@ const Player = ({item, onEnded, onBack, onPlayNext}) => {
 				if (creditsStart && nextEpisode) {
 					const inCredits = ticks >= creditsStart;
 					if (inCredits && !showSkipCredits) {
+						// Auto-skip credits if setting enabled
+						if (settings.skipCredits) {
+							handlePlayNextEpisode();
+							return;
+						}
 						setShowSkipCredits(true);
-						startNextEpisodeCountdown();
+						if (settings.autoPlay) {
+							startNextEpisodeCountdown();
+						}
 					}
 				}
 			}
@@ -432,11 +441,13 @@ const Player = ({item, onEnded, onBack, onPlayNext}) => {
 				const nearEnd = remaining < 300000000;
 				if (nearEnd && !showNextEpisode && !showSkipCredits) {
 					setShowNextEpisode(true);
-					startNextEpisodeCountdown();
+					if (settings.autoPlay) {
+						startNextEpisodeCountdown();
+					}
 				}
 			}
 		}
-	}, [mediaSegments, settings.skipIntro, nextEpisode, showSkipCredits, showNextEpisode, startNextEpisodeCountdown]);
+	}, [mediaSegments, settings.skipIntro, settings.skipCredits, settings.autoPlay, nextEpisode, showSkipCredits, showNextEpisode, startNextEpisodeCountdown, handlePlayNextEpisode]);
 
 	const handleWaiting = useCallback(() => {
 		setIsBuffering(true);

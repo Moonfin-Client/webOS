@@ -525,7 +525,6 @@ const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
 			<h1>General Settings</h1>
 			<div className={css.settingsGroup}>
 				<h2>Application</h2>
-				{renderToggleItem('Auto Login', 'Automatically sign in on startup', 'autoLogin')}
 				{renderSettingItem('Clock Display', 'Show clock in the interface',
 					settings.clockDisplay === '12-hour' ? '12-Hour' : '24-Hour',
 					() => updateSetting('clockDisplay', settings.clockDisplay === '12-hour' ? '24-hour' : '12-hour'),
@@ -574,14 +573,6 @@ const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
 	const renderDisplayPanel = () => (
 		<div className={css.panel}>
 			<h1>Display Settings</h1>
-			<div className={css.settingsGroup}>
-				<h2>Appearance</h2>
-				{renderSettingItem('Theme', 'Choose the app theme',
-					settings.theme === 'dark' ? 'Dark' : 'Light',
-					() => updateSetting('theme', settings.theme === 'dark' ? 'light' : 'dark'),
-					'setting-theme'
-				)}
-			</div>
 			<div className={css.settingsGroup}>
 				<h2>Backdrop</h2>
 				{renderSettingItem('Home Backdrop Blur', 'Amount of blur on home screen backdrop',
