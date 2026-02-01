@@ -805,27 +805,24 @@ const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
 							>
 								<div className={css.serverItemInfo}>
 									<div className={css.serverItemUser}>
-										<span className={css.serverItemAvatar}>
-											{server.username?.charAt(0)?.toUpperCase() || '?'}
-										</span>
+										{isActive && user?.PrimaryImageTag ? (
+											<img
+												src={`${server.url}/Users/${server.userId}/Images/Primary?tag=${user.PrimaryImageTag}&quality=90&maxHeight=100`}
+												alt={server.username}
+												className={css.serverItemAvatarImage}
+											/>
+										) : (
+											<span className={css.serverItemAvatar}>
+												{server.username?.charAt(0)?.toUpperCase() || '?'}
+											</span>
+										)}
 										<span className={css.serverItemUsername}>{server.username}</span>
 									</div>
 									<div className={css.serverItemServer}>
 										{server.name} ({new URL(server.url).hostname})
 									</div>
 								</div>
-								<div className={css.serverItemActions}>
-									{!isActive && (
-										<SpottableButton
-											className={css.smallButton}
-											data-server-id={server.serverId}
-											data-user-id={server.userId}
-											onClick={handleSwitchUserClick}
-											spotlightId={`switch-user-${index}`}
-										>
-											Switch
-										</SpottableButton>
-									)}
+								<div className={css.serverItemActions} data-spotlight-container-disabled>
 									{(servers.length > 1 || !isActive) && (
 										<SpottableButton
 											className={`${css.smallButton} ${css.dangerButton}`}
@@ -837,6 +834,17 @@ const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
 											spotlightId={`remove-user-${index}`}
 										>
 											Remove
+										</SpottableButton>
+									)}
+									{!isActive && (
+										<SpottableButton
+											className={css.smallButton}
+											data-server-id={server.serverId}
+											data-user-id={server.userId}
+											onClick={handleSwitchUserClick}
+											spotlightId={`switch-user-${index}`}
+										>
+											Switch
 										</SpottableButton>
 									)}
 									{isActive && (

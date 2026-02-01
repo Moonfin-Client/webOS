@@ -200,17 +200,18 @@
 	padding: 16px 32px;
 	font-size: 18px;
 	font-weight: 600;
-	background: #00a4dc;
+	background: rgba(255, 255, 255, 0.15);
 	color: #fff;
-	border: none;
+	border: 3px solid rgba(255, 255, 255, 0.2);
 	border-radius: 8px;
 	cursor: pointer;
-	transition: background 0.2s, transform 0.2s;
+	transition: background 0.2s, transform 0.2s, border-color 0.2s;
 	margin-top: 16px;
 
 	&:focus {
 		outline: none;
-		background: #0090c4;
+		background: #00a4dc;
+		border-color: #00a4dc;
 		transform: scale(1.05);
 		box-shadow: 0 0 0 4px rgba(0, 164, 220, 0.5);
 	}
@@ -374,7 +375,13 @@
 }
 
 .primaryButton {
-	background: #00a4dc !important;
+	background: rgba(255, 255, 255, 0.15) !important;
+	border: 2px solid rgba(255, 255, 255, 0.2) !important;
+
+	&:focus {
+		background: #00a4dc !important;
+		border-color: #00a4dc !important;
+	}
 }
 
 // Multi-Server / Multi-User Styles
@@ -489,6 +496,15 @@
 	flex-shrink: 0;
 }
 
+.serverItemAvatarImage {
+	width: 32px;
+	height: 32px;
+	border-radius: 50%;
+	object-fit: cover;
+	margin-right: 12px;
+	flex-shrink: 0;
+}
+
 .serverItemUsername {
 	font-size: 18px;
 	font-weight: 500;
@@ -536,11 +552,13 @@
 }
 
 .dangerButton {
-	background: #c62828 !important;
+	background: rgba(255, 255, 255, 0.15) !important;
+	border: 2px solid rgba(255, 255, 255, 0.2) !important;
 	color: #fff !important;
 
 	&:focus {
-		background: #d32f2f !important;
+		background: #c62828 !important;
+		border-color: #c62828 !important;
 	}
 }
 

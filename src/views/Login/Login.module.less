@@ -139,11 +139,13 @@
 }
 
 .btnPrimary {
-	background: @accent;
+	background: rgba(255, 255, 255, 0.15);
 	color: #fff;
+	border: 3px solid rgba(255, 255, 255, 0.2);
 
 	&:hover, &:focus {
-		background: @accentHover;
+		background: @accent;
+		border-color: @accent;
 	}
 }
 

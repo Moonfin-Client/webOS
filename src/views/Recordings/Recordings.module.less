@@ -223,8 +223,8 @@
 .popupBtn {
 	padding: 16px 32px;
 	font-size: 18px;
-	background: @accent-color;
-	border: 2px solid transparent;
+	background: rgba(255, 255, 255, 0.15);
+	border: 2px solid rgba(255, 255, 255, 0.2);
 	border-radius: 8px;
 	color: @text-primary;
 	cursor: pointer;
@@ -232,16 +232,19 @@
 
 	&:hover,
 	&:focus {
-		background: lighten(@accent-color, 10%);
+		background: @accent-color;
+		border-color: @accent-color;
 		outline: none;
 	}
 
 	&.danger {
-		background: @accent-secondary;
+		background: rgba(255, 255, 255, 0.15);
+		border: 2px solid rgba(255, 255, 255, 0.2);
 
 		&:hover,
 		&:focus {
-			background: lighten(@accent-secondary, 10%);
+			background: @accent-secondary;
+			border-color: @accent-secondary;
 		}
 	}
 
