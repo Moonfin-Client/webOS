@@ -419,7 +419,7 @@ const Browse = ({
 
 	const handleFocusItem = useCallback((item) => {
 		setFocusedItem(item);
-		if (!item.Overview) {
+		if (!item.BackdropImageTags?.length && !item.ParentBackdropImageTags?.length) {
 			api.getItem(item.Id).then(fullItem => {
 				setFocusedItem(fullItem);
 			}).catch(() => {});

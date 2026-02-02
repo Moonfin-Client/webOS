@@ -248,7 +248,12 @@ const GenreBrowse = ({genre, libraryId, onSelectItem, onBack}) => {
 			}
 		};
 		document.addEventListener('keydown', handleKeyDown);
-		return () => document.removeEventListener('keydown', handleKeyDown);
+		return () => {
+			document.removeEventListener('keydown', handleKeyDown);
+			if (backdropTimeoutRef.current) {
+				clearTimeout(backdropTimeoutRef.current);
+			}
+		};
 	}, [showSortModal, showFilterModal, onBack]);
 
 	const handleSortSelect = useCallback((ev) => {
