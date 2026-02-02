@@ -61,40 +61,96 @@ const Browse = ({
 			let result = allRowData.filter(r => r.id !== 'resume' && r.id !== 'nextup');
 
 			if (resumeRow || nextUpRow) {
-				const mergedItems = [
-					...(resumeRow?.items || []),
-					...(nextUpRow?.items || [])
-				];
-				const uniqueItems = [...new Map(mergedItems.map(i => [i.Id, i])).values()];
+				const resumeItems = resumeRow?.items || [];
+				const nextUpItems = nextUpRow?.items || [];
+				
+				// Track series lastPlayedDate from resume items
+				const seriesLastPlayedMap = new Map();
+				resumeItems.forEach(item => {
+					const seriesId = item.SeriesId;
+					const lastPlayed = item.UserData?.LastPlayedDate;
+					if (seriesId && lastPlayed) {
+						const existing = seriesLastPlayedMap.get(seriesId);
+						if (!existing || lastPlayed > existing) {
+							seriesLastPlayedMap.set(seriesId, lastPlayed);
+						}
+					}
+				});
+				
+				// Create set of resume item IDs to avoid duplicates
+				const resumeItemIds = new Set(resumeItems.map(item => item.Id));
+				
+				// Filter next up items that aren't already in resume and inherit lastPlayedDate
+				const filteredNextUp = nextUpItems
+					.filter(item => !resumeItemIds.has(item.Id))
+					.map(item => {
+						const seriesLastPlayed = seriesLastPlayedMap.get(item.SeriesId);
+						if (seriesLastPlayed && !item.UserData?.LastPlayedDate) {
+							return {
+								...item,
+								UserData: {
+									...item.UserData,
+									LastPlayedDate: seriesLastPlayed
+								}
+							};
+						}
+						return item;
+					});
+				
+				// Combine and sort by lastPlayedDate (most recent first)
+				const combinedItems = [...resumeItems, ...filteredNextUp].sort((a, b) => {
+					const aLastPlayed = a.UserData?.LastPlayedDate;
+					const bLastPlayed = b.UserData?.LastPlayedDate;
+					
+					if (aLastPlayed && bLastPlayed) {
+						return bLastPlayed.localeCompare(aLastPlayed);
+					}
+					if (aLastPlayed) return -1;
+					if (bLastPlayed) return 1;
+					return 0;
+				});
 
-				if (uniqueItems.length > 0) {
+				if (combinedItems.length > 0) {
 					if (enabledRowIds.includes('resume') || enabledRowIds.includes('nextup')) {
 						result = [{
 							id: 'continue-nextup',
 							title: 'Continue Watching',
-							items: uniqueItems,
+							items: combinedItems,
 							type: 'landscape'
 						}, ...result];
 					}
 				}
 			}
 
-				return result.filter(row =>
+			return result.filter(row =>
 				row.id === 'continue-nextup' ||
 				enabledRowIds.includes(row.id) ||
 				(row.isLatestRow && enabledRowIds.includes('latest-media'))
 			);
 		}
 
-		return allRowData.filter(row => {
-			if (row.id === 'resume' || row.id === 'nextup') {
+		// Filter out Next Up items that are in Continue Watching
+		const resumeRow = allRowData.find(r => r.id === 'resume');
+		const resumeItemIds = new Set((resumeRow?.items || []).map(item => item.Id));
+
+		return allRowData
+			.map(row => {
+				if (row.id === 'nextup' && resumeItemIds.size > 0) {
+					const filteredItems = row.items.filter(item => !resumeItemIds.has(item.Id));
+					return filteredItems.length > 0 ? {...row, items: filteredItems} : null;
+				}
+				return row;
+			})
+			.filter(row => {
+				if (!row) return false;
+				if (row.id === 'resume' || row.id === 'nextup') {
+					return enabledRowIds.includes(row.id);
+				}
+				if (row.isLatestRow) {
+					return enabledRowIds.includes('latest-media');
+				}
 				return enabledRowIds.includes(row.id);
-			}
-			if (row.isLatestRow) {
-				return enabledRowIds.includes('latest-media');
-			}
-			return enabledRowIds.includes(row.id);
-		});
+			});
 	}, [allRowData, homeRowsConfig, settings.mergeContinueWatchingNextUp]);
 
 	const handleNavigateUp = useCallback((fromRowIndex) => {
