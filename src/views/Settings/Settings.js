@@ -584,6 +584,7 @@ const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
 			</div>
 			<div className={css.settingsGroup}>
 				<h2>Featured Carousel</h2>
+				{renderToggleItem('Show Featured Bar', 'Display the featured media carousel on home screen', 'showFeaturedBar')}
 				{renderSettingItem('Content Type', 'Type of content to display in featured carousel',
 					getFeaturedContentTypeLabel(), cycleFeaturedContentType, 'setting-featuredContentType'
 				)}

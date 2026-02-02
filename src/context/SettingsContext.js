@@ -29,7 +29,8 @@ const defaultSettings = {
 	carouselSpeed: 8000,
 	serverLogging: false,
 	featuredContentType: 'both',
-	featuredItemCount: 10
+	featuredItemCount: 10,
+	showFeaturedBar: true
 };
 
 export {DEFAULT_HOME_ROWS};

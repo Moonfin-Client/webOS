@@ -97,7 +97,11 @@ const Browse = ({
 
 	const handleNavigateUp = useCallback((fromRowIndex) => {
 		if (fromRowIndex === 0) {
-			Spotlight.focus('featured-banner');
+			if (settings.showFeaturedBar !== false) {
+				Spotlight.focus('featured-banner');
+			} else {
+				Spotlight.focus('navbar-home');
+			}
 			return;
 		}
 		const targetIndex = fromRowIndex - 1;
@@ -106,7 +110,7 @@ const Browse = ({
 		if (targetRow) {
 			targetRow.scrollIntoView({behavior: 'smooth', block: 'start'});
 		}
-	}, []);
+	}, [settings.showFeaturedBar]);
 
 	const handleNavigateDown = useCallback((fromRowIndex) => {
 		const targetIndex = fromRowIndex + 1;
@@ -117,6 +121,24 @@ const Browse = ({
 			targetRow.scrollIntoView({behavior: 'smooth', block: 'center'});
 		}
 	}, [filteredRows.length]);
+
+	useEffect(() => {
+		if (settings.showFeaturedBar === false) {
+			setBrowseMode('rows');
+		}
+	}, [settings.showFeaturedBar]);
+
+	useEffect(() => {
+		if (!isLoading) {
+			setTimeout(() => {
+				if (settings.showFeaturedBar !== false && featuredItems.length > 0) {
+					Spotlight.focus('featured-banner');
+				} else if (filteredRows.length > 0) {
+					Spotlight.focus('row-0');
+				}
+			}, FOCUS_DELAY_MS);
+		}
+	}, [isLoading, featuredItems.length, filteredRows.length, settings.showFeaturedBar]);
 
 	useEffect(() => {
 		cachedRowData = null;
@@ -331,14 +353,24 @@ const Browse = ({
 	}, [onSelectLibrary]);
 
 	const handleHome = useCallback(() => {
-		setBrowseMode('featured');
-		if (mainContentRef.current) {
-			mainContentRef.current.scrollTo({top: 0, behavior: 'smooth'});
+		if (settings.showFeaturedBar !== false) {
+			setBrowseMode('featured');
+			if (mainContentRef.current) {
+				mainContentRef.current.scrollTo({top: 0, behavior: 'smooth'});
+			}
+			setTimeout(() => {
+				Spotlight.focus('featured-banner');
+			}, FOCUS_DELAY_MS);
+		} else {
+			setBrowseMode('rows');
+			if (mainContentRef.current) {
+				mainContentRef.current.scrollTo({top: 0, behavior: 'smooth'});
+			}
+			setTimeout(() => {
+				Spotlight.focus('row-0');
+			}, FOCUS_DELAY_MS);
 		}
-		setTimeout(() => {
-			Spotlight.focus('featured-banner');
-		}, FOCUS_DELAY_MS);
-	}, []);
+	}, [settings.showFeaturedBar]);
 
 	const handleFeaturedPrev = useCallback(() => {
 		if (featuredItems.length <= 1) return;
@@ -450,7 +482,7 @@ const Browse = ({
 			</div>
 
 			<div className={css.mainContent} ref={mainContentRef}>
-				{currentFeatured && (
+				{currentFeatured && settings.showFeaturedBar !== false && (
 					<div
 						className={`${css.featuredBanner} ${browseMode === 'rows' ? css.featuredHidden : ''}`}
 					>
