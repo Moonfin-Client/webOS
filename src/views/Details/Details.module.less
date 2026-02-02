@@ -82,6 +82,7 @@
 	margin-bottom: 40px;
 	width: 100%;
 	gap: 50px;
+	align-items: flex-start;
 }
 
 .infoSection {
@@ -210,6 +211,11 @@
 	line-height: 1.6;
 	color: rgba(255, 255, 255, 0.85);
 	margin: 0;
+	max-height: 200px;
+	overflow: hidden;
+	display: -webkit-box;
+	-webkit-line-clamp: 5;
+	-webkit-box-orient: vertical;
 }
 
 .metadataGroup {
