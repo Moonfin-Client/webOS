@@ -1,4 +1,4 @@
-import {useState, useCallback, useEffect} from 'react';
+import {useState, useCallback, useEffect, useMemo, lazy, Suspense} from 'react';
 import ThemeDecorator from '@enact/sandstone/ThemeDecorator';
 import {Panels, Panel} from '@enact/sandstone/Panels';
 
@@ -8,28 +8,37 @@ import {JellyseerrProvider} from '../context/JellyseerrContext';
 import {useVersionCheck} from '../hooks/useVersionCheck';
 import UpdateNotification from '../components/UpdateNotification';
 import NavBar from '../components/NavBar';
+import LoadingSpinner from '../components/LoadingSpinner';
 import Login from '../views/Login';
 import Browse from '../views/Browse';
-import Details from '../views/Details';
-import Library from '../views/Library';
-import Search from '../views/Search';
-import Settings from '../views/Settings';
-import Player from '../views/Player';
-import Favorites from '../views/Favorites';
-import Genres from '../views/Genres';
-import GenreBrowse from '../views/GenreBrowse';
-import Person from '../views/Person';
-import LiveTV from '../views/LiveTV';
-import Recordings from '../views/Recordings';
-import JellyseerrDiscover from '../views/JellyseerrDiscover';
-import JellyseerrDetails from '../views/JellyseerrDetails';
-import JellyseerrRequests from '../views/JellyseerrRequests';
-import JellyseerrBrowse from '../views/JellyseerrBrowse';
-import JellyseerrPerson from '../views/JellyseerrPerson';
+
+const Details = lazy(() => import('../views/Details'));
+const Library = lazy(() => import('../views/Library'));
+const Search = lazy(() => import('../views/Search'));
+const Settings = lazy(() => import('../views/Settings'));
+const Player = lazy(() => import('../views/Player'));
+const Favorites = lazy(() => import('../views/Favorites'));
+const Genres = lazy(() => import('../views/Genres'));
+const GenreBrowse = lazy(() => import('../views/GenreBrowse'));
+const Person = lazy(() => import('../views/Person'));
+const LiveTV = lazy(() => import('../views/LiveTV'));
+const Recordings = lazy(() => import('../views/Recordings'));
+const JellyseerrDiscover = lazy(() => import('../views/JellyseerrDiscover'));
+const JellyseerrDetails = lazy(() => import('../views/JellyseerrDetails'));
+const JellyseerrRequests = lazy(() => import('../views/JellyseerrRequests'));
+const JellyseerrBrowse = lazy(() => import('../views/JellyseerrBrowse'));
+const JellyseerrPerson = lazy(() => import('../views/JellyseerrPerson'));
 
 import css from './App.module.less';
 
+const MAX_HISTORY_LENGTH = 10;
 const EXCLUDED_COLLECTION_TYPES = ['playlists', 'books', 'music', 'musicvideos', 'homevideos', 'photos'];
+
+const PanelLoader = () => (
+	<div className={css.panelLoader}>
+		<LoadingSpinner />
+	</div>
+);
 
 const PANELS = {
 	LOGIN: 0,
@@ -100,7 +109,13 @@ const AppContent = (props) => {
 
 	const navigateTo = useCallback((panel, addToHistory = true) => {
 		if (addToHistory && panelIndex !== PANELS.LOGIN) {
-			setPanelHistory(prev => [...prev, panelIndex]);
+			setPanelHistory(prev => {
+				const newHistory = [...prev, panelIndex];
+				if (newHistory.length > MAX_HISTORY_LENGTH) {
+					return newHistory.slice(-MAX_HISTORY_LENGTH);
+				}
+				return newHistory;
+			});
 		}
 		setPanelIndex(panel);
 	}, [panelIndex]);
@@ -347,133 +362,169 @@ const AppContent = (props) => {
 					onUserMenu={handleOpenSettings}
 				/>
 			)}
-			<Panels index={panelIndex} noCloseButton noAnimation>
-				<Panel>
-					<Login onLoggedIn={handleLoggedIn} />
-				</Panel>
-				<Panel>
-					<Browse
-						onSelectItem={handleSelectItem}
-						onSelectLibrary={handleSelectLibrary}
-					/>
-				</Panel>
-				<Panel>
-					<Details
-						itemId={selectedItem?.Id}
-						onPlay={handlePlay}
-						onSelectItem={handleSelectItem}
-						onSelectPerson={handleSelectPerson}
-						onBack={handleBack}
-					/>
-				</Panel>
-				<Panel>
-					<Library
-						library={selectedLibrary}
-						onSelectItem={handleSelectItem}
-						onBack={handleBack}
-					/>
-				</Panel>
-				<Panel>
-					<Search onSelectItem={handleSelectItem} onSelectPerson={handleSelectPerson} onBack={handleBack} />
-				</Panel>
-				<Panel>
-					<Settings onBack={handleBack} onLogout={handleSwitchUser} onAddServer={handleAddServer} onAddUser={handleAddUser} />
-				</Panel>
-				<Panel>
-					{playingItem && (
-						<Player
-							item={playingItem}
-							initialAudioIndex={playbackOptions?.audioStreamIndex}
-							initialSubtitleIndex={playbackOptions?.subtitleStreamIndex}
-							onEnded={handlePlayerEnd}
-							onBack={handlePlayerEnd}
-							onPlayNext={handlePlayNext}
+			<Suspense fallback={<PanelLoader />}>
+				<Panels index={panelIndex} noCloseButton noAnimation>
+					<Panel>
+						<Login onLoggedIn={handleLoggedIn} />
+					</Panel>
+					<Panel>
+						<Browse
+							onSelectItem={handleSelectItem}
+							onSelectLibrary={handleSelectLibrary}
 						/>
-					)}
-				</Panel>
-				<Panel>
-					<Favorites onSelectItem={handleSelectItem} onBack={handleBack} />
-				</Panel>
-				<Panel>
-					<Genres onSelectGenre={handleSelectGenre} onBack={handleBack} />
-				</Panel>
-				<Panel>
-					<Person personId={selectedPerson?.Id} onSelectItem={handleSelectItem} onBack={handleBack} />
-				</Panel>
-				<Panel>
-					<LiveTV onPlayChannel={handlePlayChannel} onRecordings={handleOpenRecordings} onBack={handleBack} />
-				</Panel>
-				<Panel>
-					<JellyseerrDiscover
-						onSelectItem={handleSelectJellyseerrItem}
-						onSelectGenre={handleSelectJellyseerrGenre}
-						onSelectStudio={handleSelectJellyseerrStudio}
-						onSelectNetwork={handleSelectJellyseerrNetwork}
-						onOpenRequests={handleOpenJellyseerrRequests}
-						onBack={handleBack}
-					/>
-				</Panel>
-				<Panel>
-					<JellyseerrDetails
-						mediaType={jellyseerrItem?.mediaType}
-						mediaId={jellyseerrItem?.mediaId}
-						onSelectItem={handleSelectJellyseerrItem}
-						onSelectPerson={handleSelectJellyseerrPerson}
-						onSelectKeyword={handleSelectJellyseerrKeyword}
-						onClose={handleBack}
-					/>
-				</Panel>
-				<Panel>
-					<JellyseerrRequests
-						onSelectItem={handleSelectJellyseerrItem}
-						onClose={handleBack}
-					/>
-				</Panel>
-				<Panel>
-					<GenreBrowse
-						genre={selectedGenre}
-						libraryId={selectedGenreLibraryId}
-						onSelectItem={handleSelectItem}
-						onBack={handleBack}
-					/>
-				</Panel>
-				<Panel>
-					<Recordings onPlayRecording={handlePlayRecording} onBack={handleBack} />
-				</Panel>
-				<Panel>
-					<JellyseerrBrowse
-						browseType={jellyseerrBrowse?.browseType}
-						item={jellyseerrBrowse?.item}
-						mediaType={jellyseerrBrowse?.mediaType}
-						onSelectItem={handleSelectJellyseerrItem}
-						onBack={handleBack}
-					/>
-				</Panel>
-				<Panel>
-					<JellyseerrPerson
-						personId={jellyseerrPerson?.id}
-						personName={jellyseerrPerson?.name}
-						onSelectItem={handleSelectJellyseerrItem}
-						onBack={handleBack}
-					/>
-				</Panel>
-				<Panel>
-					<Login
-						onLoggedIn={handleLoggedIn}
-						onServerAdded={handleServerAdded}
-						isAddingServer
-					/>
-				</Panel>
-				<Panel>
-					<Login
-						onLoggedIn={handleLoggedIn}
-						onServerAdded={handleServerAdded}
-						isAddingUser
-						currentServerUrl={serverUrl}
-						currentServerName={serverName}
-					/>
-				</Panel>
-			</Panels>
+					</Panel>
+					<Panel>
+						{panelIndex === PANELS.DETAILS && (
+							<Details
+								itemId={selectedItem?.Id}
+								onPlay={handlePlay}
+								onSelectItem={handleSelectItem}
+								onSelectPerson={handleSelectPerson}
+								onBack={handleBack}
+							/>
+						)}
+					</Panel>
+					<Panel>
+						{panelIndex === PANELS.LIBRARY && (
+							<Library
+								library={selectedLibrary}
+								onSelectItem={handleSelectItem}
+								onBack={handleBack}
+							/>
+						)}
+					</Panel>
+					<Panel>
+						{panelIndex === PANELS.SEARCH && (
+							<Search onSelectItem={handleSelectItem} onSelectPerson={handleSelectPerson} onBack={handleBack} />
+						)}
+					</Panel>
+					<Panel>
+						{panelIndex === PANELS.SETTINGS && (
+							<Settings onBack={handleBack} onLogout={handleSwitchUser} onAddServer={handleAddServer} onAddUser={handleAddUser} />
+						)}
+					</Panel>
+					<Panel>
+						{panelIndex === PANELS.PLAYER && playingItem && (
+							<Player
+								item={playingItem}
+								initialAudioIndex={playbackOptions?.audioStreamIndex}
+								initialSubtitleIndex={playbackOptions?.subtitleStreamIndex}
+								onEnded={handlePlayerEnd}
+								onBack={handlePlayerEnd}
+								onPlayNext={handlePlayNext}
+							/>
+						)}
+					</Panel>
+					<Panel>
+						{panelIndex === PANELS.FAVORITES && (
+							<Favorites onSelectItem={handleSelectItem} onBack={handleBack} />
+						)}
+					</Panel>
+					<Panel>
+						{panelIndex === PANELS.GENRES && (
+							<Genres onSelectGenre={handleSelectGenre} onBack={handleBack} />
+						)}
+					</Panel>
+					<Panel>
+						{panelIndex === PANELS.PERSON && (
+							<Person personId={selectedPerson?.Id} onSelectItem={handleSelectItem} onBack={handleBack} />
+						)}
+					</Panel>
+					<Panel>
+						{panelIndex === PANELS.LIVETV && (
+							<LiveTV onPlayChannel={handlePlayChannel} onRecordings={handleOpenRecordings} onBack={handleBack} />
+						)}
+					</Panel>
+					<Panel>
+						{panelIndex === PANELS.JELLYSEERR_DISCOVER && (
+							<JellyseerrDiscover
+								onSelectItem={handleSelectJellyseerrItem}
+								onSelectGenre={handleSelectJellyseerrGenre}
+								onSelectStudio={handleSelectJellyseerrStudio}
+								onSelectNetwork={handleSelectJellyseerrNetwork}
+								onOpenRequests={handleOpenJellyseerrRequests}
+								onBack={handleBack}
+							/>
+						)}
+					</Panel>
+					<Panel>
+						{panelIndex === PANELS.JELLYSEERR_DETAILS && (
+							<JellyseerrDetails
+								mediaType={jellyseerrItem?.mediaType}
+								mediaId={jellyseerrItem?.mediaId}
+								onSelectItem={handleSelectJellyseerrItem}
+								onSelectPerson={handleSelectJellyseerrPerson}
+								onSelectKeyword={handleSelectJellyseerrKeyword}
+								onClose={handleBack}
+							/>
+						)}
+					</Panel>
+					<Panel>
+						{panelIndex === PANELS.JELLYSEERR_REQUESTS && (
+							<JellyseerrRequests
+								onSelectItem={handleSelectJellyseerrItem}
+								onClose={handleBack}
+							/>
+						)}
+					</Panel>
+					<Panel>
+						{panelIndex === PANELS.GENRE_BROWSE && (
+							<GenreBrowse
+								genre={selectedGenre}
+								libraryId={selectedGenreLibraryId}
+								onSelectItem={handleSelectItem}
+								onBack={handleBack}
+							/>
+						)}
+					</Panel>
+					<Panel>
+						{panelIndex === PANELS.RECORDINGS && (
+							<Recordings onPlayRecording={handlePlayRecording} onBack={handleBack} />
+						)}
+					</Panel>
+					<Panel>
+						{panelIndex === PANELS.JELLYSEERR_BROWSE && (
+							<JellyseerrBrowse
+								browseType={jellyseerrBrowse?.browseType}
+								item={jellyseerrBrowse?.item}
+								mediaType={jellyseerrBrowse?.mediaType}
+								onSelectItem={handleSelectJellyseerrItem}
+								onBack={handleBack}
+							/>
+						)}
+					</Panel>
+					<Panel>
+						{panelIndex === PANELS.JELLYSEERR_PERSON && (
+							<JellyseerrPerson
+								personId={jellyseerrPerson?.id}
+								personName={jellyseerrPerson?.name}
+								onSelectItem={handleSelectJellyseerrItem}
+								onBack={handleBack}
+							/>
+						)}
+					</Panel>
+					<Panel>
+						{panelIndex === PANELS.ADD_SERVER && (
+							<Login
+								onLoggedIn={handleLoggedIn}
+								onServerAdded={handleServerAdded}
+								isAddingServer
+							/>
+						)}
+					</Panel>
+					<Panel>
+						{panelIndex === PANELS.ADD_USER && (
+							<Login
+								onLoggedIn={handleLoggedIn}
+								onServerAdded={handleServerAdded}
+								isAddingUser
+								currentServerUrl={serverUrl}
+								currentServerName={serverName}
+							/>
+						)}
+					</Panel>
+				</Panels>
+			</Suspense>
 			<UpdateNotification
 				updateInfo={updateInfo}
 				formattedNotes={formattedNotes}
