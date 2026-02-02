@@ -942,9 +942,9 @@ const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
 					<div className={css.infoItem}>
 						<span className={css.infoLabel}>Resolution</span>
 						<span className={css.infoValue}>
-							{capabilities.screenWidth}x{capabilities.screenHeight}
-							{capabilities.uhd8K && ' (8K)'}
-							{capabilities.uhd && !capabilities.uhd8K && ' (4K)'}
+							{capabilities.uhd8K ? '7680x4320 (8K)' : 
+							 capabilities.uhd ? '3840x2160 (4K)' : 
+							 '1920x1080 (HD)'}
 							{capabilities.oled && ' OLED'}
 						</span>
 					</div>

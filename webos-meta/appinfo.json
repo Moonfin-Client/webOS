@@ -21,7 +21,6 @@
         "settings.read",
         "deviceinfo.read"
     ],
-    "resolution": "1920x1080",
     "allowVideoCapture": false,
     "allowAudioCapture": false,
     "handlesRelaunch": true

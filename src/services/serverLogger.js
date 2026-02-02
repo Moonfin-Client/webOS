@@ -30,7 +30,7 @@ const getTimestamp = () => {
 	}
 };
 
-const getDeviceInfo = () => {
+const getDeviceInfo = async () => {
 	if (deviceInfo) return deviceInfo;
 
 	deviceInfo = {
@@ -42,17 +42,29 @@ const getDeviceInfo = () => {
 		modelName: 'Unknown'
 	};
 
+	// Try Enact API first
 	try {
-		if (typeof window.webOS !== 'undefined' && window.webOS.deviceInfo) {
-			window.webOS.deviceInfo((device) => {
-				if (device) {
-					deviceInfo.modelName = device.modelName || 'Unknown';
-					deviceInfo.webOSVersion = device.version || 'Unknown';
-				}
-			});
+		const deviceInfoModule = await import('@enact/webos/deviceinfo');
+		const device = await new Promise(resolve => deviceInfoModule.default(resolve));
+		if (device) {
+			deviceInfo.modelName = device.modelName || 'Unknown';
+			deviceInfo.webOSVersion = device.version || device.sdkVersion || 'Unknown';
 		}
-	} catch {
-		// webOS API not available
+		return deviceInfo;
+	} catch (e) {
+		// Fall back to window.webOS API
+		try {
+			if (typeof window.webOS !== 'undefined' && window.webOS.deviceInfo) {
+				window.webOS.deviceInfo((device) => {
+					if (device) {
+						deviceInfo.modelName = device.modelName || 'Unknown';
+						deviceInfo.webOSVersion = device.version || 'Unknown';
+					}
+				});
+			}
+		} catch {
+			// webOS API not available
+		}
 	}
 
 	return deviceInfo;
@@ -129,14 +141,14 @@ const sendLogToServer = async (entry) => {
 	}
 };
 
-const log = (level, category, message, context = {}, immediate = false) => {
+const log = async (level, category, message, context = {}, immediate = false) => {
 	const entry = {
 		timestamp: getTimestamp(),
 		level,
 		category,
 		message,
 		context,
-		device: getDeviceInfo()
+		device: await getDeviceInfo()
 	};
 
 	logBuffer.push(entry);
