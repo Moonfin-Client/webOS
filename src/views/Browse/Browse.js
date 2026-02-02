@@ -419,7 +419,12 @@ const Browse = ({
 
 	const handleFocusItem = useCallback((item) => {
 		setFocusedItem(item);
-	}, []);
+		if (!item.Overview) {
+			api.getItem(item.Id).then(fullItem => {
+				setFocusedItem(fullItem);
+			}).catch(() => {});
+		}
+	}, [api]);
 
 	const handleFeaturedClick = useCallback(() => {
 		const item = featuredItems[currentFeaturedIndex];
