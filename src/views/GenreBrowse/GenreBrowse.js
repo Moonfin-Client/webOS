@@ -1,5 +1,6 @@
 import {useState, useEffect, useCallback, useRef} from 'react';
 import Spottable from '@enact/spotlight/Spottable';
+import SpotlightContainerDecorator from '@enact/spotlight/SpotlightContainerDecorator';
 import {VirtualGridList} from '@enact/sandstone/VirtualList';
 import Popup from '@enact/sandstone/Popup';
 import Button from '@enact/sandstone/Button';
@@ -11,6 +12,8 @@ import css from './GenreBrowse.module.less';
 
 const SpottableDiv = Spottable('div');
 const SpottableButton = Spottable('button');
+const ToolbarContainer = SpotlightContainerDecorator({enterTo: 'last-focused', restrict: 'self-first'}, 'div');
+const GridContainer = SpotlightContainerDecorator({enterTo: 'last-focused', restrict: 'self-only'}, 'div');
 
 const SORT_OPTIONS = [
 	{key: 'SortName,Ascending', label: 'Name (A-Z)'},
@@ -358,7 +361,7 @@ const GenreBrowse = ({genre, libraryId, onSelectItem, onBack}) => {
 					<div className={css.counter}>{serverTotalCount} items</div>
 				</div>
 
-				<div className={css.toolbar}>
+				<ToolbarContainer className={css.toolbar} spotlightId="genre-toolbar">
 					<SpottableButton
 						className={css.sortButton}
 						onClick={handleOpenSortModal}
@@ -391,9 +394,9 @@ const GenreBrowse = ({genre, libraryId, onSelectItem, onBack}) => {
 							</SpottableButton>
 						))}
 					</div>
-				</div>
+				</ToolbarContainer>
 
-				<div className={css.gridContainer}>
+				<GridContainer className={css.gridContainer}>
 					{isLoading && items.length === 0 ? (
 						<div className={css.loading}>
 							<LoadingSpinner />
@@ -410,7 +413,7 @@ const GenreBrowse = ({genre, libraryId, onSelectItem, onBack}) => {
 							spotlightId="genre-browse-grid"
 						/>
 					)}
-				</div>
+				</GridContainer>
 			</div>
 
 			<Popup
