@@ -11,11 +11,13 @@ var service = new Service(pkgInfo.name);
 var JELLYFIN_DISCOVERY_PORT = 7359;
 var JELLYFIN_DISCOVERY_MESSAGE = 'who is JellyfinServer?';
 var SCAN_INTERVAL = 15000;
+var IDLE_TIMEOUT = 60000;
 var COOKIE_FILE = '/tmp/moonfin-cookies.json';
 
 var scanResult = {};
 var subscriptions = {};
 var interval = null;
+var idleTimer = null;
 var client4 = null;
 var cookieJars = {};
 
@@ -100,22 +102,42 @@ function sendJellyfinDiscovery() {
 function createInterval() {
 	if (interval) return;
 	interval = setInterval(sendJellyfinDiscovery, SCAN_INTERVAL);
+	if (idleTimer) {
+		clearTimeout(idleTimer);
+		idleTimer = null;
+	}
+}
+
+function stopInterval() {
+	if (interval) {
+		clearInterval(interval);
+		interval = null;
+	}
+	if (idleTimer) {
+		clearTimeout(idleTimer);
+		idleTimer = null;
+	}
+	idleTimer = setTimeout(function() {
+		scanResult = {};
+		idleTimer = null;
+	}, IDLE_TIMEOUT);
 }
 
 var discover = service.register('discover');
 discover.on('request', function(message) {
 	sendScanResults();
-	sendJellyfinDiscovery();
-	if (message.isSubscription) {
+	if (!message.isSubscription) {
+		sendJellyfinDiscovery();
+	} else {
 		subscriptions[message.uniqueToken] = message;
+		sendJellyfinDiscovery();
 		createInterval();
 	}
 });
 discover.on('cancel', function(message) {
 	delete subscriptions[message.uniqueToken];
-	if (Object.keys(subscriptions).length === 0 && interval) {
-		clearInterval(interval);
-		interval = null;
+	if (Object.keys(subscriptions).length === 0) {
+		stopInterval();
 	}
 });
 
