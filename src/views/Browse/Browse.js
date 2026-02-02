@@ -302,14 +302,14 @@ const Browse = ({
 
 	useEffect(() => {
 		const carouselSpeed = settings.carouselSpeed || 8000;
-		if (featuredItems.length <= 1 || !featuredFocused || carouselSpeed === 0) return;
+		if (settings.showFeaturedBar === false || featuredItems.length <= 1 || !featuredFocused || browseMode !== 'featured' || carouselSpeed === 0) return;
 
 		const interval = setInterval(() => {
 			setCurrentFeaturedIndex((prev) => (prev + 1) % featuredItems.length);
 		}, carouselSpeed);
 
 		return () => clearInterval(interval);
-	}, [featuredItems.length, featuredFocused, settings.carouselSpeed]);
+	}, [featuredItems.length, featuredFocused, browseMode, settings.carouselSpeed, settings.showFeaturedBar]);
 
 	useEffect(() => {
 		let backdropId = null;
