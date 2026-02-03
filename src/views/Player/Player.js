@@ -1,5 +1,7 @@
 import {useState, useEffect, useCallback, useRef, useMemo} from 'react';
 import Spottable from '@enact/spotlight/Spottable';
+import SpotlightContainerDecorator from '@enact/spotlight/SpotlightContainerDecorator';
+import Spotlight from '@enact/spotlight';
 import Button from '@enact/sandstone/Button';
 import * as playback from '../../services/playback';
 import {
@@ -17,6 +19,13 @@ import css from './Player.module.less';
 
 const SpottableButton = Spottable('button');
 const SpottableDiv = Spottable('div');
+
+const ModalContainer = SpotlightContainerDecorator({
+	enterTo: 'default-element',
+	defaultElement: '[data-selected="true"]',
+	straightOnly: false,
+	preserveId: true
+}, 'div');
 
 const formatTime = (seconds) => {
 	const h = Math.floor(seconds / 3600);
@@ -87,21 +96,15 @@ const IconSubtitle = () => (
 	</svg>
 );
 
-const IconPlayMode = () => (
-	<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor">
-		<path d="M170-228q-38-44-61-98T80-440h82q6 44 22 83.5t42 72.5l-56 56ZM80-520q8-60 30-114t60-98l56 56q-26 33-42 72.5T162-520H80ZM438-82q-60-6-113.5-29T226-170l56-58q35 26 73.5 43t82.5 23v80ZM284-732l-58-58q45-36 98.5-59T440-878v80q-45 6-84 23t-72 43Zm96 432v-360l280 180-280 180ZM520-82v-80q121-17 200.5-107T800-480q0-121-79.5-211T520-798v-80q154 17 257 130t103 268q0 155-103 268T520-82Z"/>
-	</svg>
-);
-
 const IconAudio = () => (
 	<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor">
-		<path d="M560-131v-82q90-26 145-100t55-168q0-94-55-168T560-749v-82q124 28 202 125.5T840-481q0 127-78 224.5T560-131ZM120-360v-240h160l200-200v640L280-360H120Zm440 40v-322q47 22 73.5 66t26.5 96q0 51-26.5 94.5T560-320ZM400-606l-86 86H200v80h114l86 86v-252ZM300-480Z"/>
+		<path d="M400-120q-66 0-113-47t-47-113q0-66 47-113t113-47q23 0 42.5 5.5T480-418v-422h240v160H560v400q0 66-47 113t-113 47Z"/>
 	</svg>
 );
 
 const IconChapters = () => (
 	<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor">
-		<path d="M320-280q17 0 28.5-11.5T360-320v-320q0-17-11.5-28.5T320-680q-17 0-28.5 11.5T280-640v320q0 17 11.5 28.5T320-280Zm160 0q17 0 28.5-11.5T520-320v-320q0-17-11.5-28.5T480-680q-17 0-28.5 11.5T440-640v320q0 17 11.5 28.5T480-280Zm160 0q17 0 28.5-11.5T680-320v-320q0-17-11.5-28.5T640-680q-17 0-28.5 11.5T600-640v320q0 17 11.5 28.5T640-280ZM200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Zm0-560v560-560Z"/>
+		<path d="m160-800 80 160h120l-80-160h80l80 160h120l-80-160h80l80 160h120l-80-160h120q33 0 56.5 23.5T880-720v480q0 33-23.5 56.5T800-160H160q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800Zm0 240v320h640v-320H160Zm0 0v320-320Z"/>
 	</svg>
 );
 
@@ -125,7 +128,7 @@ const IconSpeed = () => (
 
 const IconQuality = () => (
 	<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="currentColor">
-		<path d="m370-80-16-128q-13-5-24.5-12T307-235l-119 50L78-375l103-78q-1-7-1-13.5v-27q0-6.5 1-13.5L78-585l110-190 119 50q11-8 23-15t24-12l16-128h220l16 128q13 5 24.5 12t22.5 15l119-50 110 190-103 78q1 7 1 13.5v27q0 6.5-2 13.5l103 78-110 190-118-50q-11 8-23 15t-24 12L590-80H370Zm70-80h79l14-106q31-8 57.5-23.5T639-327l99 41 39-68-86-65q5-14 7-29.5t2-31.5q0-16-2-31.5t-7-29.5l86-65-39-68-99 42q-22-23-48.5-38.5T533-694l-13-106h-79l-14 106q-31 8-57.5 23.5T321-633l-99-41-39 68 86 64q-5 15-7 30t-2 32q0 16 2 31t7 30l-86 65 39 68 99-42q22 23 48.5 38.5T427-266l13 106Zm42-180q58 0 99-41t41-99q0-58-41-99t-99-41q-59 0-99.5 41T342-480q0 58 40.5 99t99.5 41Zm-2-140Z"/>
+		<path d="M170-228q-38-44-61-98T80-440h82q6 44 22 83.5t42 72.5l-56 56ZM80-520q8-60 30-114t60-98l56 56q-26 33-42 72.5T162-520H80ZM438-82q-60-6-113.5-29T226-170l56-58q35 26 73.5 43t82.5 23v80ZM284-732l-58-58q45-36 98.5-59T440-878v80q-45 6-84 23t-72 43Zm96 432v-360l280 180-280 180ZM520-82v-80q121-17 200.5-107T800-480q0-121-79.5-211T520-798v-80q154 17 257 130t103 268q0 155-103 268T520-82Z"/>
 	</svg>
 );
 
@@ -187,8 +190,7 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 		{id: 'rewind', icon: <IconRewind />, label: 'Rewind', action: 'rewind'},
 		{id: 'forward', icon: <IconForward />, label: 'Forward', action: 'forward'},
 		{id: 'audio', icon: <IconAudio />, label: 'Audio', action: 'audio', disabled: audioStreams.length === 0},
-		{id: 'subtitle', icon: <IconSubtitle />, label: 'Subtitles', action: 'subtitle', disabled: subtitleStreams.length === 0},
-		{id: 'playMode', icon: <IconPlayMode />, label: 'Play Mode', action: 'quality'}
+		{id: 'subtitle', icon: <IconSubtitle />, label: 'Subtitles', action: 'subtitle', disabled: subtitleStreams.length === 0}
 	], [isPaused, audioStreams.length, subtitleStreams.length]);
 
 	const bottomButtons = useMemo(() => [
@@ -760,11 +762,29 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 	// Modal handlers
 	const openModal = useCallback((modal) => {
 		setActiveModal(modal);
+		window.requestAnimationFrame(() => {
+			const modalId = `${modal}-modal`;
+			
+			const focusResult = Spotlight.focus(modalId);
+			
+			if (!focusResult) {
+				const selectedItem = document.querySelector(`[data-modal="${modal}"] [data-selected="true"]`);
+				const firstItem = document.querySelector(`[data-modal="${modal}"] button`);
+				if (selectedItem) {
+					Spotlight.focus(selectedItem);
+				} else if (firstItem) {
+					Spotlight.focus(firstItem);
+				}
+			}
+		});
 	}, []);
 
 	const closeModal = useCallback(() => {
 		setActiveModal(null);
 		showControls();
+		window.requestAnimationFrame(() => {
+			Spotlight.focus('player-controls');
+		});
 	}, [showControls]);
 
 	// Track selection - using data attributes to avoid arrow functions in JSX
@@ -1078,11 +1098,11 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 						{topButtons.map((btn) => (
 							<SpottableButton
 								key={btn.id}
-								className={css.controlBtn}
-							data-action={btn.action}
-							onClick={handleControlButtonClick}
-								disabled={btn.disabled}
+								className={`${css.controlBtn} ${btn.disabled ? css.controlBtnDisabled : ''}`}
+								data-action={btn.action}
+								onClick={btn.disabled ? undefined : handleControlButtonClick}
 								aria-label={btn.label}
+								aria-disabled={btn.disabled}
 								spotlightDisabled={focusRow !== 'top'}
 							>
 								{btn.icon}
@@ -1127,11 +1147,11 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 						{bottomButtons.map((btn) => (
 							<SpottableButton
 								key={btn.id}
-								className={css.controlBtn}
-							data-action={btn.action}
-							onClick={handleControlButtonClick}
-								disabled={btn.disabled}
+								className={`${css.controlBtn} ${btn.disabled ? css.controlBtnDisabled : ''}`}
+								data-action={btn.action}
+								onClick={btn.disabled ? undefined : handleControlButtonClick}
 								aria-label={btn.label}
+								aria-disabled={btn.disabled}
 								spotlightDisabled={focusRow !== 'bottom'}
 							>
 								{btn.icon}
@@ -1144,7 +1164,7 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 			{/* Audio Track Modal */}
 			{activeModal === 'audio' && (
 				<div className={css.trackModal} onClick={closeModal}>
-					<div className={css.modalContent} onClick={stopPropagation}>
+					<ModalContainer className={css.modalContent} onClick={stopPropagation} data-modal="audio" spotlightId="audio-modal">
 						<h2 className={css.modalTitle}>Select Audio Track</h2>
 						<div className={css.trackList}>
 							{audioStreams.map((stream) => (
@@ -1152,6 +1172,7 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 									key={stream.index}
 									className={`${css.trackItem} ${stream.index === selectedAudioIndex ? css.selected : ''}`}
 									data-index={stream.index}
+									data-selected={stream.index === selectedAudioIndex ? 'true' : undefined}
 									onClick={handleSelectAudio}
 								>
 									<span className={css.trackName}>{stream.displayTitle}</span>
@@ -1160,19 +1181,20 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 							))}
 						</div>
 						<p className={css.modalFooter}>Press BACK to close</p>
-					</div>
+					</ModalContainer>
 				</div>
 			)}
 
 			{/* Subtitle Modal */}
 			{activeModal === 'subtitle' && (
 				<div className={css.trackModal} onClick={closeModal}>
-					<div className={css.modalContent} onClick={stopPropagation}>
+					<ModalContainer className={css.modalContent} onClick={stopPropagation} data-modal="subtitle" spotlightId="subtitle-modal">
 						<h2 className={css.modalTitle}>Select Subtitle</h2>
 						<div className={css.trackList}>
 							<SpottableButton
 								className={`${css.trackItem} ${selectedSubtitleIndex === -1 ? css.selected : ''}`}
 								data-index={-1}
+								data-selected={selectedSubtitleIndex === -1 ? 'true' : undefined}
 								onClick={handleSelectSubtitle}
 							>
 								<span className={css.trackName}>Off</span>
@@ -1182,6 +1204,7 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 									key={stream.index}
 									className={`${css.trackItem} ${stream.index === selectedSubtitleIndex ? css.selected : ''}`}
 									data-index={stream.index}
+									data-selected={stream.index === selectedSubtitleIndex ? 'true' : undefined}
 									onClick={handleSelectSubtitle}
 								>
 									<span className={css.trackName}>{stream.displayTitle}</span>
@@ -1190,14 +1213,14 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 							))}
 						</div>
 						<p className={css.modalFooter}>Press BACK to close</p>
-					</div>
+					</ModalContainer>
 				</div>
 			)}
 
 			{/* Speed Modal */}
 			{activeModal === 'speed' && (
 				<div className={css.trackModal} onClick={closeModal}>
-					<div className={css.modalContent} onClick={stopPropagation}>
+					<ModalContainer className={css.modalContent} onClick={stopPropagation} data-modal="speed" spotlightId="speed-modal">
 						<h2 className={css.modalTitle}>Playback Speed</h2>
 						<div className={css.trackList}>
 							{PLAYBACK_RATES.map((rate) => (
@@ -1205,6 +1228,7 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 									key={rate}
 									className={`${css.trackItem} ${rate === playbackRate ? css.selected : ''}`}
 									data-rate={rate}
+									data-selected={rate === playbackRate ? 'true' : undefined}
 									onClick={handleSelectSpeed}
 								>
 									<span className={css.trackName}>{rate === 1 ? 'Normal' : `${rate}x`}</span>
@@ -1212,14 +1236,14 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 							))}
 						</div>
 						<p className={css.modalFooter}>Press BACK to close</p>
-					</div>
+					</ModalContainer>
 				</div>
 			)}
 
 			{/* Quality Modal */}
 			{activeModal === 'quality' && (
 				<div className={css.trackModal} onClick={closeModal}>
-					<div className={css.modalContent} onClick={stopPropagation}>
+					<ModalContainer className={css.modalContent} onClick={stopPropagation} data-modal="quality" spotlightId="quality-modal">
 						<h2 className={css.modalTitle}>Max Bitrate</h2>
 						<div className={css.trackList}>
 							{QUALITY_PRESETS.map((preset) => (
@@ -1227,6 +1251,7 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 									key={preset.label}
 									className={`${css.trackItem} ${selectedQuality === preset.value ? css.selected : ''}`}
 									data-value={preset.value === null ? 'null' : preset.value}
+									data-selected={selectedQuality === preset.value ? 'true' : undefined}
 									onClick={handleSelectQuality}
 								>
 									<span className={css.trackName}>{preset.label}</span>
@@ -1234,14 +1259,14 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 							))}
 						</div>
 						<p className={css.modalFooter}>Current: {playMethod || 'Unknown'}</p>
-					</div>
+					</ModalContainer>
 				</div>
 			)}
 
 			{/* Chapter Modal */}
 			{activeModal === 'chapter' && (
 				<div className={css.trackModal} onClick={closeModal}>
-					<div className={`${css.modalContent} ${css.chaptersModal}`} onClick={stopPropagation}>
+					<ModalContainer className={`${css.modalContent} ${css.chaptersModal}`} onClick={stopPropagation} data-modal="chapter" spotlightId="chapter-modal">
 						<h2 className={css.modalTitle}>Chapters</h2>
 						<div className={css.trackList}>
 							{chapters.map((chapter) => {
@@ -1254,6 +1279,7 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 										key={chapter.index}
 										className={`${css.chapterItem} ${isCurrent ? css.currentChapter : ''}`}
 										data-ticks={chapter.startPositionTicks}
+										data-selected={isCurrent ? 'true' : undefined}
 										onClick={handleSelectChapter}
 									>
 										<span className={css.chapterTime}>{formatTime(chapterTime)}</span>
@@ -1263,7 +1289,7 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 							})}
 						</div>
 						<p className={css.modalFooter}>Press BACK to close</p>
-					</div>
+					</ModalContainer>
 				</div>
 			)}
 

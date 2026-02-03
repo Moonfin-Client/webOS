@@ -243,6 +243,19 @@
 	pointer-events: none;
 }
 
+/* Disabled state that still allows focus */
+.controlBtnDisabled {
+	opacity: 0.3;
+}
+
+.controlBtnDisabled:hover,
+.controlBtnDisabled:focus {
+	background: rgba(255, 255, 255, 0.3);
+	transform: scale(1.05);
+	color: rgba(255, 255, 255, 0.5);
+	cursor: not-allowed;
+}
+
 /* Progress Container */
 .progressContainer {
 	margin-bottom: 30px;
