@@ -5,6 +5,7 @@ import {VirtualGridList} from '@enact/sandstone/VirtualList';
 import Popup from '@enact/sandstone/Popup';
 import Button from '@enact/sandstone/Button';
 import {useAuth} from '../../context/AuthContext';
+import {useSettings} from '../../context/SettingsContext';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import {getImageUrl, getBackdropId, getPrimaryImageId} from '../../utils/helpers';
 
@@ -36,6 +37,7 @@ const BACKDROP_DEBOUNCE_MS = 300;
 
 const GenreBrowse = ({genre, libraryId, onSelectItem, onBack}) => {
 	const {api, serverUrl} = useAuth();
+	const {settings} = useSettings();
 	const [items, setItems] = useState([]);
 	const [isLoading, setIsLoading] = useState(true);
 	const [serverTotalCount, setServerTotalCount] = useState(0);
@@ -349,7 +351,12 @@ const GenreBrowse = ({genre, libraryId, onSelectItem, onBack}) => {
 		<div className={css.page}>
 			<div className={css.backdrop}>
 				{backdropUrl && (
-					<img className={css.backdropImage} src={backdropUrl} alt="" />
+					<img
+						className={css.backdropImage}
+						src={backdropUrl}
+						alt=""
+						style={{filter: settings.backdropBlurHome > 0 ? `blur(${settings.backdropBlurHome}px)` : 'none'}}
+					/>
 				)}
 				<div className={css.backdropOverlay} />
 			</div>

@@ -3,6 +3,7 @@ import Spottable from '@enact/spotlight/Spottable';
 import SpotlightContainerDecorator from '@enact/spotlight/SpotlightContainerDecorator';
 import Spotlight from '@enact/spotlight';
 import {useJellyseerr} from '../../context/JellyseerrContext';
+import {useSettings} from '../../context/SettingsContext';
 import jellyseerrApi from '../../services/jellyseerrApi';
 import LoadingSpinner from '../../components/LoadingSpinner';
 
@@ -257,6 +258,7 @@ const DiscoverRow = memo(function DiscoverRow({
 
 const JellyseerrDiscover = ({onSelectItem, onSelectGenre, onSelectNetwork, onSelectStudio, onBack}) => {
 	const {isAuthenticated, isEnabled} = useJellyseerr();
+	const {settings} = useSettings();
 	const [rows, setRows] = useState({});
 	const [rowPages, setRowPages] = useState({});
 	const [rowHasMore, setRowHasMore] = useState({});
@@ -475,7 +477,14 @@ const JellyseerrDiscover = ({onSelectItem, onSelectGenre, onSelectNetwork, onSel
 	return (
 		<div className={css.container}>
 			<div className={css.backdrop}>
-				{backdropUrl && <img className={css.backdropImage} src={backdropUrl} alt="" />}
+				{backdropUrl && (
+					<img
+						className={css.backdropImage}
+						src={backdropUrl}
+						alt=""
+						style={{filter: settings.backdropBlurHome > 0 ? `blur(${settings.backdropBlurHome}px)` : 'none'}}
+					/>
+				)}
 				<div className={css.backdropOverlay} />
 			</div>
 			{isLoading ? (

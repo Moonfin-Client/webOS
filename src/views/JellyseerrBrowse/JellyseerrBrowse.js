@@ -4,6 +4,7 @@ import {VirtualGridList} from '@enact/sandstone/VirtualList';
 import Popup from '@enact/sandstone/Popup';
 import Button from '@enact/sandstone/Button';
 import {useJellyseerr} from '../../context/JellyseerrContext';
+import {useSettings} from '../../context/SettingsContext';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import * as jellyseerrApi from '../../services/jellyseerrApi';
 
@@ -32,6 +33,7 @@ const MAX_PAGES = 25;
  */
 const JellyseerrBrowse = ({browseType, item, mediaType: initialMediaType, onSelectItem, onBack}) => {
 	const {isEnabled} = useJellyseerr();
+	const {settings} = useSettings();
 	const [items, setItems] = useState([]);
 	const [isLoading, setIsLoading] = useState(true);
 	const [totalCount, setTotalCount] = useState(0);
@@ -298,7 +300,12 @@ const JellyseerrBrowse = ({browseType, item, mediaType: initialMediaType, onSele
 		<div className={css.page}>
 			<div className={css.backdrop}>
 				{backdropUrl && (
-					<img className={css.backdropImage} src={backdropUrl} alt="" />
+					<img
+						className={css.backdropImage}
+						src={backdropUrl}
+						alt=""
+						style={{filter: settings.backdropBlurHome > 0 ? `blur(${settings.backdropBlurHome}px)` : 'none'}}
+					/>
 				)}
 				<div className={css.backdropOverlay} />
 			</div>

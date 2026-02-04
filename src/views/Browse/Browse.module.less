@@ -31,7 +31,6 @@
 	transform: scale(1.1) translateZ(0);
 	opacity: 1;
 	transition: opacity 0.5s ease;
-	filter: blur(15px);
 	will-change: opacity;
 }
 
@@ -219,7 +218,7 @@
 	border-radius: 50%;
 	cursor: pointer;
 	z-index: 10;
-	transition: all 0.3s ease;
+	transition: background 0.3s ease, transform 0.3s ease;
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -264,7 +263,7 @@
 	height: 10px;
 	border-radius: 50%;
 	background: rgba(255, 255, 255, 0.3);
-	transition: all 0.3s ease;
+	transition: background 0.3s ease;
 
 	&.active {
 		background: #ffffff;

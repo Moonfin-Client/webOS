@@ -13,18 +13,18 @@ const MediaCard = ({item, serverUrl, cardType = 'portrait', onSelect, onFocusIte
 	const imageUrl = useMemo(() => {
 		if (isLandscape && item.Type === 'Episode') {
 			if (item.ImageTags?.Primary) {
-				return getImageUrl(serverUrl, item.Id, 'Primary', {maxWidth: 500, quality: 100});
+				return getImageUrl(serverUrl, item.Id, 'Primary', {maxWidth: 500, quality: 90});
 			}
 			if (item.ParentThumbItemId) {
-				return getImageUrl(serverUrl, item.ParentThumbItemId, 'Thumb', {maxWidth: 500, quality: 100});
+				return getImageUrl(serverUrl, item.ParentThumbItemId, 'Thumb', {maxWidth: 500, quality: 90});
 			}
 			if (item.ParentBackdropItemId) {
-				return getImageUrl(serverUrl, item.ParentBackdropItemId, 'Backdrop', {maxWidth: 500, quality: 100});
+				return getImageUrl(serverUrl, item.ParentBackdropItemId, 'Backdrop', {maxWidth: 500, quality: 90});
 			}
 		}
 
 		if (item.ImageTags?.Primary) {
-			return getImageUrl(serverUrl, item.Id, 'Primary', {maxHeight: 400, quality: 100});
+			return getImageUrl(serverUrl, item.Id, 'Primary', {maxHeight: 400, quality: 90});
 		}
 
 		return null;

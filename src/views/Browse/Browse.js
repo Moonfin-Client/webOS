@@ -832,6 +832,7 @@ const Browse = ({
 					{filteredRows.map((row, index) => (
 						<MediaRow
 							key={row.id}
+							rowId={row.id}
 							title={row.title}
 							items={row.items}
 							serverUrl={serverUrl}

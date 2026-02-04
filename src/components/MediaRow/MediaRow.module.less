@@ -3,6 +3,9 @@
 	overflow: visible;
 	padding-left: 60px;
 	padding-right: 60px;
+	contain: layout style;
+	content-visibility: auto;
+	contain-intrinsic-size: 0 450px;
 
 	&:first-child {
 		margin-top: 40px;
@@ -26,6 +29,8 @@
 	margin-right: -60px;
 	-webkit-overflow-scrolling: touch;
 	transform: translateZ(0);
+	will-change: scroll-position;
+	contain: layout style;
 
 	&::-webkit-scrollbar {
 		display: none;
@@ -37,6 +42,7 @@
 	padding: 20px 0;
 	width: max-content;
 	transform: translateZ(0);
+	contain: layout style;
 
 	> * + * {
 		margin-left: 24px;
