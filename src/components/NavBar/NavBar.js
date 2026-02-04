@@ -72,6 +72,36 @@ const NavBar = ({
 		};
 	}, []);
 
+	const getUiColorRgb = useCallback((colorKey) => {
+		const colorMap = {
+			dark: '40, 40, 40',
+			black: '0, 0, 0',
+			charcoal: '54, 54, 54',
+			slate: '47, 54, 64',
+			navy: '20, 30, 48',
+			midnight: '25, 25, 65',
+			ocean: '20, 50, 70',
+			teal: '0, 60, 60',
+			forest: '25, 50, 35',
+			olive: '50, 50, 25',
+			purple: '48, 25, 52',
+			plum: '60, 30, 60',
+			wine: '60, 20, 30',
+			maroon: '50, 20, 20',
+			brown: '50, 35, 25'
+		};
+		return colorMap[colorKey] || '40, 40, 40';
+	}, []);
+
+	const navPillStyle = useMemo(() => {
+		const rgb = getUiColorRgb(settings.uiColor);
+		return {
+			background: `rgba(${rgb}, ${(settings.uiOpacity || 85) / 100})`,
+			backdropFilter: settings.uiBlur > 0 ? `blur(${settings.uiBlur}px)` : 'none',
+			WebkitBackdropFilter: settings.uiBlur > 0 ? `blur(${settings.uiBlur}px)` : 'none'
+		};
+	}, [settings.uiBlur, settings.uiOpacity, settings.uiColor, getUiColorRgb]);
+
 	const userAvatarUrl = user?.PrimaryImageTag
 		? `${serverUrl}/Users/${user.Id}/Images/Primary?tag=${user.PrimaryImageTag}&quality=90&maxHeight=100`
 		: null;
@@ -175,7 +205,7 @@ const NavBar = ({
 			</div>
 
 			<div className={css.navCenter}>
-				<div className={css.navPill}>
+				<div className={css.navPill} style={navPillStyle}>
 					<SpottableButton
 						className={`${css.navBtn} ${css.navBtnIcon} ${css.expandableBtn} spottable-default`}
 						onClick={onHome}

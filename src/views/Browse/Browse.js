@@ -53,6 +53,45 @@ const Browse = ({
 	const preloadedImagesRef = useRef(new Set());
 	const focusItemTimeoutRef = useRef(null);
 
+	const getUiColorRgb = useCallback((colorKey) => {
+		const colorMap = {
+			dark: '40, 40, 40',
+			black: '0, 0, 0',
+			charcoal: '54, 54, 54',
+			slate: '47, 54, 64',
+			navy: '20, 30, 48',
+			midnight: '25, 25, 65',
+			ocean: '20, 50, 70',
+			teal: '0, 60, 60',
+			forest: '25, 50, 35',
+			olive: '50, 50, 25',
+			purple: '48, 25, 52',
+			plum: '60, 30, 60',
+			wine: '60, 20, 30',
+			maroon: '50, 20, 20',
+			brown: '50, 35, 25'
+		};
+		return colorMap[colorKey] || '0, 0, 0';
+	}, []);
+
+	const uiPanelStyle = useMemo(() => {
+		const rgb = getUiColorRgb(settings.uiColor);
+		return {
+			background: `rgba(${rgb}, ${(settings.uiOpacity || 85) / 100 * 0.6})`,
+			backdropFilter: settings.uiBlur > 0 ? `blur(${settings.uiBlur / 2}px)` : 'none',
+			WebkitBackdropFilter: settings.uiBlur > 0 ? `blur(${settings.uiBlur / 2}px)` : 'none'
+		};
+	}, [settings.uiBlur, settings.uiOpacity, settings.uiColor, getUiColorRgb]);
+
+	const uiButtonStyle = useMemo(() => {
+		const rgb = getUiColorRgb(settings.uiColor);
+		return {
+			background: `rgba(${rgb}, ${(settings.uiOpacity || 85) / 100 * 0.7})`,
+			backdropFilter: settings.uiBlur > 0 ? `blur(${settings.uiBlur / 2}px)` : 'none',
+			WebkitBackdropFilter: settings.uiBlur > 0 ? `blur(${settings.uiBlur / 2}px)` : 'none'
+		};
+	}, [settings.uiBlur, settings.uiOpacity, settings.uiColor, getUiColorRgb]);
+
 	const homeRowsConfig = useMemo(() => {
 		return [...(settings.homeRows || [])].sort((a, b) => a.order - b.order);
 	}, [settings.homeRows]);
@@ -725,6 +764,7 @@ const Browse = ({
 									<SpottableButton
 										className={`${css.carouselNav} ${css.carouselNavLeft}`}
 										onClick={handleCarouselPrevClick}
+										style={uiButtonStyle}
 									>
 										<svg viewBox="0 0 24 24" width="32" height="32">
 											<path fill="currentColor" d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
@@ -733,6 +773,7 @@ const Browse = ({
 									<SpottableButton
 										className={`${css.carouselNav} ${css.carouselNavRight}`}
 										onClick={handleCarouselNextClick}
+										style={uiButtonStyle}
 									>
 										<svg viewBox="0 0 24 24" width="32" height="32">
 											<path fill="currentColor" d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z" />
@@ -742,7 +783,7 @@ const Browse = ({
 							)}
 
 							<div className={css.featuredContent}>
-								<div className={css.featuredInfoBox}>
+								<div className={css.featuredInfoBox} style={uiPanelStyle}>
 									<h1 className={css.featuredTitle}>{currentFeatured.Name}</h1>
 									<div className={css.featuredMeta}>
 										{currentFeatured.ProductionYear && (

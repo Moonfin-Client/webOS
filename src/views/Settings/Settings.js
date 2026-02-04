@@ -90,6 +90,39 @@ const BLUR_OPTIONS = [
 	{value: 40, label: 'Heavy'}
 ];
 
+const UI_BLUR_OPTIONS = [
+	{value: 0, label: 'Off'},
+	{value: 10, label: 'Light'},
+	{value: 20, label: 'Medium'},
+	{value: 30, label: 'Strong'}
+];
+
+const UI_OPACITY_OPTIONS = [
+	{value: 50, label: '50%'},
+	{value: 65, label: '65%'},
+	{value: 75, label: '75%'},
+	{value: 85, label: '85%'},
+	{value: 95, label: '95%'}
+];
+
+const UI_COLOR_OPTIONS = [
+	{value: 'dark', label: 'Dark Gray', rgb: '40, 40, 40'},
+	{value: 'black', label: 'Black', rgb: '0, 0, 0'},
+	{value: 'charcoal', label: 'Charcoal', rgb: '54, 54, 54'},
+	{value: 'slate', label: 'Slate', rgb: '47, 54, 64'},
+	{value: 'navy', label: 'Navy', rgb: '20, 30, 48'},
+	{value: 'midnight', label: 'Midnight Blue', rgb: '25, 25, 65'},
+	{value: 'ocean', label: 'Ocean', rgb: '20, 50, 70'},
+	{value: 'teal', label: 'Teal', rgb: '0, 60, 60'},
+	{value: 'forest', label: 'Forest', rgb: '25, 50, 35'},
+	{value: 'olive', label: 'Olive', rgb: '50, 50, 25'},
+	{value: 'purple', label: 'Purple', rgb: '48, 25, 52'},
+	{value: 'plum', label: 'Plum', rgb: '60, 30, 60'},
+	{value: 'wine', label: 'Wine', rgb: '60, 20, 30'},
+	{value: 'maroon', label: 'Maroon', rgb: '50, 20, 20'},
+	{value: 'brown', label: 'Brown', rgb: '50, 35, 25'}
+];
+
 const AUTH_METHODS = {
 	NONE: 'none',
 	JELLYFIN: 'jellyfin',
@@ -309,6 +342,24 @@ const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
 		updateSetting('backdropBlurDetail', BLUR_OPTIONS[nextIndex].value);
 	}, [settings.backdropBlurDetail, updateSetting]);
 
+	const cycleUiBlur = useCallback(() => {
+		const currentIndex = UI_BLUR_OPTIONS.findIndex(o => o.value === settings.uiBlur);
+		const nextIndex = (currentIndex + 1) % UI_BLUR_OPTIONS.length;
+		updateSetting('uiBlur', UI_BLUR_OPTIONS[nextIndex].value);
+	}, [settings.uiBlur, updateSetting]);
+
+	const cycleUiOpacity = useCallback(() => {
+		const currentIndex = UI_OPACITY_OPTIONS.findIndex(o => o.value === settings.uiOpacity);
+		const nextIndex = (currentIndex + 1) % UI_OPACITY_OPTIONS.length;
+		updateSetting('uiOpacity', UI_OPACITY_OPTIONS[nextIndex].value);
+	}, [settings.uiOpacity, updateSetting]);
+
+	const cycleUiColor = useCallback(() => {
+		const currentIndex = UI_COLOR_OPTIONS.findIndex(o => o.value === settings.uiColor);
+		const nextIndex = (currentIndex + 1) % UI_COLOR_OPTIONS.length;
+		updateSetting('uiColor', UI_COLOR_OPTIONS[nextIndex].value);
+	}, [settings.uiColor, updateSetting]);
+
 	const openHomeRowsModal = useCallback(() => {
 		setTempHomeRows([...(settings.homeRows || DEFAULT_HOME_ROWS)].sort((a, b) => a.order - b.order));
 		setShowHomeRowsModal(true);
@@ -475,6 +526,21 @@ const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
 		return option?.label || 'Medium';
 	};
 
+	const getUiBlurLabel = () => {
+		const option = UI_BLUR_OPTIONS.find(o => o.value === settings.uiBlur);
+		return option?.label || 'Medium';
+	};
+
+	const getUiOpacityLabel = () => {
+		const option = UI_OPACITY_OPTIONS.find(o => o.value === settings.uiOpacity);
+		return option?.label || '85%';
+	};
+
+	const getUiColorLabel = () => {
+		const option = UI_COLOR_OPTIONS.find(o => o.value === settings.uiColor);
+		return option?.label || 'Dark Gray';
+	};
+
 	const renderSettingItem = (title, description, value, onClick, key) => (
 		<SpottableDiv
 			key={key}
@@ -561,6 +627,18 @@ const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
 				)}
 				{renderSettingItem('Details Backdrop Blur', 'Amount of blur on details page backdrop',
 					getBackdropBlurLabel(settings.backdropBlurDetail), cycleBackdropBlurDetail, 'setting-backdropBlurDetail'
+				)}
+			</div>
+			<div className={css.settingsGroup}>
+				<h2>UI Elements</h2>
+				{renderSettingItem('UI Blur', 'Blur effect on navbar and UI panels (disable for better performance)',
+					getUiBlurLabel(), cycleUiBlur, 'setting-uiBlur'
+				)}
+				{renderSettingItem('UI Opacity', 'Background opacity of navbar and UI panels',
+					getUiOpacityLabel(), cycleUiOpacity, 'setting-uiOpacity'
+				)}
+				{renderSettingItem('UI Color', 'Background color of navbar and UI panels',
+					getUiColorLabel(), cycleUiColor, 'setting-uiColor'
 				)}
 			</div>
 			<div className={css.settingsGroup}>
