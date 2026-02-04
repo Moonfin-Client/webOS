@@ -130,14 +130,14 @@ export const getMediaCapabilities = async () => {
 
 		const cfg = result.configs || {};
 		const webosVersion = getWebOSVersion();
-		
+
 		// HDR detection
 		// - All webOS 4+ TVs support HDR10 and HLG via HEVC Main10 profile
 		// - Dolby Vision only via Luna API confirmation
 		const hasHdr = cfg['tv.model.supportHDR'] === true || webosVersion >= 4;
 		const hasHlg = cfg['tv.config.supportHLG'] === true || hasHdr;
 		const hasDolbyVision = cfg['tv.config.supportDolbyHDRContents'] === true;
-		
+
 		console.log('[webosVideo] HDR detection:', {
 			webosVersion,
 			'tv.model.supportHDR': cfg['tv.model.supportHDR'],
@@ -196,7 +196,7 @@ export const getMediaCapabilities = async () => {
 
 export const getPlayMethod = (mediaSource, capabilities) => {
 	console.log('[webosVideo] getPlayMethod called with capabilities.truehd:', capabilities?.truehd, 'capabilities.dtshd:', capabilities?.dtshd);
-	
+
 	if (!mediaSource) {
 		console.log('[webosVideo] No media source provided');
 		return 'Transcode';
@@ -204,7 +204,7 @@ export const getPlayMethod = (mediaSource, capabilities) => {
 
 	const container = (mediaSource.Container || '').toLowerCase();
 	const videoStream = mediaSource.MediaStreams?.find(s => s.Type === 'Video');
-	
+
 	// Get the audio stream that will actually be used for playback
 	// Priority: DefaultAudioStreamIndex > first audio stream marked as default > first audio stream
 	const audioStreams = mediaSource.MediaStreams?.filter(s => s.Type === 'Audio') || [];
@@ -247,20 +247,20 @@ export const getPlayMethod = (mediaSource, capabilities) => {
 	// Build supported audio codecs list
 	const audioCodec = (audioStream?.Codec || '').toLowerCase();
 	const supportedAudioCodecs = ['aac', 'mp3', 'mp2', 'mp1', 'flac', 'pcm_s16le', 'pcm_s24le', 'lpcm', 'wav'];
-	
+
 	// AC3/EAC3 support is container-specific on webOS 5
 	// Only reliably works in broadcast containers (TS, M2TS)
 	const isBroadcastContainer = ['ts', 'mpegts', 'mts', 'm2ts'].includes(container);
 	const ac3Supported = capabilities.ac3 && (capabilities.webosVersion !== 5 || isBroadcastContainer);
 	const eac3Supported = capabilities.eac3 && (capabilities.webosVersion !== 5 || isBroadcastContainer);
-	
+
 	if (ac3Supported) supportedAudioCodecs.push('ac3', 'dolby');
 	if (eac3Supported) supportedAudioCodecs.push('eac3', 'ec3');
 	if (capabilities.dts) supportedAudioCodecs.push('dts', 'dca', 'dts-hd', 'dtshd');
 	if (capabilities.truehd) supportedAudioCodecs.push('truehd', 'mlp');
 	if (capabilities.webosVersion >= 24) supportedAudioCodecs.push('opus');
 	supportedAudioCodecs.push('vorbis', 'wma', 'amr', 'amrnb', 'amrwb');
-	
+
 	const audioOkResult = !audioCodec || supportedAudioCodecs.includes(audioCodec);
 	console.log('[webosVideo] Audio check: audioCodec=' + audioCodec + ' truehd=' + capabilities.truehd + ' inList=' + supportedAudioCodecs.includes(audioCodec) + ' audioOk=' + audioOkResult);
 

@@ -3,6 +3,7 @@ import Spottable from '@enact/spotlight/Spottable';
 import SpotlightContainerDecorator from '@enact/spotlight/SpotlightContainerDecorator';
 import Spotlight from '@enact/spotlight';
 import Button from '@enact/sandstone/Button';
+import Hls from 'hls.js';
 import * as playback from '../../services/playback';
 import {
 	initLunaAPI,
@@ -159,8 +160,7 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 	const [chapters, setChapters] = useState([]);
 	const [selectedAudioIndex, setSelectedAudioIndex] = useState(null);
 	const [selectedSubtitleIndex, setSelectedSubtitleIndex] = useState(-1);
-	const [subtitleUrl, setSubtitleUrl] = useState(null);
-	const [subtitleTrackEvents, setSubtitleTrackEvents] = useState(null);
+	const [subtitleTrackEvents, setSubtitleTrackEvents] = useState(null)
 	const [currentSubtitleText, setCurrentSubtitleText] = useState(null);
 	const [controlsVisible, setControlsVisible] = useState(false);
 	const [activeModal, setActiveModal] = useState(null);
@@ -179,6 +179,7 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 	const [focusRow, setFocusRow] = useState('top');
 
 	const videoRef = useRef(null);
+	const hlsRef = useRef(null);
 	const positionRef = useRef(0);
 	const playSessionRef = useRef(null);
 	const runTimeRef = useRef(0);
@@ -301,7 +302,16 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 				setPlayMethod(result.playMethod);
 				setMediaSourceId(result.mediaSourceId);
 				playSessionRef.current = result.playSessionId;
-				positionRef.current = startPosition;
+
+				// For webOS 5 transcodes, server sends stream from position 0 to avoid
+				// FFmpeg negative timestamp issues. We need to seek client-side.
+				if (result.clientSeekRequired) {
+					console.log('[Player] Client-side seek required (webOS 5 workaround) to:', result.clientSeekPositionTicks);
+					positionRef.current = result.clientSeekPositionTicks;
+				} else {
+					positionRef.current = startPosition;
+				}
+
 				runTimeRef.current = result.runTimeTicks || 0;
 				setDuration((result.runTimeTicks || 0) / 10000000);
 
@@ -364,14 +374,12 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 						if (selectedSub) {
 							console.log('[Player] Using initial subtitle index:', initialSubtitleIndex);
 							setSelectedSubtitleIndex(initialSubtitleIndex);
-							setSubtitleUrl(playback.getSubtitleUrl(selectedSub));
 							await loadSubtitleData(selectedSub);
 						}
 					} else {
 						// -1 means subtitles off
 						console.log('[Player] initialSubtitleIndex is -1, subtitles off');
 						setSelectedSubtitleIndex(-1);
-						setSubtitleUrl(null);
 						setSubtitleTrackEvents(null);
 					}
 				} else if (settings.subtitleMode === 'always') {
@@ -380,14 +388,12 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 					if (defaultSub) {
 						console.log('[Player] Using default subtitle (always mode):', defaultSub.index);
 						setSelectedSubtitleIndex(defaultSub.index);
-						setSubtitleUrl(playback.getSubtitleUrl(defaultSub));
 						await loadSubtitleData(defaultSub);
 					} else if (result.subtitleStreams?.length > 0) {
 						// No default marked, use first available
 						const firstSub = result.subtitleStreams[0];
 						console.log('[Player] No default subtitle, using first:', firstSub.index);
 						setSelectedSubtitleIndex(firstSub.index);
-						setSubtitleUrl(playback.getSubtitleUrl(firstSub));
 						await loadSubtitleData(firstSub);
 					} else {
 						console.log('[Player] subtitleMode=always but no subtitles available');
@@ -398,7 +404,6 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 					if (forcedSub) {
 						console.log('[Player] Using forced subtitle:', forcedSub.index);
 						setSelectedSubtitleIndex(forcedSub.index);
-						setSubtitleUrl(playback.getSubtitleUrl(forcedSub));
 						await loadSubtitleData(forcedSub);
 					} else {
 						console.log('[Player] No forced subtitle found');
@@ -482,30 +487,85 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 		video.setAttribute('preload', 'auto');
 		// Note: Don't set crossOrigin for local Jellyfin servers - it can break webOS 4
 
-		// For HLS transcoding, we need to prime the stream by pre-fetching the manifest
+		// Check if this is HLS content
 		const isHls = mediaUrl.includes('.m3u8') || mimeType === 'application/x-mpegURL';
-		
+
+		// Cleanup any existing HLS instance
+		if (hlsRef.current) {
+			console.log('[Player] Destroying existing HLS instance');
+			hlsRef.current.destroy();
+			hlsRef.current = null;
+		}
+
 		const setSourceAndPlay = async () => {
-			// For HLS transcode, pre-fetch the manifest to ensure transcode is ready
-			if (isHls && playMethod === playback.PlayMethod.Transcode) {
-				console.log('[Player] Pre-fetching HLS manifest to prime transcode...');
-				try {
-					const response = await fetch(mediaUrl);
-					if (response.ok) {
-						const manifestText = await response.text();
-						console.log('[Player] HLS manifest pre-fetched, length:', manifestText.length);
-						// Small delay after pre-fetch to let server prepare segments
-						await new Promise(resolve => setTimeout(resolve, 500));
-					} else {
-						console.warn('[Player] HLS manifest pre-fetch failed:', response.status);
-					}
-				} catch (e) {
-					console.warn('[Player] HLS manifest pre-fetch error:', e.message);
+			// For HLS content, prefer hls.js over native - webOS claims native support but fails
+			if (isHls) {
+				// Always prefer hls.js when available - native HLS on webOS is unreliable
+				if (Hls.isSupported()) {
+					console.log('[Player] Using hls.js for HLS playback');
+
+					const hls = new Hls({
+						debug: false,
+						enableWorker: true,
+						lowLatencyMode: false,
+						backBufferLength: 90,
+						maxBufferLength: 60,
+						maxMaxBufferLength: 120,
+						// Optimize for TV playback
+						startFragPrefetch: true,
+						testBandwidth: true,
+						progressive: true,
+						// Error recovery
+						fragLoadingMaxRetry: 6,
+						manifestLoadingMaxRetry: 4,
+						levelLoadingMaxRetry: 4
+					});
+
+					hlsRef.current = hls;
+
+					hls.on(Hls.Events.MEDIA_ATTACHED, () => {
+						console.log('[Player] HLS media attached');
+						hls.loadSource(mediaUrl);
+					});
+
+					hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+						console.log('[Player] HLS manifest parsed, levels:', data.levels.length);
+						video.play().then(() => {
+							console.log('[Player] HLS play() promise resolved');
+						}).catch(err => {
+							console.error('[Player] HLS play() promise rejected:', err);
+						});
+					});
+
+					hls.on(Hls.Events.ERROR, (event, data) => {
+						console.error('[Player] HLS error:', data.type, data.details);
+						if (data.fatal) {
+							switch (data.type) {
+								case Hls.ErrorTypes.NETWORK_ERROR:
+									console.log('[Player] HLS fatal network error, trying to recover');
+									hls.startLoad();
+									break;
+								case Hls.ErrorTypes.MEDIA_ERROR:
+									console.log('[Player] HLS fatal media error, trying to recover');
+									hls.recoverMediaError();
+									break;
+								default:
+									console.error('[Player] HLS unrecoverable error');
+									hls.destroy();
+									break;
+							}
+						}
+					});
+
+					hls.attachMedia(video);
+					return; // HLS.js handles playback
+				} else {
+					console.warn('[Player] HLS not supported, falling back to direct playback');
 				}
 			}
 
+			// Non-HLS or fallback: direct video source
 			console.log('[Player] Setting video source now');
-			// Set source and load
 			video.src = mediaUrl;
 			video.load();
 
@@ -518,6 +578,14 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 		};
 
 		setSourceAndPlay();
+
+		// Cleanup on unmount or URL change
+		return () => {
+			if (hlsRef.current) {
+				hlsRef.current.destroy();
+				hlsRef.current = null;
+			}
+		};
 	}, [mediaUrl, isLoading, mimeType, playMethod]);
 
 	// Controls auto-hide
@@ -589,8 +657,11 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 		if (videoRef.current) {
 			setDuration(videoRef.current.duration);
 			// Seek to start position if resuming
+			// This handles both normal resume AND webOS 5 client-side seek workaround
 			if (positionRef.current > 0) {
-				videoRef.current.currentTime = positionRef.current / 10000000;
+				const seekTimeSec = positionRef.current / 10000000;
+				console.log('[Player] Seeking to resume position:', seekTimeSec, 'seconds (', positionRef.current, 'ticks)');
+				videoRef.current.currentTime = seekTimeSec;
 			}
 			// Explicitly call play() - autoPlay attribute alone is not reliable on webOS
 			videoRef.current.play().catch(err => {
@@ -749,7 +820,7 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 					// Give the server a moment to prepare the transcode stream
 					console.log('[Player] Waiting for transcode to initialize...');
 					await new Promise(resolve => setTimeout(resolve, 1500));
-					
+
 					setMediaUrl(result.url);
 					setPlayMethod(result.playMethod);
 					playSessionRef.current = result.playSessionId;
@@ -811,9 +882,9 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 		setActiveModal(modal);
 		window.requestAnimationFrame(() => {
 			const modalId = `${modal}-modal`;
-			
+
 			const focusResult = Spotlight.focus(modalId);
-			
+
 			if (!focusResult) {
 				const selectedItem = document.querySelector(`[data-modal="${modal}"] [data-selected="true"]`);
 				const firstItem = document.querySelector(`[data-modal="${modal}"] button`);
@@ -860,7 +931,6 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 		if (index === -1) {
 			console.log('[Player] Turning subtitles OFF');
 			setSelectedSubtitleIndex(-1);
-			setSubtitleUrl(null);
 			setSubtitleTrackEvents(null);
 			setCurrentSubtitleText(null);
 		} else {
@@ -868,7 +938,6 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 			setSelectedSubtitleIndex(index);
 			const stream = subtitleStreams.find(s => s.index === index);
 			console.log('[Player] Found stream:', stream ? 'yes' : 'no', 'codec:', stream?.codec, 'isTextBased:', stream?.isTextBased);
-			setSubtitleUrl(stream ? playback.getSubtitleUrl(stream) : null);
 			// Fetch subtitle data as JSON for custom rendering (webOS doesn't support native <track>)
 			if (stream && stream.isTextBased) {
 				try {
@@ -1090,14 +1159,7 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 				ref={videoRef}
 				className={css.videoPlayer}
 				autoPlay
-				onLoadStart={() => console.log('[Player] Video loadstart event')}
-				onLoadedData={() => console.log('[Player] Video loadeddata event')}
 				onLoadedMetadata={handleLoadedMetadata}
-				onCanPlay={() => console.log('[Player] Video canplay event')}
-				onCanPlayThrough={() => console.log('[Player] Video canplaythrough event')}
-				onStalled={() => console.log('[Player] Video stalled event')}
-				onSuspend={() => console.log('[Player] Video suspend event')}
-				onAbort={() => console.log('[Player] Video abort event')}
 				onPlay={handlePlay}
 				onPause={handlePause}
 				onTimeUpdate={handleTimeUpdate}
@@ -1112,6 +1174,7 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 				<div className={css.subtitleOverlay}>
 					<div
 						className={css.subtitleText}
+						// eslint-disable-next-line react/no-danger
 						dangerouslySetInnerHTML={{
 							__html: currentSubtitleText
 								.replace(/\\N/gi, '<br/>')

@@ -182,7 +182,7 @@ export const getDeviceCapabilities = async () => {
 		hdr10: cfg['tv.model.supportHDR'] === true || webosVersion >= 4,
 		hdr10Plus: cfg['tv.nvm.support.edid.hdr10plus'] === true || webosVersion >= 6,
 		hlg: cfg['tv.config.supportHLG'] === true || cfg['tv.model.supportHDR'] === true || webosVersion >= 4,
-		
+
 		// Dolby Vision: Only enabled if Luna API confirms support
 		// webOS 4+ can play DV Profile 8 fallback layers (HDR10/SDR) even without native DV
 		dolbyVision: cfg['tv.config.supportDolbyHDRContents'] === true,
@@ -247,7 +247,7 @@ const buildVideoRangeTypes = (caps) => {
 	// HDR10 support (all webOS 4+ TVs)
 	if (caps.hdr10) {
 		rangeTypes.push('HDR10', 'HDR10Plus');
-		
+
 		// webOS without native DV can play HDR10 fallback from DV content
 		if (isWebOsWithoutDV) {
 			rangeTypes.push('DOVIWithHDR10', 'DOVIWithHDR10Plus', 'DOVIWithEL', 'DOVIWithELHDR10Plus', 'DOVIInvalid');
@@ -257,7 +257,7 @@ const buildVideoRangeTypes = (caps) => {
 	// HLG support (all webOS 4+ TVs)
 	if (caps.hlg) {
 		rangeTypes.push('HLG');
-		
+
 		if (isWebOsWithoutDV) {
 			rangeTypes.push('DOVIWithHLG');
 		}
@@ -271,7 +271,7 @@ const buildVideoRangeTypes = (caps) => {
 		rangeTypes.push('DOVIWithEL', 'DOVIWithELHDR10Plus', 'DOVIInvalid');
 	}
 
-	console.log('[deviceProfile] buildVideoRangeTypes:', rangeTypes.join('|'), 
+	console.log('[deviceProfile] buildVideoRangeTypes:', rangeTypes.join('|'),
 		'(webOS:', caps.webosVersion, 'hdr10:', caps.hdr10, 'hlg:', caps.hlg, 'dv:', caps.dolbyVision, ')');
 	return rangeTypes.join('|');
 };
@@ -291,7 +291,7 @@ const buildDirectPlayProfiles = (caps) => {
 	if (caps.dts) {
 		videoAudioCodecs.push('dca', 'dts');
 	}
-	
+
 	console.log('[deviceProfile] Building DirectPlay profiles - caps.eac3:', caps.eac3, 'caps.webosVersion:', caps.webosVersion);
 	console.log('[deviceProfile] videoAudioCodecs:', videoAudioCodecs);
 	if (caps.truehd) videoAudioCodecs.push('truehd');
@@ -443,100 +443,61 @@ export const getJellyfinDeviceProfile = async () => {
 	console.log('[deviceProfile] Video Range Types:', videoRangeTypes, '(hdr10:', caps.hdr10, 'hlg:', caps.hlg, 'dolbyVision:', caps.dolbyVision, ')');
 	console.log('[deviceProfile] DirectPlayProfiles:', directPlayProfiles);
 
-	// Transcoding profiles based on webOS version
-	// webOS 5 (Chrome 68) has issues with native HLS - use HTTP progressive MP4 instead
-	// webOS 6+ should handle HLS fine
+	// Transcoding profiles - use HLS for all webOS versions
+	// webOS 5 (Chrome 68) needs hls.js to handle HLS via MSE
+	// webOS 6+ (Chrome 79+) has better native HLS support
+	// Progressive MP4/TS don't work reliably due to timestamp/demuxing issues
 	let transcodingProfiles;
-	
-	if (caps.webosVersion === 5) {
-		console.log('[deviceProfile] Using HTTP progressive MP4 transcoding for webOS 5');
-		// Use progressive MP4 download for webOS 5
-		// Emulator lacks Dolby licensing - force AAC for all transcodes
-		transcodingProfiles = [
-			{
-				Container: 'mp4',
-				Type: 'Video',
-				AudioCodec: 'aac',
-				VideoCodec: 'h264',
-				Context: 'Streaming',
-				Protocol: 'http',
-				MaxAudioChannels: maxAudioChannels
-			},
-			{
-				Container: 'ts',
-				Type: 'Video',
-				AudioCodec: 'aac',
-				VideoCodec: 'h264',
-				Context: 'Streaming',
-				Protocol: 'http',
-				MaxAudioChannels: maxAudioChannels
-			},
-			{
-				Container: 'mp3',
-				Type: 'Audio',
-				AudioCodec: 'mp3',
-				Context: 'Streaming',
-				Protocol: 'http'
-			},
-			{
-				Container: 'aac',
-				Type: 'Audio',
-				AudioCodec: 'aac',
-				Context: 'Streaming',
-				Protocol: 'http'
-			}
-		];
-	} else {
-		// Use HLS for other webOS versions
-		const hlsContainer = 'ts';
-		const hlsAudioCodecs = caps.ac3 ? 'aac,mp2,ac3' : 'aac,mp2';
-		
-		transcodingProfiles = [
-			{
-				Container: hlsContainer,
-				Type: 'Video',
-				AudioCodec: hlsAudioCodecs,
-				VideoCodec: 'h264',
-				Context: 'Streaming',
-				Protocol: 'hls',
-				MaxAudioChannels: maxAudioChannels,
-				MinSegments: '1',
-				BreakOnNonKeyFrames: false
-			},
-			{
-				Container: 'ts',
-				Type: 'Video',
-				AudioCodec: 'aac,mp2,ac3',
-				VideoCodec: 'h264',
-				Context: 'Streaming',
-				Protocol: 'hls',
-				MaxAudioChannels: '6',
-				MinSegments: '1',
-				BreakOnNonKeyFrames: false
-			},
-			{
-				Container: 'mp4',
-				Type: 'Video',
-				AudioCodec: 'aac,ac3',
-				VideoCodec: 'h264',
-				Context: 'Static'
-			},
-			{
-				Container: 'mp3',
-				Type: 'Audio',
-				AudioCodec: 'mp3',
-				Context: 'Streaming',
-				Protocol: 'http'
-			},
-			{
-				Container: 'aac',
-				Type: 'Audio',
-				AudioCodec: 'aac',
-				Context: 'Streaming',
-				Protocol: 'http'
-			}
-		];
-	}
+
+	console.log('[deviceProfile] Using HLS transcoding for webOS', caps.webosVersion);
+	const hlsContainer = 'ts';
+	const hlsAudioCodecs = caps.ac3 ? 'aac,mp2,ac3' : 'aac,mp2';
+
+	transcodingProfiles = [
+		{
+			Container: hlsContainer,
+			Type: 'Video',
+			AudioCodec: hlsAudioCodecs,
+			VideoCodec: 'h264',
+			Context: 'Streaming',
+			Protocol: 'hls',
+			MaxAudioChannels: maxAudioChannels,
+			MinSegments: '1',
+			BreakOnNonKeyFrames: false
+		},
+		{
+			Container: 'ts',
+			Type: 'Video',
+			AudioCodec: 'aac,mp2,ac3',
+			VideoCodec: 'h264',
+			Context: 'Streaming',
+			Protocol: 'hls',
+			MaxAudioChannels: '6',
+			MinSegments: '1',
+			BreakOnNonKeyFrames: false
+		},
+		{
+			Container: 'mp4',
+			Type: 'Video',
+			AudioCodec: 'aac,ac3',
+			VideoCodec: 'h264',
+			Context: 'Static'
+		},
+		{
+			Container: 'mp3',
+			Type: 'Audio',
+			AudioCodec: 'mp3',
+			Context: 'Streaming',
+			Protocol: 'http'
+		},
+		{
+			Container: 'aac',
+			Type: 'Audio',
+			AudioCodec: 'aac',
+			Context: 'Streaming',
+			Protocol: 'http'
+		}
+	];
 
 	// H.264 level based on webOS version and panel resolution
 	// Per LG docs: webOS 4+ UHD models support H.264 Level 5.1 at 3840x2160@30P
