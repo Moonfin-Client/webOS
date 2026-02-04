@@ -22,11 +22,8 @@ const selectMediaSource = (mediaSources, capabilities, options) => {
 		let score = 0;
 		const playMethodResult = getPlayMethod(source, capabilities);
 
-		if (playMethodResult === PlayMethod.DirectPlay) score += 1000;
-		else if (playMethodResult === PlayMethod.DirectStream) score += 500;
-
-		if (source.SupportsDirectPlay) score += 200;
-		if (source.SupportsDirectStream) score += 100;
+		if (playMethodResult === PlayMethod.DirectPlay) score += 100;
+		else if (playMethodResult === PlayMethod.DirectStream) score += 50;
 
 		const videoStream = source.MediaStreams?.find(s => s.Type === 'Video');
 		if (videoStream) {
@@ -49,67 +46,39 @@ const selectMediaSource = (mediaSources, capabilities, options) => {
 			else if (audioStream.Channels >= 6) score += 5;
 		}
 
-		console.log('[playback] Media source scored:', {
-			id: source.Id,
-			container: source.Container,
-			score,
-			playMethod: playMethodResult,
-			serverDirectPlay: source.SupportsDirectPlay,
-			serverDirectStream: source.SupportsDirectStream
-		});
-
 		return {source, score, playMethod: playMethodResult};
 	});
 
 	scored.sort((a, b) => b.score - a.score);
-	console.log('[playback] Selected media source:', scored[0].source.Id, 'with score:', scored[0].score);
 	return scored[0].source;
 };
 
 const determinePlayMethod = (mediaSource, capabilities) => {
-	// First check what our client-side capability check says
-	const computedMethod = getPlayMethod(mediaSource, capabilities);
-	console.log('[playback] determinePlayMethod - computed:', computedMethod,
-		'serverDirectPlay:', mediaSource.SupportsDirectPlay,
-		'serverDirectStream:', mediaSource.SupportsDirectStream,
-		'hasTranscodingUrl:', !!mediaSource.TranscodingUrl);
+	// Respect platform evaluation for DirectPlay / DirectStream / Transcode.
+	// This prevents HDR/codec constraints from being ignored (which can lead to missing playback URLs).
+	const computed = getPlayMethod(mediaSource, capabilities);
 
-	// If client says we need transcode, we MUST transcode
-	// Don't fall back to DirectStream if audio/video isn't compatible
-	if (computedMethod === PlayMethod.Transcode) {
-		return PlayMethod.Transcode;
-	}
-
-	// Client says DirectPlay is OK
-	if (computedMethod === PlayMethod.DirectPlay && mediaSource.SupportsDirectPlay) {
+	if (computed === PlayMethod.DirectPlay && mediaSource.SupportsDirectPlay) {
 		return PlayMethod.DirectPlay;
 	}
 
-	// Client says DirectStream is OK
-	if (computedMethod === PlayMethod.DirectStream && mediaSource.SupportsDirectStream) {
-		return PlayMethod.DirectStream;
-	}
-
-	// Fallback
-	if (mediaSource.SupportsDirectStream) {
+	if (computed === PlayMethod.DirectStream && mediaSource.SupportsDirectStream) {
 		return PlayMethod.DirectStream;
 	}
 
 	return PlayMethod.Transcode;
 };
 
+
 const buildPlaybackUrl = (itemId, mediaSource, playSessionId, playMethod) => {
 	const serverUrl = jellyfinApi.getServerUrl();
 	const apiKey = jellyfinApi.getApiKey();
-	const deviceId = jellyfinApi.getDeviceId();
-	const container = (mediaSource.Container || '').toLowerCase();
 
 	console.log('[playback] buildPlaybackUrl:', {
 		itemId,
 		mediaSourceId: mediaSource?.Id,
 		playSessionId,
 		playMethod,
-		container,
 		serverUrl,
 		apiKeyType: typeof apiKey,
 		apiKeyLength: apiKey?.length
@@ -118,19 +87,9 @@ const buildPlaybackUrl = (itemId, mediaSource, playSessionId, playMethod) => {
 	if (playMethod === PlayMethod.DirectPlay) {
 		const params = new URLSearchParams();
 		params.append('Static', 'true');
-		params.append('mediaSourceId', mediaSource.Id);
-		params.append('deviceId', deviceId);
+		params.append('MediaSourceId', mediaSource.Id);
 		params.append('api_key', apiKey);
-		// Include ETag if available
-		if (mediaSource.ETag) {
-			params.append('Tag', mediaSource.ETag);
-		}
-		// Include LiveStreamId if available
-		if (mediaSource.LiveStreamId) {
-			params.append('LiveStreamId', mediaSource.LiveStreamId);
-		}
-		// Include container extension for proper MIME type detection
-		const url = `${serverUrl}/Videos/${itemId}/stream.${container}?${params.toString()}`;
+		const url = `${serverUrl}/Videos/${itemId}/stream?${params.toString()}`;
 		console.log('[playback] DirectPlay URL:', url);
 		return url;
 	}
@@ -145,14 +104,9 @@ const buildPlaybackUrl = (itemId, mediaSource, playSessionId, playMethod) => {
 	}
 
 	if (mediaSource.TranscodingUrl) {
-		let transcodeUrl = mediaSource.TranscodingUrl;
-
-		// Clean up any malformed query string (e.g., ?& or &&)
-		transcodeUrl = transcodeUrl.replace(/\?&/g, '?').replace(/&&/g, '&');
-
-		const url = transcodeUrl.startsWith('http')
-			? transcodeUrl
-			: `${serverUrl}${transcodeUrl}`;
+		const url = mediaSource.TranscodingUrl.startsWith('http')
+			? mediaSource.TranscodingUrl
+			: `${serverUrl}${mediaSource.TranscodingUrl}`;
 		return url.includes('api_key') ? url : `${url}&api_key=${apiKey}`;
 	}
 
@@ -197,9 +151,7 @@ const extractSubtitleStreams = (mediaSource) => {
 				isExternal: s.IsExternal,
 				isForced: s.IsForced,
 				isDefault: s.IsDefault,
-				// Text-based subtitle codecs that can be rendered client-side
-				// subrip = srt, webvtt = vtt, sami = smi
-				isTextBased: ['srt', 'subrip', 'vtt', 'webvtt', 'ass', 'ssa', 'sub', 'smi', 'sami'].includes(s.Codec?.toLowerCase()),
+				isTextBased: ['srt', 'vtt', 'ass', 'ssa', 'sub', 'smi'].includes(s.Codec?.toLowerCase()),
 				deliveryUrl: deliveryUrl,
 				deliveryMethod: s.DeliveryMethod
 			};
@@ -216,41 +168,20 @@ const extractChapters = (mediaSource) => {
 	}));
 };
 
-// Default bitrate for transcoding: 20 Mbps (reasonable for 1080p content)
-const DEFAULT_MAX_BITRATE = 20000000;
-
 export const getPlaybackInfo = async (itemId, options = {}) => {
 	const deviceProfile = await getJellyfinDeviceProfile();
 	const capabilities = await getDeviceCapabilities();
 
-	// Use provided bitrate or default (0 means no limit for direct play, but we need a limit for transcode)
-	const maxBitrate = options.maxBitrate || DEFAULT_MAX_BITRATE;
-
-	// webOS 5 has issues with FFmpeg transcodes that start from a non-zero position
-	// (causes "unfixable negative timestamp" errors). For webOS 5 transcodes,
-	// we request from position 0 and do client-side seeking after load.
-	const requestedStartTime = options.startPositionTicks || 0;
-	const isWebOS5 = capabilities.webosVersion === 5;
-	const needsTranscode = options.enableDirectPlay === false || options.enableDirectStream === false;
-	const useClientSideSeek = isWebOS5 && needsTranscode && requestedStartTime > 0;
-
-	// For webOS 5 transcodes with resume, request from 0 to avoid negative timestamp issues
-	const apiStartTime = useClientSideSeek ? 0 : requestedStartTime;
-
-	if (useClientSideSeek) {
-		console.log('[playback] webOS 5 transcode with resume - will use client-side seek from', requestedStartTime);
-	}
-
-	let playbackInfo = await jellyfinApi.api.getPlaybackInfo(itemId, {
+	const playbackInfo = await jellyfinApi.api.getPlaybackInfo(itemId, {
 		DeviceProfile: deviceProfile,
-		StartTimeTicks: apiStartTime,
+		StartTimeTicks: options.startPositionTicks || 0,
 		AutoOpenLiveStream: true,
 		EnableDirectPlay: options.enableDirectPlay !== false,
 		EnableDirectStream: options.enableDirectStream !== false,
 		EnableTranscoding: options.enableTranscoding !== false,
 		AudioStreamIndex: options.audioStreamIndex,
 		SubtitleStreamIndex: options.subtitleStreamIndex,
-		MaxStreamingBitrate: maxBitrate,
+		MaxStreamingBitrate: options.maxBitrate,
 		MediaSourceId: options.mediaSourceId
 	});
 
@@ -258,92 +189,8 @@ export const getPlaybackInfo = async (itemId, options = {}) => {
 		throw new Error('No playable media source found');
 	}
 
-	let mediaSource = selectMediaSource(playbackInfo.MediaSources, capabilities, options);
-	let playMethod = determinePlayMethod(mediaSource, capabilities);
-
-	// Check again if this will actually be a transcode and we're on webOS 5
-	const willTranscode = playMethod === PlayMethod.Transcode;
-	const clientSeekRequired = isWebOS5 && willTranscode && requestedStartTime > 0;
-
-	if (clientSeekRequired && !useClientSideSeek) {
-		// We didn't anticipate needing a transcode, but now we do
-		// Re-request from position 0
-		console.log('[playback] webOS 5 transcode detected after initial request - re-requesting from position 0');
-		playbackInfo = await jellyfinApi.api.getPlaybackInfo(itemId, {
-			DeviceProfile: deviceProfile,
-			StartTimeTicks: 0,
-			AutoOpenLiveStream: true,
-			EnableDirectPlay: false,
-			EnableDirectStream: false,
-			EnableTranscoding: true,
-			AudioStreamIndex: options.audioStreamIndex,
-			SubtitleStreamIndex: options.subtitleStreamIndex,
-			MaxStreamingBitrate: maxBitrate,
-			MediaSourceId: options.mediaSourceId
-		});
-
-		if (!playbackInfo.MediaSources?.length) {
-			throw new Error('No playable media source found');
-		}
-
-		mediaSource = playbackInfo.MediaSources[0];
-		playMethod = PlayMethod.Transcode;
-	}
-
-	// Log video stream info including HDR type
-	const videoStream = mediaSource.MediaStreams?.find(s => s.Type === 'Video');
-	console.log('[playback] Video stream info:', {
-		codec: videoStream?.Codec,
-		profile: videoStream?.Profile,
-		level: videoStream?.Level,
-		width: videoStream?.Width,
-		height: videoStream?.Height,
-		videoRangeType: videoStream?.VideoRangeType,
-		colorPrimaries: videoStream?.ColorPrimaries,
-		colorTransfer: videoStream?.ColorTransfer,
-		colorSpace: videoStream?.ColorSpace,
-		bitDepth: videoStream?.BitDepth
-	});
-	console.log('[playback] HDR capabilities:', {
-		hdr10: capabilities.hdr10,
-		hlg: capabilities.hlg,
-		dolbyVision: capabilities.dolbyVision
-	});
-
-	// If we determined we need transcoding but server didn't provide a TranscodingUrl,
-	// re-request with DirectPlay/DirectStream disabled to force transcoding
-	if (playMethod === PlayMethod.Transcode && !mediaSource.TranscodingUrl) {
-		// For webOS 5, always request from position 0 for transcodes
-		const forceStartTime = isWebOS5 ? 0 : (options.startPositionTicks || 0);
-		console.log('[playback] Need transcode but no TranscodingUrl - re-requesting with transcoding forced');
-		playbackInfo = await jellyfinApi.api.getPlaybackInfo(itemId, {
-			DeviceProfile: deviceProfile,
-			StartTimeTicks: forceStartTime,
-			AutoOpenLiveStream: true,
-			EnableDirectPlay: false,
-			EnableDirectStream: false,
-			EnableTranscoding: true,
-			AudioStreamIndex: options.audioStreamIndex,
-			SubtitleStreamIndex: options.subtitleStreamIndex,
-			MaxStreamingBitrate: maxBitrate,
-			MediaSourceId: options.mediaSourceId
-		});
-
-		if (!playbackInfo.MediaSources?.length) {
-			throw new Error('No playable media source found after forcing transcode');
-		}
-
-		mediaSource = playbackInfo.MediaSources[0];
-		playMethod = PlayMethod.Transcode;
-		console.log('[playback] After forcing transcode - TranscodingUrl:', mediaSource.TranscodingUrl ? 'present' : 'none');
-	}
-
-	// Determine if client needs to seek after load (webOS 5 transcode resume workaround)
-	const finalClientSeekRequired = isWebOS5 && playMethod === PlayMethod.Transcode && requestedStartTime > 0;
-	if (finalClientSeekRequired) {
-		console.log('[playback] Client-side seek required to position:', requestedStartTime);
-	}
-
+	const mediaSource = selectMediaSource(playbackInfo.MediaSources, capabilities, options);
+	const playMethod = determinePlayMethod(mediaSource, capabilities);
 	const url = buildPlaybackUrl(itemId, mediaSource, playbackInfo.PlaySessionId, playMethod);
 	const audioStreams = extractAudioStreams(mediaSource);
 	const subtitleStreams = extractSubtitleStreams(mediaSource);
@@ -389,25 +236,8 @@ export const getPlaybackInfo = async (itemId, options = {}) => {
 		subtitleStreams,
 		chapters,
 		defaultAudioStreamIndex: mediaSource.DefaultAudioStreamIndex,
-		defaultSubtitleStreamIndex: mediaSource.DefaultSubtitleStreamIndex,
-		// webOS 5 workaround: if true, player must seek to clientSeekPositionTicks after video loads
-		clientSeekRequired: finalClientSeekRequired,
-		clientSeekPositionTicks: finalClientSeekRequired ? requestedStartTime : 0
+		defaultSubtitleStreamIndex: mediaSource.DefaultSubtitleStreamIndex
 	};
-};
-
-export const getPlaybackInfoWithFallback = async (itemId, options = {}) => {
-	try {
-		return await getPlaybackInfo(itemId, options);
-	} catch (error) {
-		console.warn('[playback] Primary playback failed, trying fallback:', error.message);
-
-		return await getPlaybackInfo(itemId, {
-			...options,
-			enableDirectPlay: false,
-			enableDirectStream: false
-		});
-	}
 };
 
 export const getSubtitleUrl = (subtitleStream) => {
@@ -417,47 +247,11 @@ export const getSubtitleUrl = (subtitleStream) => {
 	const serverUrl = jellyfinApi.getServerUrl();
 	const apiKey = jellyfinApi.getApiKey();
 
-	// Request WebVTT for any text-based subtitle - server converts ASS/SSA/SRT as needed
-	if (subtitleStream.isTextBased) {
+	if (subtitleStream.isTextBased && subtitleStream.deliveryMethod === 'External') {
 		return `${serverUrl}/Videos/${itemId}/${mediaSourceId}/Subtitles/${subtitleStream.index}/Stream.vtt?api_key=${apiKey}`;
 	}
 
 	return null;
-};
-
-/**
- * Fetch subtitle track events as JSON data for custom rendering
- * This is required on webOS because native <track> elements don't work reliably
- * The .js format returns JSON with TrackEvents array containing StartPositionTicks, EndPositionTicks, Text
- */
-export const fetchSubtitleData = async (subtitleStream) => {
-	if (!subtitleStream || !currentSession) return null;
-
-	const {itemId, mediaSourceId} = currentSession;
-	const serverUrl = jellyfinApi.getServerUrl();
-	const apiKey = jellyfinApi.getApiKey();
-
-	if (!subtitleStream.isTextBased) {
-		console.log('[Playback] Subtitle stream is not text-based, cannot fetch as JSON');
-		return null;
-	}
-
-	// Jellyfin returns JSON when requesting .js format instead of .vtt
-	const url = `${serverUrl}/Videos/${itemId}/${mediaSourceId}/Subtitles/${subtitleStream.index}/Stream.js?api_key=${apiKey}`;
-
-	try {
-		console.log('[Playback] Fetching subtitle data from:', url);
-		const response = await fetch(url);
-		if (!response.ok) {
-			throw new Error(`Failed to fetch subtitles: ${response.status}`);
-		}
-		const data = await response.json();
-		console.log(`[Playback] Loaded ${data.TrackEvents?.length || 0} subtitle events`);
-		return data;
-	} catch (err) {
-		console.error('[Playback] Failed to fetch subtitle data:', err);
-		return null;
-	}
 };
 
 export const getChapterImageUrl = (itemId, chapterIndex, width = 320) => {
@@ -717,7 +511,6 @@ export const getIntroMarkers = getMediaSegments;
 export default {
 	PlayMethod,
 	getPlaybackInfo,
-	getPlaybackInfoWithFallback,
 	getPlaybackUrl,
 	getSubtitleUrl,
 	getChapterImageUrl,
