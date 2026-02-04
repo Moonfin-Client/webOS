@@ -1,8 +1,15 @@
-import {useState, useCallback, useEffect, useMemo, lazy, Suspense} from 'react';
+import {useState, useCallback, useEffect, lazy, Suspense, useRef} from 'react';
 import ThemeDecorator from '@enact/sandstone/ThemeDecorator';
 import {Panels, Panel} from '@enact/sandstone/Panels';
 
 import {AuthProvider, useAuth} from '../context/AuthContext';
+import * as playback from '../services/playback';
+import {
+	isWebOS,
+	setupVisibilityHandler,
+	setupWebOSLifecycle,
+	cleanupVideoElement
+} from '../services/webosVideo';
 import {SettingsProvider} from '../context/SettingsContext';
 import {JellyseerrProvider} from '../context/JellyseerrContext';
 import {useVersionCheck} from '../hooks/useVersionCheck';
@@ -78,6 +85,7 @@ const AppContent = (props) => {
 	const [jellyseerrPerson, setJellyseerrPerson] = useState(null);
 	const [authChecked, setAuthChecked] = useState(false);
 	const [libraries, setLibraries] = useState([]);
+	const cleanupHandlersRef = useRef(null);
 
 	useEffect(() => {
 		const fetchLibraries = async () => {
@@ -98,6 +106,103 @@ const AppContent = (props) => {
 	}, [isAuthenticated, api, user]);
 
 	const {updateInfo, formattedNotes, dismiss: dismissUpdate} = useVersionCheck(isAuthenticated ? 3000 : null);
+
+	// App-wide cleanup function for webOS lifecycle events
+	const performAppCleanup = useCallback(() => {
+		console.log('[App] Performing app cleanup...');
+
+		// Stop any active playback reporting
+		playback.stopProgressReporting();
+		playback.stopHealthMonitoring();
+
+		// Try to report playback stopped if there was an active session
+		const session = playback.getCurrentSession();
+		if (session) {
+			try {
+				playback.reportStop(session.positionTicks || 0);
+			} catch (e) {
+				console.warn('[App] Failed to report stop during cleanup:', e);
+			}
+		}
+
+		// Clean up any video elements to release hardware decoder
+		const videoElements = document.querySelectorAll('video');
+		videoElements.forEach(video => {
+			cleanupVideoElement(video);
+		});
+
+		console.log('[App] App cleanup complete');
+	}, []);
+
+	// Set up webOS lifecycle event handlers
+	useEffect(() => {
+		if (typeof window === 'undefined') return;
+
+		// Handle app being closed/hidden (beforeunload, pagehide)
+		const handleBeforeUnload = () => {
+			console.log('[App] beforeunload event - cleaning up');
+			performAppCleanup();
+		};
+
+		const handlePageHide = (event) => {
+			console.log('[App] pagehide event - persisted:', event.persisted);
+			if (!event.persisted) {
+				performAppCleanup();
+			}
+		};
+
+		// Handle webOS app visibility changes
+		const handleVisibilityHidden = () => {
+			console.log('[App] App hidden/suspended');
+			const videoElements = document.querySelectorAll('video');
+			videoElements.forEach(video => {
+				if (!video.paused) {
+					video.pause();
+				}
+			});
+		};
+
+		const handleVisibilityVisible = () => {
+			console.log('[App] App visible/resumed');
+		};
+
+		// Handle webOS relaunch (app launched while already running)
+		const handleWebOSRelaunch = (params) => {
+			console.log('[App] webOSRelaunch event received:', params);
+			performAppCleanup();
+			setPlayingItem(null);
+			setPanelHistory([]);
+			if (isAuthenticated) {
+				setPanelIndex(PANELS.BROWSE);
+			}
+		};
+
+		window.addEventListener('beforeunload', handleBeforeUnload);
+		window.addEventListener('pagehide', handlePageHide);
+
+		const removeVisibilityHandler = setupVisibilityHandler(handleVisibilityHidden, handleVisibilityVisible);
+		const removeWebOSHandler = isWebOS() ? setupWebOSLifecycle(handleWebOSRelaunch) : () => {};
+
+		const handleWebOSLaunch = () => {
+			console.log('[App] webOSLaunch event received');
+		};
+		document.addEventListener('webOSLaunch', handleWebOSLaunch);
+
+		cleanupHandlersRef.current = () => {
+			window.removeEventListener('beforeunload', handleBeforeUnload);
+			window.removeEventListener('pagehide', handlePageHide);
+			document.removeEventListener('webOSLaunch', handleWebOSLaunch);
+			removeVisibilityHandler();
+			removeWebOSHandler();
+		};
+
+		return () => {
+			if (cleanupHandlersRef.current) {
+				cleanupHandlersRef.current();
+			}
+		};
+	}, [isAuthenticated, performAppCleanup]);
+
 	useEffect(() => {
 		if (!isLoading && !authChecked) {
 			setAuthChecked(true);
@@ -255,6 +360,14 @@ const AppContent = (props) => {
 
 	const handleHome = useCallback(() => {
 		setPanelHistory([]);
+		setSelectedItem(null);
+		setSelectedLibrary(null);
+		setSelectedPerson(null);
+		setSelectedGenre(null);
+		setJellyseerrItem(null);
+		setJellyseerrBrowse(null);
+		setJellyseerrPerson(null);
+		window.dispatchEvent(new CustomEvent('moonfin:browseRefresh'));
 		setPanelIndex(PANELS.BROWSE);
 	}, []);
 
