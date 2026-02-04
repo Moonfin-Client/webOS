@@ -139,15 +139,13 @@ const Login = ({
 		try {
 			const result = await login(jellyfinApi.getServerUrl(), username, password, {
 				serverName: serverInfo?.ServerName,
-				isAddingNewServer: isAdding
+				isAddingNewServer: isAdding,
+				switchToNewUser: true
 			});
 
 			if (isAdding) {
 				completeAddServerFlow?.();
-				setStatus('User added successfully!');
-				setTimeout(() => {
-					onServerAdded?.(result);
-				}, 1000);
+				onServerAdded?.(result);
 			} else {
 				onLoggedIn?.();
 			}
@@ -168,7 +166,12 @@ const Login = ({
 			clearInterval(quickConnectInterval);
 			setQuickConnectInterval(null);
 		}
-		if (step === 'password' || step === 'passwordform' || step === 'quickconnect') {
+		if (step === 'quickconnect-manual') {
+			setStep('manual');
+			setQuickConnectCode('');
+			setQuickConnectSecret(null);
+			setTimeout(() => Spotlight.focus('[data-spotlight-id="username-input"]'), 100);
+		} else if (step === 'password' || step === 'passwordform' || step === 'quickconnect') {
 			setStep('users');
 			setSelectedUser(null);
 			setPassword('');
@@ -199,6 +202,57 @@ const Login = ({
 		setTimeout(() => Spotlight.focus('[data-spotlight-id="username-input"]'), 100);
 	}, []);
 
+	const handleManualQuickConnect = useCallback(async () => {
+		setIsConnecting(true);
+		setError(null);
+		setStatus('Initiating Quick Connect...');
+		const isAdding = isAddingServer || isAddingToExisting;
+
+		try {
+			const result = await jellyfinApi.api.initiateQuickConnect();
+			setQuickConnectCode(result.Code);
+			setQuickConnectSecret(result.Secret);
+			setStep('quickconnect-manual');
+			setStatus('Enter the code on another device or authorize in the Jellyfin dashboard');
+
+			const intervalId = setInterval(async () => {
+				try {
+					const state = await jellyfinApi.api.getQuickConnectState(result.Secret);
+					if (state.Authenticated) {
+						clearInterval(intervalId);
+						setQuickConnectInterval(null);
+						setStatus(isAdding ? 'Quick Connect authorized! Adding user...' : 'Quick Connect authorized! Signing in...');
+
+						const authResult = await jellyfinApi.api.authenticateQuickConnect(result.Secret);
+						const loginResult = await loginWithToken(jellyfinApi.getServerUrl(), authResult, {
+							serverName: serverInfo?.ServerName,
+							isAddingNewServer: isAdding,
+							switchToNewUser: true
+						});
+
+						if (isAdding) {
+							completeAddServerFlow?.();
+							onServerAdded?.(loginResult);
+						} else {
+							onLoggedIn?.();
+						}
+					}
+				} catch (err) {
+					console.error('Quick Connect poll error:', err);
+				}
+			}, 3000);
+
+			setQuickConnectInterval(intervalId);
+			setTimeout(() => Spotlight.focus('[data-spotlight-id="qc-back-btn"]'), 100);
+		} catch (err) {
+			console.error('Quick Connect error:', err);
+			setError('Quick Connect is not available on this server. Use password login.');
+			setStatus(null);
+		} finally {
+			setIsConnecting(false);
+		}
+	}, [loginWithToken, onLoggedIn, isAddingServer, isAddingToExisting, serverInfo, completeAddServerFlow, onServerAdded]);
+
 	const handleQuickConnect = useCallback(async (user) => {
 		setSelectedUser(user);
 		setUsername(user.Name);
@@ -225,15 +279,13 @@ const Login = ({
 						const authResult = await jellyfinApi.api.authenticateQuickConnect(result.Secret);
 						const loginResult = await loginWithToken(jellyfinApi.getServerUrl(), authResult, {
 							serverName: serverInfo?.ServerName,
-							isAddingNewServer: isAdding
+							isAddingNewServer: isAdding,
+							switchToNewUser: true
 						});
 
 						if (isAdding) {
 							completeAddServerFlow?.();
-							setStatus('User added successfully!');
-							setTimeout(() => {
-								onServerAdded?.(loginResult);
-							}, 1000);
+							onServerAdded?.(loginResult);
 						} else {
 							onLoggedIn?.();
 						}
@@ -599,20 +651,52 @@ const Login = ({
 								/>
 							</div>
 							<div className={css.buttonGroup}>
-								<SpottableButton
-									data-spotlight-id="manual-submit-btn"
-									className={`${css.btn} ${css.btnPrimary}`}
-									onClick={handleLogin}
-									disabled={isConnecting || !username.trim()}
-								>
-									{isConnecting ? 'Signing in...' : 'Sign In'}
-								</SpottableButton>
+								{username.trim() ? (
+									<SpottableButton
+										data-spotlight-id="manual-submit-btn"
+										className={`${css.btn} ${css.btnPrimary}`}
+										onClick={handleLogin}
+										disabled={isConnecting}
+									>
+										{isConnecting ? 'Signing in...' : 'Sign In'}
+									</SpottableButton>
+								) : (
+									<SpottableButton
+										data-spotlight-id="manual-qc-btn"
+										className={`${css.btn} ${css.btnPrimary}`}
+										onClick={handleManualQuickConnect}
+										disabled={isConnecting}
+									>
+										{isConnecting ? 'Connecting...' : 'Quick Connect'}
+									</SpottableButton>
+								)}
 								<SpottableButton
 									data-spotlight-id="manual-back-btn"
 									className={`${css.btn} ${css.btnSecondary}`}
 									onClick={handleBack}
 								>
 									Back
+								</SpottableButton>
+							</div>
+						</div>
+					)}
+
+					{step === 'quickconnect-manual' && (
+						<div className={css.section}>
+							<h2>Quick Connect</h2>
+							{serverInfo && <div className={css.serverName}>{serverInfo.ServerName}</div>}
+							<div className={css.quickConnectCodeDisplay}>
+								<div className={css.qcLabel}>Enter this code on another device or authorize in Jellyfin dashboard:</div>
+								<div className={css.qcCode}>{quickConnectCode}</div>
+								<div className={css.qcWaiting}>Waiting for authorization...</div>
+							</div>
+							<div className={css.buttonGroup}>
+								<SpottableButton
+									data-spotlight-id="qc-back-btn"
+									className={`${css.btn} ${css.btnSecondary}`}
+									onClick={handleBack}
+								>
+									Cancel
 								</SpottableButton>
 							</div>
 						</div>

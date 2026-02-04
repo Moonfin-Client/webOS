@@ -27,7 +27,6 @@ const defaultSettings = {
 	mergeContinueWatchingNextUp: false,
 	backdropBlurHome: 20,
 	backdropBlurDetail: 20,
-	carouselSpeed: 8000,
 	serverLogging: false,
 	featuredContentType: 'both',
 	featuredItemCount: 10,

@@ -141,10 +141,10 @@ export const api = {
 		request(`/Users/${currentUser}/Items?IncludeItemTypes=BoxSet&Recursive=true&SortBy=SortName&SortOrder=Ascending&Limit=${limit}&Fields=PrimaryImageAspectRatio,ProductionYear`),
 
 	getResumeItems: (limit = 12) =>
-		request(`/Users/${currentUser}/Items/Resume?Limit=${limit}&MediaTypes=Video`),
+		request(`/Users/${currentUser}/Items/Resume?Limit=${limit}&MediaTypes=Video&Fields=Overview`),
 
 	getNextUp: (limit = 24, seriesId = null) => {
-		let url = `/Shows/NextUp?UserId=${currentUser}&Limit=${limit}`;
+		let url = `/Shows/NextUp?UserId=${currentUser}&Limit=${limit}&Fields=Overview`;
 		if (seriesId) url += `&SeriesId=${seriesId}`;
 		return request(url);
 	},

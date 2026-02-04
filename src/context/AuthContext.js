@@ -84,7 +84,7 @@ export const AuthProvider = ({children}) => {
 	}, [loadServers]);
 
 	const login = useCallback(async (server, username, password, options = {}) => {
-		const {serverName: sName, isAddingNewServer = false} = options;
+		const {serverName: sName, isAddingNewServer = false, switchToNewUser = true} = options;
 
 		jellyfinApi.setServer(server);
 
@@ -92,18 +92,14 @@ export const AuthProvider = ({children}) => {
 
 		jellyfinApi.setAuth(result.User.Id, result.AccessToken);
 
+		// Use provided server name or extract from URL
 		let finalServerName = sName;
 		if (!finalServerName) {
 			try {
-				const info = await jellyfinApi.api.getPublicInfo();
-				finalServerName = info.ServerName;
+				const url = new URL(server);
+				finalServerName = url.hostname;
 			} catch (e) {
-				try {
-					const url = new URL(server);
-					finalServerName = url.hostname;
-				} catch (e2) {
-					finalServerName = 'Jellyfin Server';
-				}
+				finalServerName = 'Jellyfin Server';
 			}
 		}
 
@@ -116,17 +112,14 @@ export const AuthProvider = ({children}) => {
 			result.AccessToken
 		);
 
-		if (!isAddingNewServer) {
+		// Always switch to the newly logged in user
+		const shouldSwitch = switchToNewUser || !isAddingNewServer;
+		if (shouldSwitch) {
 			await multiServerManager.setActiveServer(serverResult.serverId, result.User.Id);
-		} else {
-			const currentActive = await multiServerManager.getActiveServer();
-			if (currentActive) {
-				jellyfinApi.setServer(currentActive.url);
-				jellyfinApi.setAuth(currentActive.userId, currentActive.accessToken);
-			}
 		}
 
-		await loadServers();
+		// Load servers in background, don't await
+		loadServers();
 
 		const authData = {
 			serverUrl: server,
@@ -136,7 +129,8 @@ export const AuthProvider = ({children}) => {
 		};
 		await saveToStorage('auth', authData);
 
-		if (!isAddingNewServer) {
+		// Always update state to the new user if switching
+		if (shouldSwitch) {
 			setServerUrl(server);
 			setServerName(finalServerName);
 			setAccessToken(result.AccessToken);
@@ -148,23 +142,19 @@ export const AuthProvider = ({children}) => {
 	}, [loadServers]);
 
 	const loginWithToken = useCallback(async (server, authResult, options = {}) => {
-		const {serverName: sName, isAddingNewServer = false} = options;
+		const {serverName: sName, isAddingNewServer = false, switchToNewUser = true} = options;
 
 		jellyfinApi.setServer(server);
 		jellyfinApi.setAuth(authResult.User.Id, authResult.AccessToken);
 
+		// Use provided server name or extract from URL
 		let finalServerName = sName;
 		if (!finalServerName) {
 			try {
-				const info = await jellyfinApi.api.getPublicInfo();
-				finalServerName = info.ServerName;
+				const url = new URL(server);
+				finalServerName = url.hostname;
 			} catch (e) {
-				try {
-					const url = new URL(server);
-					finalServerName = url.hostname;
-				} catch (e2) {
-					finalServerName = 'Jellyfin Server';
-				}
+				finalServerName = 'Jellyfin Server';
 			}
 		}
 
@@ -176,17 +166,14 @@ export const AuthProvider = ({children}) => {
 			authResult.AccessToken
 		);
 
-		if (!isAddingNewServer) {
+		// Always switch to the newly logged in user
+		const shouldSwitch = switchToNewUser || !isAddingNewServer;
+		if (shouldSwitch) {
 			await multiServerManager.setActiveServer(serverResult.serverId, authResult.User.Id);
-		} else {
-			const currentActive = await multiServerManager.getActiveServer();
-			if (currentActive) {
-				jellyfinApi.setServer(currentActive.url);
-				jellyfinApi.setAuth(currentActive.userId, currentActive.accessToken);
-			}
 		}
 
-		await loadServers();
+		// Load servers in background, don't await
+		loadServers();
 
 		const authData = {
 			serverUrl: server,
@@ -196,7 +183,8 @@ export const AuthProvider = ({children}) => {
 		};
 		await saveToStorage('auth', authData);
 
-		if (!isAddingNewServer) {
+		// Always update state to the new user if switching
+		if (shouldSwitch) {
 			setServerUrl(server);
 			setServerName(finalServerName);
 			setAccessToken(authResult.AccessToken);
