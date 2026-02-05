@@ -1083,6 +1083,50 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 		const handleKeyDown = (e) => {
 			const key = e.key || e.keyCode;
 
+			// Media playback keys (webOS remote)
+			// Play: 415, Pause: 19, Fast-forward: 417, Rewind: 412, Stop: 413
+			if (e.keyCode === 415) {
+				// Play key
+				e.preventDefault();
+				e.stopPropagation();
+				if (videoRef.current && videoRef.current.paused) {
+					videoRef.current.play();
+				}
+				return;
+			}
+			if (e.keyCode === 19) {
+				// Pause key
+				e.preventDefault();
+				e.stopPropagation();
+				if (videoRef.current && !videoRef.current.paused) {
+					videoRef.current.pause();
+				}
+				return;
+			}
+			if (e.keyCode === 417) {
+				// Fast-forward key
+				e.preventDefault();
+				e.stopPropagation();
+				handleForward();
+				showControls();
+				return;
+			}
+			if (e.keyCode === 412) {
+				// Rewind key
+				e.preventDefault();
+				e.stopPropagation();
+				handleRewind();
+				showControls();
+				return;
+			}
+			if (e.keyCode === 413) {
+				// Stop key
+				e.preventDefault();
+				e.stopPropagation();
+				handleBack();
+				return;
+			}
+
 			if (key === 'GoBack' || key === 'Backspace' || e.keyCode === 461 || e.keyCode === 8 || e.keyCode === 27) {
 				e.preventDefault();
 				e.stopPropagation();
@@ -1156,7 +1200,7 @@ const Player = ({item, initialAudioIndex, initialSubtitleIndex, onEnded, onBack,
 
 		window.addEventListener('keydown', handleKeyDown, true);
 		return () => window.removeEventListener('keydown', handleKeyDown, true);
-	}, [controlsVisible, activeModal, closeModal, hideControls, handleBack, showControls, handlePlayPause, currentTime, duration, settings.seekStep]);
+	}, [controlsVisible, activeModal, closeModal, hideControls, handleBack, showControls, handlePlayPause, handleForward, handleRewind, currentTime, duration, settings.seekStep]);
 
 	// Calculate progress - use seekPosition when actively seeking for smooth scrubbing
 	const displayTime = isSeeking ? (seekPosition / 10000000) : currentTime;
