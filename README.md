@@ -23,10 +23,12 @@ Moonfin for webOS builds on the solid foundation of Jellyfin with targeted impro
 - Smooth playback with proper hardware decoding support
 - Enhanced player controls optimized for TV remote navigation
 
-### Cross-Server Content Playback
-- **Unified Library Support** - Seamless playback from multiple Jellyfin servers
-- Seamless switching between servers for content playback
-- Improved server selection logic
+### Multi-Server & Unified Library Mode
+- **Unified Library Mode** - Combine content from all connected Jellyfin servers into a single view
+- Browse, search, and play content across multiple servers seamlessly
+- Server badges show content origin when unified mode is enabled
+- Cross-server playback with proper progress tracking per server
+- Favorites, genres, and search aggregate results from all servers
 
 ### Jellyseerr Integration (Beta)
 
