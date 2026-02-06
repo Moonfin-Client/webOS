@@ -65,6 +65,19 @@ const lunaCall = (service, method, parameters = {}) => {
 	});
 };
 
+// Per LG developer documentation, DTS support varies by webOS version AND container.
+// This mirrors getDtsContainerSupport() from deviceProfile.js for local use.
+const getDtsContainerSupportLocal = (webosVersion, lunaDts = null) => {
+	if (webosVersion >= 23) {
+		const dtsEnabled = lunaDts !== false;
+		return { mkv: dtsEnabled, mp4: dtsEnabled, ts: dtsEnabled, avi: false };
+	}
+	if (webosVersion >= 5) {
+		return { mkv: true, mp4: false, ts: false, avi: false };
+	}
+	return { mkv: true, mp4: false, ts: false, avi: true };
+};
+
 const getDefaultCapabilities = () => {
 	const webosVersion = getWebOSVersion();
 	return {
@@ -81,7 +94,7 @@ const getDefaultCapabilities = () => {
 		hevc: webosVersion >= 4,
 		av1: webosVersion >= 5,
 		vp9: webosVersion >= 4,
-		dts: webosVersion <= 4 || webosVersion >= 23,
+		dts: getDtsContainerSupportLocal(webosVersion, null),
 		ac3: true,
 		// E-AC3: webOS 5 has issues decoding some E-AC3 streams
 		eac3: webosVersion !== 5,
@@ -125,7 +138,8 @@ export const getMediaCapabilities = async () => {
 				'tv.model.oled',
 				'tv.hw.ddrSize',
 				'tv.nvm.support.edid.hdr10plus',
-				'tv.config.supportHLG'
+				'tv.config.supportHLG',
+				'tv.config.supportDTS'
 			]
 		});
 
@@ -163,7 +177,7 @@ export const getMediaCapabilities = async () => {
 			hevc: cfg['tv.hw.supportCodecH265'] !== false && webosVersion >= 4,
 			av1: cfg['tv.hw.supportCodecAV1'] === true || (cfg['tv.hw.supportCodecAV1'] !== false && webosVersion >= 5),
 			vp9: cfg['tv.hw.supportCodecVP9'] === true || webosVersion >= 4,
-			dts: webosVersion <= 4 || webosVersion >= 23,
+			dts: getDtsContainerSupportLocal(webosVersion, cfg['tv.config.supportDTS'] ?? null),
 			ac3: true,
 			// E-AC3: webOS 5 has issues decoding some E-AC3 streams
 			eac3: webosVersion !== 5,
@@ -257,7 +271,14 @@ export const getPlayMethod = (mediaSource, capabilities) => {
 
 	if (ac3Supported) supportedAudioCodecs.push('ac3', 'dolby');
 	if (eac3Supported) supportedAudioCodecs.push('eac3', 'ec3');
-	if (capabilities.dts) supportedAudioCodecs.push('dts', 'dca', 'dts-hd', 'dtshd');
+	if (capabilities.dts) {
+		// DTS is now a per-container object: { mkv, mp4, ts, avi }
+		// Add DTS codecs globally to the supported list - container check happens below
+		const dtsObj = capabilities.dts;
+		if (dtsObj.mkv || dtsObj.mp4 || dtsObj.ts || dtsObj.avi) {
+			supportedAudioCodecs.push('dts', 'dca', 'dts-hd', 'dtshd');
+		}
+	}
 	if (capabilities.truehd) supportedAudioCodecs.push('truehd', 'mlp');
 	if (capabilities.webosVersion >= 24) supportedAudioCodecs.push('opus');
 	supportedAudioCodecs.push('vorbis', 'wma', 'amr', 'amrnb', 'amrwb');
@@ -309,20 +330,24 @@ export const getPlayMethod = (mediaSource, capabilities) => {
 		}
 	}
 
-	// DTS container restrictions by webOS version
+	// DTS container restrictions based on LG documentation per webOS version
 	let dtsContainerOk = true;
 	if (audioCodec && (audioCodec === 'dts' || audioCodec === 'dca' || audioCodec.startsWith('dts'))) {
-		const webosVersion = capabilities.webosVersion || 4;
-		// DTS disabled for webOS 5-22
-		if (webosVersion >= 5 && webosVersion < 23) {
-			dtsContainerOk = false;
-		} else if (webosVersion >= 23) {
-			dtsContainerOk = ['mkv', 'matroska', 'mp4', 'm4v', 'mov', 'ts', 'mpegts', 'mts', 'm2ts'].includes(container);
+		const dtsObj = capabilities.dts || {};
+		// Map container to DTS support object key
+		if (['mkv', 'matroska'].includes(container)) {
+			dtsContainerOk = !!dtsObj.mkv;
+		} else if (['mp4', 'm4v', 'mov'].includes(container)) {
+			dtsContainerOk = !!dtsObj.mp4;
+		} else if (['ts', 'mpegts', 'mts', 'm2ts'].includes(container)) {
+			dtsContainerOk = !!dtsObj.ts;
+		} else if (container === 'avi') {
+			dtsContainerOk = !!dtsObj.avi;
 		} else {
-			dtsContainerOk = ['mkv', 'matroska', 'avi'].includes(container);
+			dtsContainerOk = false;
 		}
 		if (!dtsContainerOk) {
-			console.log('[webosVideo] DTS not supported in container:', container, 'for webOS', webosVersion);
+			console.log('[webosVideo] DTS not supported in container:', container, 'dtsSupport:', JSON.stringify(dtsObj));
 		}
 	}
 

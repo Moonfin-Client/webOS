@@ -82,25 +82,29 @@ export const testVp9Support = (lunaResult = null, webosVersion = 4) => {
 	return webosVersion >= 4;
 };
 
-export const testDtsSupport = (webosVersion) => {
-	// DTS audio is not natively supported on webOS 5+ (2020 and later LG TVs).
-	// LG dropped DTS licensing starting with 2020 models and has not re-added it.
+// Per LG developer documentation, DTS support varies by webOS version AND container:
+//   webOS 4/4.5: DTS in AVI + MKV
+//   webOS 5/6/22: DTS in MKV only
+//   webOS 23+: DTS in MKV + MP4 + TS (model-specific)
+// The Luna API config key 'tv.config.supportDTS' can override for model-specific detection.
+export const getDtsContainerSupport = (webosVersion, lunaDts = null) => {
+	if (webosVersion >= 23) {
+		// Use Luna API result if available, otherwise assume supported
+		// (Jellyfin will fall back to transcoding if model can't decode)
+		const dtsEnabled = lunaDts !== false;
+		return {
+			mkv: dtsEnabled,
+			mp4: dtsEnabled,
+			ts: dtsEnabled,
+			avi: false
+		};
+	}
 	if (webosVersion >= 5) {
-		return false;
+		// webOS 5/6/22: DTS in MKV only
+		return { mkv: true, mp4: false, ts: false, avi: false };
 	}
-	return true;
-};
-
-// Check if DTS is supported in a specific container based on webOS version
-export const testDtsInContainer = (webosVersion, container) => {
-	if (!testDtsSupport(webosVersion)) {
-		return false;
-	}
-
-	const containerLower = (container || '').toLowerCase();
-
-	// webOS < 5 supports DTS in limited containers
-	return ['mkv', 'matroska', 'avi'].includes(containerLower);
+	// webOS 4/4.5: DTS in AVI + MKV
+	return { mkv: true, mp4: false, ts: false, avi: true };
 };
 
 export const testAc3Support = () => true;
@@ -139,7 +143,8 @@ export const getDeviceCapabilities = async () => {
 						'tv.config.supportDolbyAtmos',
 						'tv.model.oled',
 						'tv.nvm.support.edid.hdr10plus',
-						'tv.config.supportHLG'
+						'tv.config.supportHLG',
+						'tv.config.supportDTS'
 					]
 				},
 				onSuccess: resolve,
@@ -158,6 +163,10 @@ export const getDeviceCapabilities = async () => {
 	const lunaHevc = cfg['tv.hw.supportCodecH265'];
 	const lunaAv1 = cfg['tv.hw.supportCodecAV1'];
 	const lunaVp9 = cfg['tv.hw.supportCodecVP9'];
+	const lunaDts = cfg['tv.config.supportDTS'] ?? null;
+
+	// Per-container DTS support based on LG documentation + Luna API override
+	const dtsSupport = getDtsContainerSupport(webosVersion, lunaDts);
 
 	cachedCapabilities = {
 		modelName: deviceInfoData.modelName || cfg['tv.model.modelName'] || 'Unknown',
@@ -187,7 +196,8 @@ export const getDeviceCapabilities = async () => {
 		dolbyVision: cfg['tv.config.supportDolbyHDRContents'] === true,
 
 		dolbyAtmos: cfg['tv.conti.supportDolbyAtmos'] === true || cfg['tv.config.supportDolbyAtmos'] === true,
-		dts: testDtsSupport(webosVersion),
+		// Per-container DTS support per LG docs
+		dts: dtsSupport,
 		ac3: testAc3Support(),
 		// E-AC3: webOS 4 handles it, but webOS 5 has issues with some streams, go figure
 		// Disabled for webOS 5 to force transcoding to AAC which is more reliable
@@ -280,35 +290,36 @@ const buildDirectPlayProfiles = (caps) => {
 
 	const mp4VideoCodecs = ['h264'];
 	if (caps.hevc) mp4VideoCodecs.push('hevc');
-	if (caps.vp9) mp4VideoCodecs.push('vp9');
 	if (caps.av1) mp4VideoCodecs.push('av1');
 
 	// Per-container audio codecs based on LG's official AV format docs.
 	// Different containers support different audio codecs on webOS.
+	const dts = caps.dts || {}; // Per-container DTS support object
 
-	// MP4/M4V/MOV: ac3, eac3, aac, mp3 (no PCM, FLAC, or Vorbis)
+	// MP4/M4V/MOV: ac3, eac3, aac, mp3; DTS only on webOS 23+ (model-specific)
 	const mp4AudioCodecs = ['aac', 'mp3'];
 	if (caps.ac3) mp4AudioCodecs.push('ac3');
 	if (caps.eac3) mp4AudioCodecs.push('eac3');
-	if (caps.dts) mp4AudioCodecs.push('dca', 'dts');
+	if (dts.mp4) mp4AudioCodecs.push('dca', 'dts');
 
-	// MKV: ac3, eac3, aac, pcm, mp3, vorbis, opus (24+), dts (version-dependent)
-	const mkvAudioCodecs = ['aac', 'mp3', 'flac', 'pcm_s16le', 'pcm_s24le', 'vorbis'];
+	// MKV: ac3, eac3, aac, pcm, mp3, opus (24+), dts (all versions per LG docs)
+	// FLAC and Vorbis are NOT listed in MKV by LG docs (standalone formats only)
+	const mkvAudioCodecs = ['aac', 'mp3', 'pcm_s16le', 'pcm_s24le'];
 	if (caps.ac3) mkvAudioCodecs.push('ac3');
 	if (caps.eac3) mkvAudioCodecs.push('eac3');
-	if (caps.dts) mkvAudioCodecs.push('dca', 'dts');
+	if (dts.mkv) mkvAudioCodecs.push('dca', 'dts');
 	if (caps.webosVersion >= 24) mkvAudioCodecs.push('opus');
 
-	// TS: ac3, eac3, aac, pcm, mp3 (no FLAC or Vorbis)
+	// TS: ac3, eac3, aac, pcm, mp3; DTS only on webOS 23+ (model-specific)
 	const tsAudioCodecs = ['aac', 'mp3', 'pcm_s16le', 'pcm_s24le'];
 	if (caps.ac3) tsAudioCodecs.push('ac3');
 	if (caps.eac3) tsAudioCodecs.push('eac3');
-	if (caps.dts) tsAudioCodecs.push('dca', 'dts');
+	if (dts.ts) tsAudioCodecs.push('dca', 'dts');
 
-	// AVI: ac3, mp3, lpcm, adpcm, dts (webOS 4/4.5 only for DTS)
+	// AVI: ac3, mp3, lpcm, adpcm; DTS only on webOS 4/4.5
 	const aviAudioCodecs = ['mp3', 'pcm_s16le', 'pcm_s24le'];
 	if (caps.ac3) aviAudioCodecs.push('ac3');
-	if (caps.dts) aviAudioCodecs.push('dca', 'dts');
+	if (dts.avi) aviAudioCodecs.push('dca', 'dts');
 
 	console.log('[deviceProfile] Building DirectPlay profiles - caps.eac3:', caps.eac3, 'caps.webosVersion:', caps.webosVersion);
 	console.log('[deviceProfile] mp4AudioCodecs:', mp4AudioCodecs);
