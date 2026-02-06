@@ -1,6 +1,6 @@
 {
 	"name": "moonfin",
-	"version": "2.0.0",
+	"version": "2.0.1",
 	"description": "Jellyfin client for LG webOS TV",
 	"author": "RadicalMuffinMan",
 	"main": "src/index.js",

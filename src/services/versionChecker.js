@@ -5,7 +5,8 @@
  */
 
 import {getFromStorage, saveToStorage} from './storage';
-import {version as APP_VERSION} from '../../package.json';
+import packageJson from '../../package.json';
+const APP_VERSION = packageJson.version;
 
 const GITHUB_API_URL = 'https://api.github.com/repos/Moonfin-Client/WebOS/releases/latest';
 const CHECK_COOLDOWN_HOURS = 24;

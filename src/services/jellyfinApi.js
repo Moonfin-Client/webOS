@@ -1,4 +1,5 @@
-import {version as APP_VERSION} from '../../package.json';
+import packageJson from '../../package.json';
+const APP_VERSION = packageJson.version;
 
 const APP_NAME = 'Moonfin for webOS';
 

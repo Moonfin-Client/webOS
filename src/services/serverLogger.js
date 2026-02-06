@@ -15,7 +15,8 @@ const LOG_CATEGORIES = {
 	NAVIGATION: 'Navigation'
 };
 
-import {version as APP_VERSION} from '../../package.json';
+import packageJson from '../../package.json';
+const APP_VERSION = packageJson.version;
 
 const MAX_LOG_BUFFER = 50;
 
