@@ -494,6 +494,21 @@ export const getJellyfinDeviceProfile = async () => {
 	const hlsAudioCodecs = caps.ac3 ? 'aac,mp2,ac3' : 'aac,mp2';
 
 	transcodingProfiles = [
+		// HEVC HLS transcoding preserves HDR when transcoding is necessary
+		// (e.g., burn-in subtitles, no compatible audio at all).
+		// Placed first so Jellyfin prefers HEVC over H.264 for HDR content.
+		...(caps.hevc ? [{
+			Container: hlsContainer,
+			Type: 'Video',
+			AudioCodec: hlsAudioCodecs,
+			VideoCodec: 'hevc',
+			Context: 'Streaming',
+			Protocol: 'hls',
+			MaxAudioChannels: maxAudioChannels,
+			MinSegments: '1',
+			BreakOnNonKeyFrames: false
+		}] : []),
+		// H.264 HLS fallback — used when HEVC transcoding is not needed or not possible
 		{
 			Container: hlsContainer,
 			Type: 'Video',
@@ -502,17 +517,6 @@ export const getJellyfinDeviceProfile = async () => {
 			Context: 'Streaming',
 			Protocol: 'hls',
 			MaxAudioChannels: maxAudioChannels,
-			MinSegments: '1',
-			BreakOnNonKeyFrames: false
-		},
-		{
-			Container: 'ts',
-			Type: 'Video',
-			AudioCodec: 'aac,mp2,ac3',
-			VideoCodec: 'h264',
-			Context: 'Streaming',
-			Protocol: 'hls',
-			MaxAudioChannels: '6',
 			MinSegments: '1',
 			BreakOnNonKeyFrames: false
 		},
