@@ -209,6 +209,69 @@ export const getMediaCapabilities = async () => {
 	}
 };
 
+/**
+ * Get the list of audio codecs supported by the TV hardware for a given container.
+ * Container-specific restrictions (AC3/EAC3 on webOS 5, DTS per-container) are applied.
+ * @param {object} capabilities - Device capabilities from getMediaCapabilities()
+ * @param {string} [container=''] - Container format (e.g., 'mkv', 'mp4'). Empty = no container restriction.
+ * @returns {string[]} Array of supported audio codec strings
+ */
+export const getSupportedAudioCodecs = (capabilities, container = '') => {
+	const codecs = ['aac', 'mp3', 'mp2', 'mp1', 'flac', 'pcm_s16le', 'pcm_s24le', 'lpcm', 'wav'];
+
+	// AC3/EAC3 support is container-specific on webOS 5
+	const isBroadcastContainer = ['ts', 'mpegts', 'mts', 'm2ts'].includes(container);
+	const ac3Ok = capabilities.ac3 && (capabilities.webosVersion !== 5 || !container || isBroadcastContainer);
+	const eac3Ok = capabilities.eac3 && (capabilities.webosVersion !== 5 || !container || isBroadcastContainer);
+
+	if (ac3Ok) codecs.push('ac3', 'dolby');
+	if (eac3Ok) codecs.push('eac3', 'ec3');
+
+	// DTS: per-container support based on webOS version
+	if (capabilities.dts) {
+		const dtsObj = capabilities.dts;
+		let dtsOk = false;
+		if (!container) {
+			// No container context — include DTS if supported in any container
+			dtsOk = !!(dtsObj.mkv || dtsObj.mp4 || dtsObj.ts || dtsObj.avi);
+		} else if (['mkv', 'matroska'].includes(container)) {
+			dtsOk = !!dtsObj.mkv;
+		} else if (['mp4', 'm4v', 'mov'].includes(container)) {
+			dtsOk = !!dtsObj.mp4;
+		} else if (['ts', 'mpegts', 'mts', 'm2ts'].includes(container)) {
+			dtsOk = !!dtsObj.ts;
+		} else if (container === 'avi') {
+			dtsOk = !!dtsObj.avi;
+		}
+		if (dtsOk) codecs.push('dts', 'dca', 'dts-hd', 'dtshd');
+	}
+
+	if (capabilities.truehd) codecs.push('truehd', 'mlp');
+	if (capabilities.webosVersion >= 24) codecs.push('opus');
+	codecs.push('vorbis', 'wma', 'amr', 'amrnb', 'amrwb');
+
+	return codecs;
+};
+
+/**
+ * Find the first compatible audio stream index for a media source.
+ * Returns the index of the first audio stream whose codec is supported,
+ * or -1 if no compatible audio stream exists.
+ */
+export const findCompatibleAudioStreamIndex = (mediaSource, capabilities) => {
+	if (!mediaSource?.MediaStreams) return -1;
+	const container = (mediaSource.Container || '').toLowerCase();
+	const supported = getSupportedAudioCodecs(capabilities, container);
+	const audioStreams = mediaSource.MediaStreams.filter(s => s.Type === 'Audio');
+	for (const stream of audioStreams) {
+		const codec = (stream.Codec || '').toLowerCase();
+		if (!codec || supported.includes(codec)) {
+			return stream.Index;
+		}
+	}
+	return -1;
+};
+
 export const getPlayMethod = (mediaSource, capabilities) => {
 	console.log('[webosVideo] getPlayMethod called with capabilities.truehd:', capabilities?.truehd, 'capabilities.dtshd:', capabilities?.dtshd);
 
@@ -259,32 +322,24 @@ export const getPlayMethod = (mediaSource, capabilities) => {
 	supportedVideoCodecs.push('vp8');
 	if (capabilities.dolbyVision) supportedVideoCodecs.push('dvhe', 'dvh1', 'dovi');
 
-	// Build supported audio codecs list
+	// Build supported audio codecs list (with container-specific restrictions)
 	const audioCodec = (audioStream?.Codec || '').toLowerCase();
-	const supportedAudioCodecs = ['aac', 'mp3', 'mp2', 'mp1', 'flac', 'pcm_s16le', 'pcm_s24le', 'lpcm', 'wav'];
+	const supportedAudioCodecs = getSupportedAudioCodecs(capabilities, container);
 
-	// AC3/EAC3 support is container-specific on webOS 5
-	// Only reliably works in broadcast containers (TS, M2TS)
-	const isBroadcastContainer = ['ts', 'mpegts', 'mts', 'm2ts'].includes(container);
-	const ac3Supported = capabilities.ac3 && (capabilities.webosVersion !== 5 || isBroadcastContainer);
-	const eac3Supported = capabilities.eac3 && (capabilities.webosVersion !== 5 || isBroadcastContainer);
+	// Check if ANY audio stream is compatible (not just the default/first one).
+	// A file with TrueHD primary + AC3 secondary should still DirectPlay using the AC3 track.
+	const hasCompatibleAudio = audioStreams.length === 0 || audioStreams.some(s => {
+		const codec = (s.Codec || '').toLowerCase();
+		return !codec || supportedAudioCodecs.includes(codec);
+	});
 
-	if (ac3Supported) supportedAudioCodecs.push('ac3', 'dolby');
-	if (eac3Supported) supportedAudioCodecs.push('eac3', 'ec3');
-	if (capabilities.dts) {
-		// DTS is now a per-container object: { mkv, mp4, ts, avi }
-		// Add DTS codecs globally to the supported list - container check happens below
-		const dtsObj = capabilities.dts;
-		if (dtsObj.mkv || dtsObj.mp4 || dtsObj.ts || dtsObj.avi) {
-			supportedAudioCodecs.push('dts', 'dca', 'dts-hd', 'dtshd');
-		}
-	}
-	if (capabilities.truehd) supportedAudioCodecs.push('truehd', 'mlp');
-	if (capabilities.webosVersion >= 24) supportedAudioCodecs.push('opus');
-	supportedAudioCodecs.push('vorbis', 'wma', 'amr', 'amrnb', 'amrwb');
-
-	const audioOkResult = !audioCodec || supportedAudioCodecs.includes(audioCodec);
-	console.log('[webosVideo] Audio check: audioCodec=' + audioCodec + ' truehd=' + capabilities.truehd + ' inList=' + supportedAudioCodecs.includes(audioCodec) + ' audioOk=' + audioOkResult);
+	console.log('[webosVideo] Audio check:', {
+		defaultAudioCodec: audioCodec,
+		defaultAudioOk: !audioCodec || supportedAudioCodecs.includes(audioCodec),
+		hasCompatibleAudio,
+		compatibleStreams: audioStreams.filter(s => supportedAudioCodecs.includes((s.Codec || '').toLowerCase())).map(s => `${s.Index}:${s.Codec}`),
+		totalAudioStreams: audioStreams.length
+	});
 
 	// Build supported containers list
 	const supportedContainers = ['mp4', 'm4v', 'mov', 'ts', 'mpegts', 'mts', 'm2ts', 'avi', '3gp', '3g2', 'mpg', 'mpeg', 'vob', 'dat'];
@@ -295,7 +350,7 @@ export const getPlayMethod = (mediaSource, capabilities) => {
 	if (capabilities.nativeHls) supportedContainers.push('m3u8', 'hls');
 
 	const videoOk = !videoCodec || supportedVideoCodecs.includes(videoCodec);
-	const audioOk = audioOkResult;
+	const audioOk = hasCompatibleAudio;
 	// Container can be comma-separated (e.g., "mov,mp4,m4a,3gp,3g2,mj2") - check if ANY match
 	const containerParts = container.split(',').map(c => c.trim());
 	const containerOk = !container || containerParts.some(c => supportedContainers.includes(c));
@@ -330,44 +385,22 @@ export const getPlayMethod = (mediaSource, capabilities) => {
 		}
 	}
 
-	// DTS container restrictions based on LG documentation per webOS version
-	let dtsContainerOk = true;
-	if (audioCodec && (audioCodec === 'dts' || audioCodec === 'dca' || audioCodec.startsWith('dts'))) {
-		const dtsObj = capabilities.dts || {};
-		// Map container to DTS support object key
-		if (['mkv', 'matroska'].includes(container)) {
-			dtsContainerOk = !!dtsObj.mkv;
-		} else if (['mp4', 'm4v', 'mov'].includes(container)) {
-			dtsContainerOk = !!dtsObj.mp4;
-		} else if (['ts', 'mpegts', 'mts', 'm2ts'].includes(container)) {
-			dtsContainerOk = !!dtsObj.ts;
-		} else if (container === 'avi') {
-			dtsContainerOk = !!dtsObj.avi;
-		} else {
-			dtsContainerOk = false;
-		}
-		if (!dtsContainerOk) {
-			console.log('[webosVideo] DTS not supported in container:', container, 'dtsSupport:', JSON.stringify(dtsObj));
-		}
-	}
-
 	console.log('[webosVideo] Compatibility check:', {
 		videoOk,
 		audioOk,
 		containerOk,
 		hdrOk,
-		bitrateOk,
-		dtsContainerOk
+		bitrateOk
 	});
 
-	if (mediaSource.SupportsDirectPlay && videoOk && audioOk && containerOk && hdrOk && bitrateOk && dtsContainerOk) {
+	if (mediaSource.SupportsDirectPlay && videoOk && audioOk && containerOk && hdrOk && bitrateOk) {
 		console.log('[webosVideo] Result: DirectPlay');
 		return 'DirectPlay';
 	}
 
-	// DirectStream only remuxes - it cannot transcode audio
-	// So we need audioOk to be true for DirectStream
-	if (mediaSource.SupportsDirectStream && videoOk && audioOk && containerOk && bitrateOk) {
+	// DirectStream can remux the container and transcode audio while keeping video direct.
+	// This preserves HDR when only the audio track is incompatible.
+	if (mediaSource.SupportsDirectStream && videoOk && containerOk && bitrateOk) {
 		console.log('[webosVideo] Result: DirectStream');
 		return 'DirectStream';
 	}
@@ -587,6 +620,8 @@ export default {
 	getMediaCapabilities,
 	getPlayMethod,
 	getMimeType,
+	getSupportedAudioCodecs,
+	findCompatibleAudioStreamIndex,
 	setDisplayWindow,
 	registerAppStateObserver,
 	keepScreenOn,

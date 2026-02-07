@@ -1,6 +1,6 @@
 import * as jellyfinApi from './jellyfinApi';
 import {getJellyfinDeviceProfile, getDeviceCapabilities} from './deviceProfile';
-import {getPlayMethod, getMimeType} from './webosVideo';
+import {getPlayMethod, getMimeType, findCompatibleAudioStreamIndex, getSupportedAudioCodecs} from './webosVideo';
 
 export const PlayMethod = {
 	DirectPlay: 'DirectPlay',
@@ -61,12 +61,25 @@ const selectMediaSource = (mediaSources, capabilities, options) => {
 			else if (rangeType.includes('HDR') && capabilities.hdr10) score += 5;
 		}
 
-		const audioStream = source.MediaStreams?.find(s => s.Type === 'Audio');
-		if (audioStream) {
-			if (audioStream.Codec === 'truehd' && capabilities.truehd) score += 15;
-			else if (audioStream.Codec === 'eac3') score += 10;
-			else if (audioStream.Codec === 'ac3') score += 8;
-			else if (audioStream.Channels >= 6) score += 5;
+		// Score based on the best COMPATIBLE audio stream, not just the first one
+		const sourceAudioStreams = source.MediaStreams?.filter(s => s.Type === 'Audio') || [];
+		const sourceContainer = (source.Container || '').toLowerCase();
+		const supportedAudio = getSupportedAudioCodecs(capabilities, sourceContainer);
+		const compatibleAudio = sourceAudioStreams.filter(s => supportedAudio.includes((s.Codec || '').toLowerCase()));
+		if (compatibleAudio.length > 0) {
+			const bestAudio = compatibleAudio.reduce((best, s) => {
+				let trackScore = 0;
+				if (s.Codec === 'truehd' && capabilities.truehd) trackScore = 15;
+				else if (s.Codec === 'eac3') trackScore = 10;
+				else if (s.Codec === 'ac3') trackScore = 8;
+				else if (s.Channels >= 6) trackScore = 5;
+				else trackScore = 3;
+				return trackScore > best.score ? {stream: s, score: trackScore} : best;
+			}, {stream: null, score: 0});
+			score += bestAudio.score;
+		} else if (sourceAudioStreams.length > 0) {
+			// No compatible audio streams at all — penalize
+			score -= 10;
 		}
 
 		console.log('[playback] Media source scored:', {
@@ -277,6 +290,49 @@ export const getPlaybackInfo = async (itemId, options = {}) => {
 	}
 
 	let mediaSource = selectMediaSource(playbackInfo.MediaSources, capabilities, options);
+
+	// Auto-select a compatible audio stream if the user hasn't explicitly chosen one.
+	// This prevents the server from forcing transcode when the default audio track
+	// is unsupported (e.g., TrueHD primary + AC3 secondary in a 4K HDR remux).
+	let audioStreamIndex = options.audioStreamIndex;
+	if (audioStreamIndex == null && mediaSource.DefaultAudioStreamIndex != null) {
+		const defaultAudioStream = mediaSource.MediaStreams?.find(
+			s => s.Type === 'Audio' && s.Index === mediaSource.DefaultAudioStreamIndex
+		);
+		const defaultCodec = (defaultAudioStream?.Codec || '').toLowerCase();
+		const sourceContainer = (mediaSource.Container || '').toLowerCase();
+		const supportedAudio = getSupportedAudioCodecs(capabilities, sourceContainer);
+
+		if (defaultCodec && !supportedAudio.includes(defaultCodec)) {
+			const compatibleIndex = findCompatibleAudioStreamIndex(mediaSource, capabilities);
+			if (compatibleIndex >= 0) {
+				console.log(`[playback] Default audio track ${mediaSource.DefaultAudioStreamIndex} (${defaultCodec}) unsupported, auto-selecting compatible track ${compatibleIndex}`);
+				// Re-request playback info with the compatible audio stream so the server
+				// evaluates DirectPlay/DirectStream against the compatible track
+				const retryInfo = await api.getPlaybackInfo(itemId, {
+					DeviceProfile: deviceProfile,
+					StartTimeTicks: requestedStartTime,
+					AutoOpenLiveStream: true,
+					EnableDirectPlay: options.enableDirectPlay !== false,
+					EnableDirectStream: options.enableDirectStream !== false,
+					EnableTranscoding: options.enableTranscoding !== false,
+					AudioStreamIndex: compatibleIndex,
+					SubtitleStreamIndex: options.subtitleStreamIndex,
+					MaxStreamingBitrate: maxBitrate,
+					MediaSourceId: options.mediaSourceId || mediaSource.Id
+				});
+				if (retryInfo.MediaSources?.length) {
+					mediaSource = selectMediaSource(retryInfo.MediaSources, capabilities, options);
+					audioStreamIndex = compatibleIndex;
+					playbackInfo = retryInfo;
+					console.log(`[playback] Re-requested with audio track ${compatibleIndex}, play method: ${determinePlayMethod(mediaSource, capabilities)}`);
+				}
+			} else {
+				console.warn('[playback] No compatible audio track found \u2014 server will remux/transcode');
+			}
+		}
+	}
+
 	let playMethod = determinePlayMethod(mediaSource, capabilities);
 
 	// Log video stream info including HDR type
@@ -302,16 +358,15 @@ export const getPlaybackInfo = async (itemId, options = {}) => {
 	// If we determined we need transcoding but server didn't provide a TranscodingUrl,
 	// re-request with DirectPlay/DirectStream disabled to force transcoding
 	if (playMethod === PlayMethod.Transcode && !mediaSource.TranscodingUrl) {
-		const forceStartTime = options.startPositionTicks || 0;
 		console.log('[playback] Need transcode but no TranscodingUrl - re-requesting with transcoding forced');
 		playbackInfo = await api.getPlaybackInfo(itemId, {
 			DeviceProfile: deviceProfile,
-			StartTimeTicks: forceStartTime,
+			StartTimeTicks: requestedStartTime,
 			AutoOpenLiveStream: true,
 			EnableDirectPlay: false,
 			EnableDirectStream: false,
 			EnableTranscoding: true,
-			AudioStreamIndex: options.audioStreamIndex,
+			AudioStreamIndex: audioStreamIndex,
 			SubtitleStreamIndex: options.subtitleStreamIndex,
 			MaxStreamingBitrate: maxBitrate,
 			MediaSourceId: options.mediaSourceId
@@ -340,7 +395,7 @@ export const getPlaybackInfo = async (itemId, options = {}) => {
 		playMethod,
 		startPositionTicks: options.startPositionTicks || 0,
 		capabilities,
-		audioStreamIndex: options.audioStreamIndex ?? mediaSource.DefaultAudioStreamIndex,
+		audioStreamIndex: audioStreamIndex ?? mediaSource.DefaultAudioStreamIndex,
 		subtitleStreamIndex: options.subtitleStreamIndex ?? mediaSource.DefaultSubtitleStreamIndex,
 		maxBitrate: options.maxBitrate,
 		serverCredentials: creds
@@ -373,6 +428,7 @@ export const getPlaybackInfo = async (itemId, options = {}) => {
 		subtitleStreams,
 		chapters,
 		defaultAudioStreamIndex: mediaSource.DefaultAudioStreamIndex,
+		selectedAudioStreamIndex: audioStreamIndex ?? mediaSource.DefaultAudioStreamIndex,
 		defaultSubtitleStreamIndex: mediaSource.DefaultSubtitleStreamIndex,
 		startPositionTicks: requestedStartTime
 	};
