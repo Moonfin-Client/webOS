@@ -96,8 +96,7 @@ const getDefaultCapabilities = () => {
 		vp9: webosVersion >= 4,
 		dts: getDtsContainerSupportLocal(webosVersion, null),
 		ac3: true,
-		// E-AC3: webOS 5 has issues decoding some E-AC3 streams
-		eac3: webosVersion !== 5,
+		eac3: true, // DD+ supported on all webOS 4+
 		truehd: false,
 		mp4: true,
 		m4v: true,
@@ -179,8 +178,7 @@ export const getMediaCapabilities = async () => {
 			vp9: cfg['tv.hw.supportCodecVP9'] === true || webosVersion >= 4,
 			dts: getDtsContainerSupportLocal(webosVersion, cfg['tv.config.supportDTS'] ?? null),
 			ac3: true,
-			// E-AC3: webOS 5 has issues decoding some E-AC3 streams
-			eac3: webosVersion !== 5,
+			eac3: true, // DD+ supported on all webOS 4+
 			// TrueHD/DTS-HD: webOS can only PASSTHROUGH these to AV receiver, not decode internally
 			truehd: false,
 			dtshd: false,
@@ -211,7 +209,7 @@ export const getMediaCapabilities = async () => {
 
 /**
  * Get the list of audio codecs supported by the TV hardware for a given container.
- * Container-specific restrictions (AC3/EAC3 on webOS 5, DTS per-container) are applied.
+ * Container-specific restrictions (DTS per-container) are applied.
  * @param {object} capabilities - Device capabilities from getMediaCapabilities()
  * @param {string} [container=''] - Container format (e.g., 'mkv', 'mp4'). Empty = no container restriction.
  * @returns {string[]} Array of supported audio codec strings
@@ -219,10 +217,8 @@ export const getMediaCapabilities = async () => {
 export const getSupportedAudioCodecs = (capabilities, container = '') => {
 	const codecs = ['aac', 'mp3', 'mp2', 'mp1', 'flac', 'pcm_s16le', 'pcm_s24le', 'lpcm', 'wav'];
 
-	// AC3/EAC3 support is container-specific on webOS 5
-	const isBroadcastContainer = ['ts', 'mpegts', 'mts', 'm2ts'].includes(container);
-	const ac3Ok = capabilities.ac3 && (capabilities.webosVersion !== 5 || !container || isBroadcastContainer);
-	const eac3Ok = capabilities.eac3 && (capabilities.webosVersion !== 5 || !container || isBroadcastContainer);
+	const ac3Ok = capabilities.ac3;
+	const eac3Ok = capabilities.eac3;
 
 	if (ac3Ok) codecs.push('ac3', 'dolby');
 	if (eac3Ok) codecs.push('eac3', 'ec3');

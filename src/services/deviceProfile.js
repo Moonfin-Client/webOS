@@ -199,9 +199,7 @@ export const getDeviceCapabilities = async () => {
 		// Per-container DTS support per LG docs
 		dts: dtsSupport,
 		ac3: testAc3Support(),
-		// E-AC3: webOS 4 handles it, but webOS 5 has issues with some streams, go figure
-		// Disabled for webOS 5 to force transcoding to AAC which is more reliable
-		eac3: webosVersion !== 5,
+		eac3: true, // DD+ supported on all webOS 4+
 		// TrueHD/DTS-HD: webOS can only PASSTHROUGH these to an AV receiver, not decode internally
 		// Setting to false by default - users with AV receivers would need a setting to enable. TODO: Add setting later probably
 		truehd: false,
