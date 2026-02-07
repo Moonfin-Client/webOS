@@ -19,7 +19,7 @@ jobs:
           node-version: lts/*
           cache: npm
 
-      - run: npm ci --omit=optional
+      - run: npm ci --force
       - run: npm run build
 
       - name: Upload artifact
