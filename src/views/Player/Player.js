@@ -329,6 +329,7 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 					maxBitrate: selectedQuality || settings.maxBitrate,
 					enableDirectPlay: !settings.preferTranscode,
 					enableDirectStream: !settings.preferTranscode,
+					forceDirectPlay: settings.forceDirectPlay,
 					// Cross-server support: pass item for server credential lookup
 					item: item
 				});
@@ -510,7 +511,7 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 
 			cleanupVideoElement(videoElement);
 		};
-	}, [item, resume, selectedQuality, settings.maxBitrate, settings.preferTranscode, settings.subtitleMode, settings.skipIntro, initialAudioIndex, initialSubtitleIndex]);
+	}, [item, resume, selectedQuality, settings.maxBitrate, settings.preferTranscode, settings.forceDirectPlay, settings.subtitleMode, settings.skipIntro, initialAudioIndex, initialSubtitleIndex]);
 
 	useEffect(() => {
 		if (mediaUrl) {
@@ -1775,6 +1776,24 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 					return 'SDR';
 				};
 
+				const getTranscodeReason = () => {
+					if (playMethod !== 'Transcode') return null;
+					const url = mediaSource?.TranscodingUrl || '';
+					const reasons = [];
+					if (url.includes('TranscodeReasons=')) {
+						const match = url.match(/TranscodeReasons=([^&]+)/);
+						if (match) {
+							// TranscodeReasons is a comma-separated list from the server
+							const serverReasons = decodeURIComponent(match[1]).split(',');
+							serverReasons.forEach(r => {
+								const formatted = r.replace(/([A-Z])/g, ' $1').trim();
+								reasons.push(formatted);
+							});
+						}
+					}
+					return reasons.length > 0 ? reasons.join(', ') : 'Unknown';
+				};
+
 				const getVideoCodec = () => {
 					if (!videoStream) return 'Unknown';
 					let codec = (videoStream.Codec || '').toUpperCase();
@@ -1833,11 +1852,21 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 										<span className={css.infoLabel}>Play Method</span>
 										<span className={css.infoValue}>{playMethod || 'Unknown'}</span>
 									</div>
+									{playMethod === 'Transcode' && (
+										<div className={`${css.infoRow} ${css.infoWarning}`}>
+											<span className={css.infoLabel}>Transcode Reason</span>
+											<span className={css.infoValue}>{getTranscodeReason()}</span>
+										</div>
+									)}
 									<div className={css.infoRow}>
 										<span className={css.infoLabel}>Container</span>
 										<span className={css.infoValue}>
 											{(mediaSource?.Container || 'Unknown').toUpperCase()}
 										</span>
+									</div>
+									<div className={css.infoRow}>
+										<span className={css.infoLabel}>HDR</span>
+										<span className={css.infoValue}>{getHdrType()}</span>
 									</div>
 									<div className={css.infoRow}>
 										<span className={css.infoLabel}>Bitrate</span>
@@ -1859,13 +1888,15 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 											</span>
 										</div>
 										<div className={css.infoRow}>
-											<span className={css.infoLabel}>HDR</span>
-											<span className={css.infoValue}>{getHdrType()}</span>
-										</div>
-										<div className={css.infoRow}>
 											<span className={css.infoLabel}>Codec</span>
 											<span className={css.infoValue}>{getVideoCodec()}</span>
 										</div>
+										{videoStream.BitDepth && (
+											<div className={css.infoRow}>
+												<span className={css.infoLabel}>Bit Depth</span>
+												<span className={css.infoValue}>{videoStream.BitDepth}-bit</span>
+											</div>
+										)}
 										{videoStream.BitRate && (
 											<div className={css.infoRow}>
 												<span className={css.infoLabel}>Video Bitrate</span>

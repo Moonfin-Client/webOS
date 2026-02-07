@@ -11,6 +11,7 @@ const DEFAULT_HOME_ROWS = [
 
 const defaultSettings = {
 	preferTranscode: false,
+	forceDirectPlay: false,
 	maxBitrate: 0,
 	audioLanguage: '',
 	subtitleLanguage: '',

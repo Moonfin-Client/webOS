@@ -99,7 +99,13 @@ const selectMediaSource = (mediaSources, capabilities, options) => {
 	return scored[0].source;
 };
 
-const determinePlayMethod = (mediaSource, capabilities) => {
+const determinePlayMethod = (mediaSource, capabilities, options = {}) => {
+	// Force DirectPlay debug override — skips all codec/HDR/bitrate checks
+	if (options.forceDirectPlay && mediaSource.SupportsDirectPlay) {
+		console.log('[playback] Force DirectPlay enabled — bypassing compatibility checks');
+		return PlayMethod.DirectPlay;
+	}
+
 	// First check what our client-side capability check says
 	const computedMethod = getPlayMethod(mediaSource, capabilities);
 	console.log('[playback] determinePlayMethod - computed:', computedMethod,
@@ -333,7 +339,7 @@ export const getPlaybackInfo = async (itemId, options = {}) => {
 		}
 	}
 
-	let playMethod = determinePlayMethod(mediaSource, capabilities);
+	let playMethod = determinePlayMethod(mediaSource, capabilities, options);
 
 	// Log video stream info including HDR type
 	const videoStream = mediaSource.MediaStreams?.find(s => s.Type === 'Video');

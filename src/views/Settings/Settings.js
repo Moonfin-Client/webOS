@@ -682,6 +682,7 @@ const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
 			<div className={css.settingsGroup}>
 				<h2>Transcoding</h2>
 				{renderToggleItem('Prefer Transcoding', 'Request transcoded streams when available', 'preferTranscode')}
+				{renderToggleItem('Force Direct Play', 'Skip codec checks and always attempt DirectPlay (debug)', 'forceDirectPlay')}
 			</div>
 		</div>
 	);
@@ -1080,14 +1081,10 @@ const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
 						<span className={css.infoValue}>
 							{[
 								capabilities.hdr10 && 'HDR10',
+								capabilities.hdr10Plus && 'HDR10+',
+								capabilities.hlg && 'HLG',
 								capabilities.dolbyVision && 'Dolby Vision'
 							].filter(Boolean).join(', ') || 'Not supported'}
-						</span>
-					</SpottableDiv>
-					<SpottableDiv className={css.infoItem} tabIndex={0}>
-						<span className={css.infoLabel}>Audio</span>
-						<span className={css.infoValue}>
-							{capabilities.dolbyAtmos ? 'Dolby Atmos' : 'Standard'}
 						</span>
 					</SpottableDiv>
 					<SpottableDiv className={css.infoItem} tabIndex={0}>
@@ -1098,6 +1095,30 @@ const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
 								capabilities.hevc && 'HEVC',
 								capabilities.vp9 && 'VP9',
 								capabilities.av1 && 'AV1'
+							].filter(Boolean).join(', ')}
+						</span>
+					</SpottableDiv>
+					<SpottableDiv className={css.infoItem} tabIndex={0}>
+						<span className={css.infoLabel}>Audio Codecs</span>
+						<span className={css.infoValue}>
+							{[
+								'AAC',
+								capabilities.ac3 && 'AC3',
+								capabilities.eac3 && 'E-AC3',
+								capabilities.dts && 'DTS',
+								capabilities.dolbyAtmos && 'Atmos'
+							].filter(Boolean).join(', ')}
+						</span>
+					</SpottableDiv>
+					<SpottableDiv className={css.infoItem} tabIndex={0}>
+						<span className={css.infoLabel}>Containers</span>
+						<span className={css.infoValue}>
+							{[
+								'MP4',
+								capabilities.mkv && 'MKV',
+								'TS',
+								capabilities.webm && 'WebM',
+								capabilities.asf && 'ASF'
 							].filter(Boolean).join(', ')}
 						</span>
 					</SpottableDiv>
