@@ -613,9 +613,18 @@ export const getNextEpisode = async (item) => {
 export const changeAudioStream = async (streamIndex) => {
 	if (!currentSession) return null;
 
+	// If we're currently transcoding, keep transcoding when switching audio.
+	// This prevents re-attempting DirectPlay after it already failed and fell back.
+	const forceTranscode = currentSession.playMethod === PlayMethod.Transcode;
+
 	const newInfo = await getPlaybackInfo(currentSession.itemId, {
 		...currentSession,
-		audioStreamIndex: streamIndex
+		audioStreamIndex: streamIndex,
+		...(forceTranscode && {
+			enableDirectPlay: false,
+			enableDirectStream: false,
+			enableTranscoding: true
+		})
 	});
 
 	return newInfo;
@@ -624,9 +633,17 @@ export const changeAudioStream = async (streamIndex) => {
 export const changeSubtitleStream = async (streamIndex) => {
 	if (!currentSession) return null;
 
+	// Preserve current play method aand don't re-attempt DirectPlay if already transcoding
+	const forceTranscode = currentSession.playMethod === PlayMethod.Transcode;
+
 	const newInfo = await getPlaybackInfo(currentSession.itemId, {
 		...currentSession,
-		subtitleStreamIndex: streamIndex
+		subtitleStreamIndex: streamIndex,
+		...(forceTranscode && {
+			enableDirectPlay: false,
+			enableDirectStream: false,
+			enableTranscoding: true
+		})
 	});
 
 	return newInfo;

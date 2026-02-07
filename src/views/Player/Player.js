@@ -1091,6 +1091,10 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 		setSelectedAudioIndex(index);
 		closeModal();
 
+		// Reset fallback flag so the DirectPlay→Transcode fallback can trigger again
+		// if the new audio track also fails at the decoder level.
+		setHasTriedTranscode(false);
+
 		// For both Transcode and DirectPlay, re-fetch playback info when switching audio.
 		// This ensures unsupported codecs (e.g. DTS on webOS 5+) trigger a transcode
 		// instead of silently failing while the UI shows the wrong track.
