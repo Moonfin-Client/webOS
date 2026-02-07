@@ -422,9 +422,13 @@ export const getPlayMethod = (mediaSource, capabilities) => {
 		return 'DirectPlay';
 	}
 
-	// DirectStream can remux the container and transcode audio while keeping video direct.
-	// This preserves HDR when only the audio track is incompatible.
-	if (mediaSource.SupportsDirectStream && videoOk && containerOk && bitrateOk) {
+	// DirectStream remuxes the container but does NOT re-encode any streams.
+	// Both video AND audio must be natively supported — DirectStream cannot
+	// transcode unsupported audio. When only audio is incompatible (e.g. TrueHD
+	// as the sole track), we must fall through to Transcode so the server uses
+	// its TranscodingUrl with video passthrough + audio-only transcode, preserving
+	// HDR/Dolby Vision metadata.
+	if (mediaSource.SupportsDirectStream && videoOk && audioOk && containerOk && hdrOk && bitrateOk) {
 		console.log('[webosVideo] Result: DirectStream');
 		return 'DirectStream';
 	}
