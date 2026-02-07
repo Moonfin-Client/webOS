@@ -20,6 +20,9 @@
 	"license": "MPL-2.0",
 	"private": true,
 	"repository": "https://github.com/Moonfin-Client/webOS",
+	"overrides": {
+		"fsevents": "$fsevents"
+	},
 	"enact": {
 		"theme": "sandstone",
 		"ri": {
