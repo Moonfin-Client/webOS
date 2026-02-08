@@ -494,8 +494,11 @@ export const getJellyfinDeviceProfile = async () => {
 	let transcodingProfiles;
 
 	console.log('[deviceProfile] Using HLS transcoding for webOS', caps.webosVersion);
-	const hlsContainer = 'ts';
-	const hlsAudioCodecs = caps.ac3 ? 'aac,mp2,ac3' : 'aac,mp2';
+	// Use fMP4 segments on webOS 5+ to preserve Dolby Vision metadata (RPU).
+	// MPEG-TS cannot carry DV RPU, causing black screen when DV content
+	// needs audio transcoding. fMP4 HLS is supported on webOS 5+.
+	const hlsContainer = caps.nativeHlsFmp4 ? 'mp4' : 'ts';
+	const hlsAudioCodecs = caps.eac3 ? 'aac,mp2,ac3,eac3' : (caps.ac3 ? 'aac,mp2,ac3' : 'aac,mp2');
 
 	transcodingProfiles = [
 		// HEVC HLS transcoding preserves HDR when transcoding is necessary
