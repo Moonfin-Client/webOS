@@ -49,6 +49,7 @@ const JellyseerrBrowse = ({browseType, item, mediaType: initialMediaType, onSele
 	const backdropTimeoutRef = useRef(null);
 	const backdropSetRef = useRef(false);
 	const loadingMoreRef = useRef(false);
+	const loadCooldownRef = useRef(false);
 	const itemsRef = useRef([]);
 	const totalPagesRef = useRef(1);
 	const currentPageRef = useRef(1);
@@ -107,6 +108,10 @@ const JellyseerrBrowse = ({browseType, item, mediaType: initialMediaType, onSele
 		} finally {
 			setIsLoading(false);
 			loadingMoreRef.current = false;
+			if (append) {
+				loadCooldownRef.current = true;
+				setTimeout(() => { loadCooldownRef.current = false; }, 500);
+			}
 		}
 	}, [item, isEnabled, browseType, mediaType]);
 
@@ -206,7 +211,7 @@ const JellyseerrBrowse = ({browseType, item, mediaType: initialMediaType, onSele
 		const hasMorePages = currentPageRef.current < totalPagesRef.current;
 		const underMaxPages = currentPageRef.current < MAX_PAGES;
 
-		if (nearEnd && hasMorePages && underMaxPages && !loadingMoreRef.current) {
+		if (nearEnd && hasMorePages && underMaxPages && !loadingMoreRef.current && !loadCooldownRef.current) {
 			loadItems(currentPageRef.current + 1, true);
 		}
 

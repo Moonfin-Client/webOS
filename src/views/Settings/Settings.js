@@ -243,6 +243,12 @@ const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
 
 	const [serverVersion, setServerVersion] = useState(null);
 
+	const [moonfinConnecting, setMoonfinConnecting] = useState(false);
+	const [moonfinStatus, setMoonfinStatus] = useState('');
+	const [moonfinLoginMode, setMoonfinLoginMode] = useState(false);
+	const [moonfinUsername, setMoonfinUsername] = useState('');
+	const [moonfinPassword, setMoonfinPassword] = useState('');
+
 	useEffect(() => {
 		Spotlight.focus('sidebar-general');
 	}, []);
@@ -386,6 +392,42 @@ const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
 			serverLogger.setEnabled(!settings[key]);
 		}
 	}, [settings, updateSetting]);
+
+	const handleMoonfinToggle = useCallback(async () => {
+		const enabling = !settings.useMoonfinPlugin;
+		updateSetting('useMoonfinPlugin', enabling);
+
+		if (enabling) {
+			if (!serverUrl || !accessToken) {
+				setMoonfinStatus('Not connected to a Jellyfin server');
+				return;
+			}
+
+			setMoonfinConnecting(true);
+			setMoonfinStatus('Checking Moonfin plugin...');
+
+			try {
+				const result = await jellyseerr.configureWithMoonfin(serverUrl, accessToken);
+				if (result.authenticated) {
+					setMoonfinStatus('Connected via Moonfin!');
+					setMoonfinLoginMode(false);
+				} else {
+					setMoonfinStatus('Moonfin plugin found but no session. Please log in.');
+					setMoonfinLoginMode(true);
+				}
+			} catch (err) {
+				setMoonfinStatus(`Moonfin connection failed: ${err.message}`);
+			} finally {
+				setMoonfinConnecting(false);
+			}
+		} else {
+			jellyseerr.disable();
+			setMoonfinStatus('');
+			setMoonfinLoginMode(false);
+			setMoonfinUsername('');
+			setMoonfinPassword('');
+		}
+	}, [settings.useMoonfinPlugin, updateSetting, serverUrl, accessToken, jellyseerr]);
 
 	const cycleBitrate = useCallback(() => {
 		const currentIndex = BITRATE_OPTIONS.findIndex(o => o.value === settings.maxBitrate);
@@ -629,6 +671,61 @@ const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
 		}
 	}, [jellyseerrUrl, localEmail, localPassword, user, jellyseerr]);
 
+	const handleMoonfinConnect = useCallback(async () => {
+		if (!serverUrl || !accessToken) {
+			setMoonfinStatus('Not connected to a Jellyfin server');
+			return;
+		}
+
+		setMoonfinConnecting(true);
+		setMoonfinStatus('Checking Moonfin plugin...');
+
+		try {
+			const result = await jellyseerr.configureWithMoonfin(serverUrl, accessToken);
+			if (result.authenticated) {
+				setMoonfinStatus('Connected via Moonfin plugin!');
+				setMoonfinLoginMode(false);
+			} else {
+				setMoonfinStatus('Moonfin plugin found but no session. Please log in.');
+				setMoonfinLoginMode(true);
+			}
+		} catch (err) {
+			setMoonfinStatus(`Moonfin connection failed: ${err.message}`);
+		} finally {
+			setMoonfinConnecting(false);
+		}
+	}, [serverUrl, accessToken, jellyseerr]);
+
+	const handleMoonfinLogin = useCallback(async () => {
+		if (!moonfinUsername || !moonfinPassword) {
+			setMoonfinStatus('Please enter username and password');
+			return;
+		}
+
+		setMoonfinConnecting(true);
+		setMoonfinStatus('Logging in via Moonfin plugin...');
+
+		try {
+			await jellyseerr.loginWithMoonfin(moonfinUsername, moonfinPassword);
+			setMoonfinStatus('Connected successfully!');
+			setMoonfinLoginMode(false);
+			setMoonfinUsername('');
+			setMoonfinPassword('');
+		} catch (err) {
+			setMoonfinStatus(`Login failed: ${err.message}`);
+		} finally {
+			setMoonfinConnecting(false);
+		}
+	}, [moonfinUsername, moonfinPassword, jellyseerr]);
+
+	const handleMoonfinUsernameChange = useCallback((e) => {
+		setMoonfinUsername(e.target.value);
+	}, []);
+
+	const handleMoonfinPasswordChange = useCallback((e) => {
+		setMoonfinPassword(e.target.value);
+	}, []);
+
 	const handleJellyseerrDisconnect = useCallback(() => {
 		jellyseerr.disable();
 		setJellyseerrUrl('');
@@ -637,6 +734,10 @@ const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
 		setLocalPassword('');
 		setJellyseerrStatus('');
 		setAuthMethod(AUTH_METHODS.NONE);
+		setMoonfinStatus('');
+		setMoonfinLoginMode(false);
+		setMoonfinUsername('');
+		setMoonfinPassword('');
 	}, [jellyseerr]);
 
 	const getBitrateLabel = () => {
@@ -951,166 +1052,265 @@ const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
 	const renderJellyseerrPanel = () => (
 		<div className={css.panel}>
 			<h1>Jellyseerr Settings</h1>
-			<div className={css.settingsGroup}>
-				<h2>Connection</h2>
-				{jellyseerr.isEnabled && jellyseerr.isAuthenticated ? (
-					<>
-						<div className={css.infoItem}>
-							<span className={css.infoLabel}>Status</span>
-							<span className={css.infoValue}>Connected</span>
-						</div>
-						<div className={css.infoItem}>
-							<span className={css.infoLabel}>Server</span>
-							<span className={css.infoValue}>{jellyseerr.serverUrl}</span>
-						</div>
-						{jellyseerr.user && (
-							<div className={css.infoItem}>
-								<span className={css.infoLabel}>User</span>
-								<span className={css.infoValue}>
-									{jellyseerr.user.displayName || jellyseerr.user.username || jellyseerr.user.email}
-								</span>
-							</div>
-						)}
-						<SpottableButton
-							className={css.actionButton}
-							onClick={handleJellyseerrDisconnect}
-							spotlightId="jellyseerr-disconnect"
-						>
-							Disconnect
-						</SpottableButton>
-					</>
-				) : (
-					<>
-						<div className={css.inputGroup}>
-							<label>Jellyseerr URL</label>
-							<SpottableInput
-								type="url"
-								placeholder="http://192.168.1.100:5055"
-								value={jellyseerrUrl}
-								onChange={handleJellyseerrUrlChange}
-								className={css.input}
-								spotlightId="jellyseerr-url"
-							/>
-						</div>
 
-						{jellyseerrStatus && (
-							<div className={css.statusMessage}>{jellyseerrStatus}</div>
-						)}
-					</>
+			<div className={css.settingsGroup}>
+				<h2>Connection Method</h2>
+				{renderSettingItem(
+					'Use Moonfin Plugin',
+					'Route Jellyseerr through the Moonfin server plugin instead of direct API connection',
+					settings.useMoonfinPlugin ? 'On' : 'Off',
+					handleMoonfinToggle,
+					'setting-useMoonfinPlugin'
 				)}
 			</div>
 
-			{!jellyseerr.isAuthenticated && (
-				<div className={css.settingsGroup}>
-					<h2>Authentication</h2>
-					<p className={css.authDescription}>
-						Choose how to authenticate with Jellyseerr
-					</p>
-
-					{authMethod === AUTH_METHODS.NONE && (
-						<div className={css.authButtons}>
-							<SpottableButton
-								className={css.authMethodButton}
-								onClick={handleSelectJellyfinAuth}
-								spotlightId="auth-jellyfin-select"
-							>
-								Login with Jellyfin Account
-							</SpottableButton>
-							<SpottableButton
-								className={css.authMethodButton}
-								onClick={handleSelectLocalAuth}
-								spotlightId="auth-local-select"
-							>
-								Login with Local Account
-							</SpottableButton>
-						</div>
-					)}
-
-					{authMethod === AUTH_METHODS.JELLYFIN && (
-						<div className={css.authForm}>
-							<div className={css.authFormHeader}>
-								<span>Jellyfin Authentication</span>
+			{settings.useMoonfinPlugin ? (
+				/* Moonfin plugin mode */
+				<>
+					<div className={css.settingsGroup}>
+						<h2>Moonfin Plugin</h2>
+						{jellyseerr.isEnabled && jellyseerr.isAuthenticated && jellyseerr.isMoonfin ? (
+							<>
+								<div className={css.infoItem}>
+									<span className={css.infoLabel}>Status</span>
+									<span className={css.infoValue}>Connected via Moonfin</span>
+								</div>
+								{jellyseerr.serverUrl && (
+									<div className={css.infoItem}>
+										<span className={css.infoLabel}>Jellyseerr URL</span>
+										<span className={css.infoValue}>{jellyseerr.serverUrl}</span>
+									</div>
+								)}
+								{jellyseerr.user && (
+									<div className={css.infoItem}>
+										<span className={css.infoLabel}>User</span>
+										<span className={css.infoValue}>
+											{jellyseerr.user.displayName || 'Moonfin User'}
+										</span>
+									</div>
+								)}
 								<SpottableButton
-									className={css.backLink}
-									onClick={handleBackToAuthSelection}
-									spotlightId="auth-back"
+									className={css.actionButton}
+									onClick={handleJellyseerrDisconnect}
+									spotlightId="jellyseerr-disconnect"
 								>
-									← Back
+									Disconnect
 								</SpottableButton>
-							</div>
-							<p className={css.authHint}>
-								Sign in using your Jellyfin credentials ({user?.Name})
-							</p>
-							<div className={css.inputGroup}>
-								<label>Jellyfin Password</label>
-								<SpottableInput
-									type="password"
-									placeholder="Enter your Jellyfin password"
-									value={jellyfinPassword}
-									onChange={handleJellyfinPasswordChange}
-									className={css.input}
-									spotlightId="jellyfin-password"
-								/>
-							</div>
-							<SpottableButton
-								className={css.actionButton}
-								onClick={handleJellyfinAuth}
-								disabled={isAuthenticating}
-								spotlightId="jellyfin-auth-submit"
-							>
-								{isAuthenticating ? 'Connecting...' : 'Connect'}
-							</SpottableButton>
-						</div>
-					)}
+							</>
+						) : (
+							<>
+								<p className={css.authHint}>
+									Connect to Jellyseerr through the Moonfin server plugin.
+									The plugin must be installed on your Jellyfin server.
+								</p>
 
-					{authMethod === AUTH_METHODS.LOCAL && (
-						<div className={css.authForm}>
-							<div className={css.authFormHeader}>
-								<span>Local Account</span>
+								{moonfinStatus && (
+									<div className={css.statusMessage}>{moonfinStatus}</div>
+								)}
+
+								{moonfinLoginMode && (
+									<>
+										<div className={css.inputGroup}>
+											<label>Jellyseerr Username</label>
+											<SpottableInput
+												type="text"
+												placeholder="Enter Jellyseerr username"
+												value={moonfinUsername}
+												onChange={handleMoonfinUsernameChange}
+												className={css.input}
+												spotlightId="moonfin-username"
+											/>
+										</div>
+										<div className={css.inputGroup}>
+											<label>Jellyseerr Password</label>
+											<SpottableInput
+												type="password"
+												placeholder="Enter Jellyseerr password"
+												value={moonfinPassword}
+												onChange={handleMoonfinPasswordChange}
+												className={css.input}
+												spotlightId="moonfin-password"
+											/>
+										</div>
+										<SpottableButton
+											className={css.actionButton}
+											onClick={handleMoonfinLogin}
+											disabled={moonfinConnecting}
+											spotlightId="moonfin-login-submit"
+										>
+											{moonfinConnecting ? 'Logging in...' : 'Log In'}
+										</SpottableButton>
+									</>
+								)}
+							</>
+						)}
+					</div>
+				</>
+			) : (
+				/* Direct connection mode */
+				<>
+					<div className={css.settingsGroup}>
+						<h2>Connection</h2>
+						{jellyseerr.isEnabled && jellyseerr.isAuthenticated && !jellyseerr.isMoonfin ? (
+							<>
+								<div className={css.infoItem}>
+									<span className={css.infoLabel}>Status</span>
+									<span className={css.infoValue}>Connected</span>
+								</div>
+								<div className={css.infoItem}>
+									<span className={css.infoLabel}>Server</span>
+									<span className={css.infoValue}>{jellyseerr.serverUrl}</span>
+								</div>
+								{jellyseerr.user && (
+									<div className={css.infoItem}>
+										<span className={css.infoLabel}>User</span>
+										<span className={css.infoValue}>
+											{jellyseerr.user.displayName || jellyseerr.user.username || jellyseerr.user.email}
+										</span>
+									</div>
+								)}
 								<SpottableButton
-									className={css.backLink}
-									onClick={handleBackToAuthSelection}
-									spotlightId="auth-back-local"
+									className={css.actionButton}
+									onClick={handleJellyseerrDisconnect}
+									spotlightId="jellyseerr-disconnect"
 								>
-									← Back
+									Disconnect
 								</SpottableButton>
-							</div>
-							<p className={css.authHint}>
-								Sign in with your Jellyseerr email and password
+							</>
+						) : (
+							<>
+								<div className={css.inputGroup}>
+									<label>Jellyseerr URL</label>
+									<SpottableInput
+										type="url"
+										placeholder="http://192.168.1.100:5055"
+										value={jellyseerrUrl}
+										onChange={handleJellyseerrUrlChange}
+										className={css.input}
+										spotlightId="jellyseerr-url"
+									/>
+								</div>
+
+								{jellyseerrStatus && (
+									<div className={css.statusMessage}>{jellyseerrStatus}</div>
+								)}
+							</>
+						)}
+					</div>
+
+					{!jellyseerr.isAuthenticated && (
+						<div className={css.settingsGroup}>
+							<h2>Authentication</h2>
+							<p className={css.authDescription}>
+								Choose how to authenticate with Jellyseerr
 							</p>
-							<div className={css.inputGroup}>
-								<label>Email</label>
-								<SpottableInput
-									type="email"
-									placeholder="email@example.com"
-									value={localEmail}
-									onChange={handleLocalEmailChange}
-									className={css.input}
-									spotlightId="local-email"
-								/>
-							</div>
-							<div className={css.inputGroup}>
-								<label>Password</label>
-								<SpottableInput
-									type="password"
-									placeholder="Enter your password"
-									value={localPassword}
-									onChange={handleLocalPasswordChange}
-									className={css.input}
-									spotlightId="local-password"
-								/>
-							</div>
-							<SpottableButton
-								className={css.actionButton}
-								onClick={handleLocalAuth}
-								disabled={isAuthenticating}
-								spotlightId="local-auth-submit"
-							>
-								{isAuthenticating ? 'Logging in...' : 'Login'}
-							</SpottableButton>
+
+							{authMethod === AUTH_METHODS.NONE && (
+								<div className={css.authButtons}>
+									<SpottableButton
+										className={css.authMethodButton}
+										onClick={handleSelectJellyfinAuth}
+										spotlightId="auth-jellyfin-select"
+									>
+										Login with Jellyfin Account
+									</SpottableButton>
+									<SpottableButton
+										className={css.authMethodButton}
+										onClick={handleSelectLocalAuth}
+										spotlightId="auth-local-select"
+									>
+										Login with Local Account
+									</SpottableButton>
+								</div>
+							)}
+
+							{authMethod === AUTH_METHODS.JELLYFIN && (
+								<div className={css.authForm}>
+									<div className={css.authFormHeader}>
+										<span>Jellyfin Authentication</span>
+										<SpottableButton
+											className={css.backLink}
+											onClick={handleBackToAuthSelection}
+											spotlightId="auth-back"
+										>
+											← Back
+										</SpottableButton>
+									</div>
+									<p className={css.authHint}>
+										Sign in using your Jellyfin credentials ({user?.Name})
+									</p>
+									<div className={css.inputGroup}>
+										<label>Jellyfin Password</label>
+										<SpottableInput
+											type="password"
+											placeholder="Enter your Jellyfin password"
+											value={jellyfinPassword}
+											onChange={handleJellyfinPasswordChange}
+											className={css.input}
+											spotlightId="jellyfin-password"
+										/>
+									</div>
+									<SpottableButton
+										className={css.actionButton}
+										onClick={handleJellyfinAuth}
+										disabled={isAuthenticating}
+										spotlightId="jellyfin-auth-submit"
+									>
+										{isAuthenticating ? 'Connecting...' : 'Connect'}
+									</SpottableButton>
+								</div>
+							)}
+
+							{authMethod === AUTH_METHODS.LOCAL && (
+								<div className={css.authForm}>
+									<div className={css.authFormHeader}>
+										<span>Local Account</span>
+										<SpottableButton
+											className={css.backLink}
+											onClick={handleBackToAuthSelection}
+											spotlightId="auth-back-local"
+										>
+											← Back
+										</SpottableButton>
+									</div>
+									<p className={css.authHint}>
+										Sign in with your Jellyseerr email and password
+									</p>
+									<div className={css.inputGroup}>
+										<label>Email</label>
+										<SpottableInput
+											type="email"
+											placeholder="email@example.com"
+											value={localEmail}
+											onChange={handleLocalEmailChange}
+											className={css.input}
+											spotlightId="local-email"
+										/>
+									</div>
+									<div className={css.inputGroup}>
+										<label>Password</label>
+										<SpottableInput
+											type="password"
+											placeholder="Enter your password"
+											value={localPassword}
+											onChange={handleLocalPasswordChange}
+											className={css.input}
+											spotlightId="local-password"
+										/>
+									</div>
+									<SpottableButton
+										className={css.actionButton}
+										onClick={handleLocalAuth}
+										disabled={isAuthenticating}
+										spotlightId="local-auth-submit"
+									>
+										{isAuthenticating ? 'Logging in...' : 'Login'}
+									</SpottableButton>
+								</div>
+							)}
 						</div>
 					)}
-				</div>
+				</>
 			)}
 		</div>
 	);

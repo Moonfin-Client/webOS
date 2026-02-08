@@ -46,7 +46,8 @@ const defaultSettings = {
 	featuredContentType: 'both',
 	featuredItemCount: 10,
 	showFeaturedBar: true,
-	unifiedLibraryMode: false
+	unifiedLibraryMode: false,
+	useMoonfinPlugin: false
 };
 
 export {DEFAULT_HOME_ROWS};

@@ -6,13 +6,40 @@ let jellyseerrUrl = null;
 let userId = null;
 let apiKey = null;
 
+// Moonfin plugin proxy mode
+let moonfinMode = false;
+let jellyfinServerUrl = null;
+let jellyfinAccessToken = null;
+
 export const setConfig = (url, user, key = null) => {
 	jellyseerrUrl = url?.replace(/\/+$/, '');
 	userId = user;
 	apiKey = key;
+	console.log('[Jellyseerr] Config set:', {
+		url: jellyseerrUrl,
+		userId,
+		hasApiKey: !!apiKey,
+		moonfinMode
+	});
 };
 
-export const getConfig = () => ({jellyseerrUrl, userId, apiKey});
+export const setMoonfinConfig = (serverUrl, token) => {
+	jellyfinServerUrl = serverUrl?.replace(/\/+$/, '');
+	jellyfinAccessToken = token;
+	console.log('[Jellyseerr] Moonfin config set:', {
+		serverUrl: jellyfinServerUrl,
+		hasToken: !!jellyfinAccessToken
+	});
+};
+
+export const setMoonfinMode = (enabled) => {
+	moonfinMode = !!enabled;
+	console.log('[Jellyseerr] Moonfin mode:', moonfinMode ? 'enabled' : 'disabled');
+};
+
+export const isMoonfinMode = () => moonfinMode;
+
+export const getConfig = () => ({jellyseerrUrl, userId, apiKey, moonfinMode, jellyfinServerUrl});
 
 const lunaRequest = (method, params) => {
 	return new Promise((resolve, reject) => {
@@ -26,7 +53,231 @@ const lunaRequest = (method, params) => {
 	});
 };
 
+/**
+ * Make a request via the Moonfin server plugin proxy
+ * Routes through /Moonfin/Jellyseerr/Api/{path} on the Jellyfin server
+ */
+const moonfinRequest = async (endpoint, options = {}) => {
+	if (!jellyfinServerUrl || !jellyfinAccessToken) {
+		throw new Error('Moonfin not configured');
+	}
+
+	const path = endpoint.replace(/^\//, '');
+	const url = `${jellyfinServerUrl}/Moonfin/Jellyseerr/Api/${path}`;
+	const headers = {
+		'Content-Type': 'application/json',
+		'Accept': 'application/json',
+		'Authorization': `MediaBrowser Token="${jellyfinAccessToken}"`
+	};
+
+	const bodyStr = options.body ? JSON.stringify(options.body) : undefined;
+
+	console.log('[Jellyseerr/Moonfin] Request:', options.method || 'GET', endpoint);
+
+	const result = await lunaRequest('jellyseerrRequest', {
+		userId: 'moonfin',
+		url,
+		method: options.method || 'GET',
+		headers,
+		body: bodyStr,
+		timeout: 30000
+	});
+
+	if (!result.success) {
+		throw new Error(result.error || 'Moonfin proxy request failed');
+	}
+
+	console.log('[Jellyseerr/Moonfin] Response:', result.status, endpoint);
+
+	if (result.status >= 400) {
+		let errorMessage = `Moonfin proxy error: ${result.status}`;
+		if (result.body) {
+			try {
+				const errorBody = JSON.parse(result.body);
+				if (errorBody.FileContents) {
+					try {
+						const decoded = JSON.parse(atob(errorBody.FileContents));
+						errorMessage = decoded.message || decoded.error || errorMessage;
+					} catch (e2) { void e2; }
+				} else {
+					errorMessage = errorBody.message || errorBody.error || errorMessage;
+				}
+			} catch (e) { void e; }
+		}
+		const error = new Error(errorMessage);
+		error.status = result.status;
+		throw error;
+	}
+
+	if (!result.body) return null;
+
+	try {
+		const parsed = JSON.parse(result.body);
+
+		// Moonfin wraps responses in a FileContents envelope with base64 data
+		if (parsed.FileContents !== undefined) {
+			try {
+				const decoded = atob(parsed.FileContents);
+				if (!decoded) return null;
+				const unwrapped = JSON.parse(decoded);
+				console.log('[Jellyseerr/Moonfin] Unwrapped FileContents for:', endpoint,
+					'keys:', Object.keys(unwrapped || {}));
+				return unwrapped;
+			} catch (decodeErr) {
+				console.log('[Jellyseerr/Moonfin] FileContents decode failed for:', endpoint, decodeErr.message);
+				return null;
+			}
+		}
+
+		return parsed;
+	} catch (e) {
+		return result.body;
+	}
+};
+
+/**
+ * Check Moonfin plugin status
+ */
+export const getMoonfinStatus = async () => {
+	if (!jellyfinServerUrl || !jellyfinAccessToken) {
+		throw new Error('Moonfin not configured');
+	}
+
+	const url = `${jellyfinServerUrl}/Moonfin/Jellyseerr/Status`;
+	const result = await lunaRequest('jellyseerrRequest', {
+		userId: 'moonfin',
+		url,
+		method: 'GET',
+		headers: {
+			'Accept': 'application/json',
+			'Authorization': `MediaBrowser Token="${jellyfinAccessToken}"`
+		},
+		timeout: 15000
+	});
+
+	if (!result.success) throw new Error(result.error || 'Network error');
+	if (result.status >= 400) {
+		const error = new Error(`Moonfin status check failed: ${result.status}`);
+		error.status = result.status;
+		throw error;
+	}
+
+	try {
+		return JSON.parse(result.body);
+	} catch (e) {
+		throw new Error('Invalid response from Moonfin');
+	}
+};
+
+/**
+ * Login to Jellyseerr via Moonfin plugin
+ */
+export const moonfinLogin = async (username, password) => {
+	if (!jellyfinServerUrl || !jellyfinAccessToken) {
+		throw new Error('Moonfin not configured');
+	}
+
+	const url = `${jellyfinServerUrl}/Moonfin/Jellyseerr/Login`;
+	const result = await lunaRequest('jellyseerrRequest', {
+		userId: 'moonfin',
+		url,
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			'Accept': 'application/json',
+			'Authorization': `MediaBrowser Token="${jellyfinAccessToken}"`
+		},
+		body: JSON.stringify({username, password}),
+		timeout: 30000
+	});
+
+	if (!result.success) throw new Error(result.error || 'Network error');
+	if (result.status >= 400) {
+		let errorMessage = `Moonfin login failed: ${result.status}`;
+		try {
+			const errorBody = JSON.parse(result.body);
+			errorMessage = errorBody.message || errorBody.error || errorMessage;
+		} catch (e) { void e; }
+		const error = new Error(errorMessage);
+		error.status = result.status;
+		throw error;
+	}
+
+	try {
+		return JSON.parse(result.body);
+	} catch (e) {
+		return null;
+	}
+};
+
+/**
+ * Logout from Jellyseerr via Moonfin plugin
+ */
+export const moonfinLogout = async () => {
+	if (!jellyfinServerUrl || !jellyfinAccessToken) {
+		throw new Error('Moonfin not configured');
+	}
+
+	const url = `${jellyfinServerUrl}/Moonfin/Jellyseerr/Logout`;
+	const result = await lunaRequest('jellyseerrRequest', {
+		userId: 'moonfin',
+		url,
+		method: 'DELETE',
+		headers: {
+			'Authorization': `MediaBrowser Token="${jellyfinAccessToken}"`
+		},
+		timeout: 15000
+	});
+
+	if (!result.success) throw new Error(result.error || 'Network error');
+	if (result.status >= 400) {
+		const error = new Error(`Moonfin logout failed: ${result.status}`);
+		error.status = result.status;
+		throw error;
+	}
+	return null;
+};
+
+/**
+ * Validate Moonfin session
+ */
+export const moonfinValidate = async () => {
+	if (!jellyfinServerUrl || !jellyfinAccessToken) {
+		throw new Error('Moonfin not configured');
+	}
+
+	const url = `${jellyfinServerUrl}/Moonfin/Jellyseerr/Validate`;
+	const result = await lunaRequest('jellyseerrRequest', {
+		userId: 'moonfin',
+		url,
+		method: 'GET',
+		headers: {
+			'Accept': 'application/json',
+			'Authorization': `MediaBrowser Token="${jellyfinAccessToken}"`
+		},
+		timeout: 15000
+	});
+
+	if (!result.success) throw new Error(result.error || 'Network error');
+	if (result.status >= 400) {
+		const error = new Error(`Moonfin validation failed: ${result.status}`);
+		error.status = result.status;
+		throw error;
+	}
+
+	try {
+		return JSON.parse(result.body);
+	} catch (e) {
+		return null;
+	}
+};
+
 const request = async (endpoint, options = {}) => {
+	// If Moonfin mode is enabled, route through the proxy
+	if (moonfinMode) {
+		return moonfinRequest(endpoint, options);
+	}
+
 	if (!jellyseerrUrl || !userId) {
 		throw new Error('Jellyseerr not configured');
 	}
@@ -387,9 +638,19 @@ export const proxyImage = async (imageUrl) => {
 	return null;
 };
 
+export const getSessionCookie = () => null; // webOS uses Luna service cookie jar
+
 export default {
 	setConfig,
 	getConfig,
+	setMoonfinConfig,
+	setMoonfinMode,
+	isMoonfinMode,
+	getMoonfinStatus,
+	moonfinLogin,
+	moonfinLogout,
+	moonfinValidate,
+	getSessionCookie,
 	testConnection,
 	login,
 	loginWithJellyfin,

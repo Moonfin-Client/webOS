@@ -345,7 +345,7 @@ const DiscoverRow = memo(function DiscoverRow({
 });
 
 const JellyseerrDiscover = ({onSelectItem, onSelectGenre, onSelectNetwork, onSelectStudio, onBack}) => {
-	const {isAuthenticated, isEnabled} = useJellyseerr();
+	const {isAuthenticated, isEnabled, user: contextUser} = useJellyseerr();
 	const {settings} = useSettings();
 	const [rows, setRows] = useState({});
 	const [rowPages, setRowPages] = useState({});
@@ -376,7 +376,11 @@ const JellyseerrDiscover = ({onSelectItem, onSelectGenre, onSelectNetwork, onSel
 			if (!isAuthenticated) return;
 			setIsLoading(true);
 			try {
-				const currentUser = await jellyseerrApi.getUser().catch(() => null);
+				// Prefer context user (Moonfin) or fall back to API user
+				const apiUser = await jellyseerrApi.getUser().catch(() => null);
+				const currentUser = contextUser?.jellyseerrUserId
+					? {id: contextUser.jellyseerrUserId, ...apiUser}
+					: apiUser;
 				console.log('[JellyseerrDiscover] Current user:', currentUser?.id, currentUser?.username);
 
 				const [
@@ -443,7 +447,7 @@ const JellyseerrDiscover = ({onSelectItem, onSelectGenre, onSelectNetwork, onSel
 		} else {
 			setIsLoading(false);
 		}
-	}, [isAuthenticated]);
+	}, [isAuthenticated, contextUser]);
 
 	// Load more items for a specific row
 	const loadMoreForRow = useCallback(async (rowId) => {
