@@ -48,6 +48,7 @@ const Browse = ({
 	const [featuredItems, setFeaturedItems] = useState([]);
 	const [currentFeaturedIndex, setCurrentFeaturedIndex] = useState(0);
 	const [backdropUrl, setBackdropUrl] = useState('');
+	const [backdropOpacity, setBackdropOpacity] = useState(1);
 	const [browseMode, setBrowseMode] = useState('featured');
 	const [featuredFocused, setFeaturedFocused] = useState(false);
 	const [focusedItem, setFocusedItem] = useState(null);
@@ -714,7 +715,6 @@ const Browse = ({
 		return () => clearInterval(interval);
 	}, [featuredItems.length, featuredFocused, browseMode, settings.carouselSpeed, settings.showFeaturedBar]);
 
-	//backdrop fading for older webos
 	const fadeBackdropTo = (targetOpacity, duration = 300) => {
 	  const startOpacity = backdropOpacity;
 	  const startTime = performance.now();
@@ -730,7 +730,7 @@ const Browse = ({
 	  };
 	  requestAnimationFrame(animate);
 	};
-	
+
 	useEffect(() => {
 		let backdropId = null;
 		let itemForBackdrop = null;
@@ -755,7 +755,6 @@ const Browse = ({
 				clearTimeout(backdropTimeoutRef.current);
 			}
 			pendingBackdropRef.current = url;
-
 			backdropTimeoutRef.current = setTimeout(() => {
 				window.requestAnimationFrame(() => {
 					setBackdropUrl(pendingBackdropRef.current);
@@ -764,6 +763,7 @@ const Browse = ({
 						setBackdropUrl(pendingBackdropRef.current);
 						fadeBackdropTo(1, 300);
 					}, 300);
+
 				});
 			}, BACKDROP_DEBOUNCE_MS);
 		}
