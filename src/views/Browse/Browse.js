@@ -48,7 +48,6 @@ const Browse = ({
 	const [featuredItems, setFeaturedItems] = useState([]);
 	const [currentFeaturedIndex, setCurrentFeaturedIndex] = useState(0);
 	const [backdropUrl, setBackdropUrl] = useState('');
-	const [backdropOpacity, setBackdropOpacity] = useState(1);
 	const [browseMode, setBrowseMode] = useState('featured');
 	const [featuredFocused, setFeaturedFocused] = useState(false);
 	const [focusedItem, setFocusedItem] = useState(null);
@@ -715,6 +714,23 @@ const Browse = ({
 		return () => clearInterval(interval);
 	}, [featuredItems.length, featuredFocused, browseMode, settings.carouselSpeed, settings.showFeaturedBar]);
 
+	//backdrop fading for older webos
+	const fadeBackdropTo = (targetOpacity, duration = 300) => {
+	  const startOpacity = backdropOpacity;
+	  const startTime = performance.now();
+	
+	  const animate = (currentTime) => {
+	    const elapsed = currentTime - startTime;
+	    const progress = Math.min(elapsed / duration, 1);
+	    const newOpacity = startOpacity + (targetOpacity - startOpacity) * progress;
+	    setBackdropOpacity(newOpacity);
+	    if (progress < 1) {
+	      requestAnimationFrame(animate);
+	    }
+	  };
+	  requestAnimationFrame(animate);
+	};
+	
 	useEffect(() => {
 		let backdropId = null;
 		let itemForBackdrop = null;
@@ -739,11 +755,15 @@ const Browse = ({
 				clearTimeout(backdropTimeoutRef.current);
 			}
 			pendingBackdropRef.current = url;
-			setBackdropOpacity(0);
+
 			backdropTimeoutRef.current = setTimeout(() => {
 				window.requestAnimationFrame(() => {
 					setBackdropUrl(pendingBackdropRef.current);
-					setBackdropOpacity(1);
+					fadeBackdropTo(0, 300);
+					setTimeout(() => {
+						setBackdropUrl(pendingBackdropRef.current);
+						fadeBackdropTo(1, 300);
+					}, 300);
 				});
 			}, BACKDROP_DEBOUNCE_MS);
 		}
@@ -880,7 +900,7 @@ const Browse = ({
 						className={css.globalBackdropImage}
 						src={backdropUrl}
 						alt=""
-						style={{filter: settings.backdropBlurHome > 0 ? `blur(${settings.backdropBlurHome}px)` : 'none',opacity: backdropOpacity}}
+						style={{filter: settings.backdropBlurHome > 0 ? `blur(${settings.backdropBlurHome}px)` : 'none',opacity: backdropOpacity,transition: 'none'}}
 					/>
 				)}
 				<div className={css.globalBackdropOverlay} />
