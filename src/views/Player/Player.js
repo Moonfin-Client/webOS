@@ -191,6 +191,7 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 	const runTimeRef = useRef(0);
 	const healthMonitorRef = useRef(null);
 	const nextEpisodeTimerRef = useRef(null);
+	const hasTriggeredNextEpisodeRef = useRef(false);
 	const unregisterAppStateRef = useRef(null);
 	const controlsTimeoutRef = useRef(null);
 	const hlsRecoveryRef = useRef({ attempts: 0, lastErrorTime: 0 });
@@ -913,8 +914,9 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 			if (nextEpisode && runTimeRef.current > 0) {
 				const remaining = runTimeRef.current - ticks;
 				const nearEnd = remaining < 300000000;
-				if (nearEnd && !showNextEpisode && !showSkipCredits) {
+				if (nearEnd && !showNextEpisode && !showSkipCredits && !hasTriggeredNextEpisodeRef.current) {
 					setShowNextEpisode(true);
+					hasTriggeredNextEpisodeRef.current = true;
 					if (settings.autoPlay) {
 						startNextEpisodeCountdown();
 					}
@@ -1523,7 +1525,7 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 									className={css.nextCancelBtn}
 									onClick={cancelNextEpisodeCountdown}
 								>
-									Cancel
+									Hide
 								</SpottableButton>
 							</div>
 						</div>
