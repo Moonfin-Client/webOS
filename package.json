@@ -7,7 +7,7 @@
 	"scripts": {
 		"serve": "enact serve",
 		"pack": "enact pack",
-		"build": "npm build.js",
+		"build": "node build.js",
 		"watch": "enact pack --watch",
 		"clean": "enact clean",
 		"lint": "enact lint .",
