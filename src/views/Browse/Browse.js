@@ -48,7 +48,7 @@ const Browse = ({
 	const [featuredItems, setFeaturedItems] = useState([]);
 	const [currentFeaturedIndex, setCurrentFeaturedIndex] = useState(0);
 	const [backdropUrl, setBackdropUrl] = useState('');
-	const [backdropOpacity, setBackdropOpacity] = useState(1);	
+	const [backdropOpacity, setBackdropOpacity] = useState(1);
 	const [prevBackdropUrl, setPrevBackdropUrl] = useState(null);
 	const [prevBackdropOpacity, setPrevBackdropOpacity] = useState(0);
 	const [browseMode, setBrowseMode] = useState('featured');
@@ -782,7 +782,7 @@ const Browse = ({
 				clearTimeout(backdropTimeoutRef.current);
 			}
 		};
-	}, [focusedItem, browseMode, currentFeaturedIndex, featuredItems, getItemServerUrl]);
+	}, [focusedItem, browseMode, backdropUrl, crossFadeBackdrop, currentFeaturedIndex, featuredItems, getItemServerUrl]);
 
 	const handleSelectItem = useCallback((item) => {
 		if (lastFocusedRowRef.current !== null) {
