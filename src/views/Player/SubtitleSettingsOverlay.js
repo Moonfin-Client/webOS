@@ -73,6 +73,8 @@ const getLabel = (options, currentValue, fallback) => {
 	return option?.label || fallback;
 };
 
+const stopPropagation = (e) => e.stopPropagation();
+
 const SubtitleSettingsOverlay = ({visible, onClose}) => {
 	const {settings, updateSetting} = useSettings();
 
@@ -119,13 +121,33 @@ const SubtitleSettingsOverlay = ({visible, onClose}) => {
 		cycleOption(SUBTITLE_BACKGROUND_COLOR_OPTIONS, settings.subtitleBackgroundColor, updateSetting, 'subtitleBackgroundColor');
 	}, [settings.subtitleBackgroundColor, updateSetting]);
 
+	const handlePositionAbsoluteChange = useCallback((e) => {
+		updateSetting('subtitlePositionAbsolute', e.value);
+	}, [updateSetting]);
+
+	const handleOpacityChange = useCallback((e) => {
+		updateSetting('subtitleOpacity', e.value);
+	}, [updateSetting]);
+
+	const handleShadowOpacityChange = useCallback((e) => {
+		updateSetting('subtitleShadowOpacity', e.value);
+	}, [updateSetting]);
+
+	const handleShadowBlurChange = useCallback((e) => {
+		updateSetting('subtitleShadowBlur', e.value);
+	}, [updateSetting]);
+
+	const handleBackgroundChange = useCallback((e) => {
+		updateSetting('subtitleBackground', e.value);
+	}, [updateSetting]);
+
 	if (!visible) return null;
 
 	return (
 		<div className={css.trackModal} onClick={onClose}>
 			<SettingsContainer
 				className={`${css.modalContent} ${css.settingsModal}`}
-				onClick={(e) => e.stopPropagation()}
+				onClick={stopPropagation}
 				spotlightId="subtitle-settings-modal"
 			>
 				<h2 className={css.modalTitle}>Subtitle Appearance</h2>
@@ -172,7 +194,7 @@ const SubtitleSettingsOverlay = ({visible, onClose}) => {
 								max={100}
 								step={5}
 								value={settings.subtitlePositionAbsolute}
-								onChange={(e) => updateSetting('subtitlePositionAbsolute', e.value)}
+							onChange={handlePositionAbsoluteChange}
 								className={css.settingsSlider}
 								tooltip={false}
 								spotlightId="sub-setting-positionAbsolute"
@@ -193,7 +215,7 @@ const SubtitleSettingsOverlay = ({visible, onClose}) => {
 							max={100}
 							step={5}
 							value={settings.subtitleOpacity}
-							onChange={(e) => updateSetting('subtitleOpacity', e.value)}
+						onChange={handleOpacityChange}
 							className={css.settingsSlider}
 							tooltip={false}
 							spotlightId="sub-setting-opacity"
@@ -237,7 +259,7 @@ const SubtitleSettingsOverlay = ({visible, onClose}) => {
 							max={100}
 							step={5}
 							value={settings.subtitleShadowOpacity}
-							onChange={(e) => updateSetting('subtitleShadowOpacity', e.value)}
+						onChange={handleShadowOpacityChange}
 							className={css.settingsSlider}
 							tooltip={false}
 							spotlightId="sub-setting-shadowOpacity"
@@ -257,7 +279,7 @@ const SubtitleSettingsOverlay = ({visible, onClose}) => {
 							max={1}
 							step={0.1}
 							value={settings.subtitleShadowBlur || 0.1}
-							onChange={(e) => updateSetting('subtitleShadowBlur', e.value)}
+						onChange={handleShadowBlurChange}
 							className={css.settingsSlider}
 							tooltip={false}
 							spotlightId="sub-setting-shadowBlur"
@@ -289,7 +311,7 @@ const SubtitleSettingsOverlay = ({visible, onClose}) => {
 							max={100}
 							step={5}
 							value={settings.subtitleBackground}
-							onChange={(e) => updateSetting('subtitleBackground', e.value)}
+						onChange={handleBackgroundChange}
 							className={css.settingsSlider}
 							tooltip={false}
 							spotlightId="sub-setting-bgOpacity"
