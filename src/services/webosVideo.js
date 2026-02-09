@@ -180,7 +180,8 @@ export const getPlayMethod = (mediaSource, capabilities) => {
 	});
 
 	// Build supported containers list
-	const supportedContainers = ['mp4', 'm4v', 'mov', 'ts', 'mpegts', 'mts', 'm2ts', 'avi', '3gp', '3g2', 'mpg', 'mpeg', 'vob', 'dat'];
+	const supportedContainers = ['mp4', 'm4v', 'mov', 'ts', 'mpegts', 'mts', 'm2ts', '3gp', '3g2', 'mpg', 'mpeg', 'vob', 'dat'];
+	if (capabilities.avi) supportedContainers.push('avi');
 	if (capabilities.mkv) supportedContainers.push('mkv', 'matroska');
 	if (capabilities.webm) supportedContainers.push('webm');
 	if (capabilities.asf) supportedContainers.push('asf');

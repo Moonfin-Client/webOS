@@ -203,6 +203,7 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 	const seekDebounceTimerRef = useRef(null);
 	const transcodeOffsetTicksRef = useRef(0);
 	const transcodeOffsetDetectedRef = useRef(true);
+	const playbackStartTimeoutRef = useRef(null);
 
 	const topButtons = useMemo(() => [
 		{id: 'playPause', icon: isPaused ? <IconPlay /> : <IconPause />, label: isPaused ? 'Play' : 'Pause', action: 'playPause'},
@@ -732,6 +733,30 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 			video.src = mediaUrl;
 			video.load();
 
+			// Start a playback timeout for non-HLS streams (DirectPlay/DirectStream).
+			// Some formats (e.g. AVI) are listed as platform-supported by LG but may
+			// silently fail in the HTML5 <video> element without firing an error event,
+			// resulting in a black screen. If no timeupdate fires within 8 seconds,
+			// synthetically trigger the error handler to fall back to transcoding.
+			if (playbackStartTimeoutRef.current) {
+				clearTimeout(playbackStartTimeoutRef.current);
+			}
+			const onFirstTimeUpdate = () => {
+				clearTimeout(playbackStartTimeoutRef.current);
+				playbackStartTimeoutRef.current = null;
+				video.removeEventListener('timeupdate', onFirstTimeUpdate);
+			};
+			video.addEventListener('timeupdate', onFirstTimeUpdate);
+			playbackStartTimeoutRef.current = setTimeout(() => {
+				video.removeEventListener('timeupdate', onFirstTimeUpdate);
+				// Check if playback actually started
+				if (video.currentTime === 0 && (video.readyState < 3 || video.paused)) {
+					console.warn('[Player] Playback start timeout — no timeupdate received in 8s, triggering error handler');
+					console.warn('[Player] Video state:', { readyState: video.readyState, networkState: video.networkState, paused: video.paused, currentSrc: video.currentSrc });
+					video.dispatchEvent(new Event('error'));
+				}
+			}, 8000);
+
 			video.play().then(() => {
 				console.log('[Player] play() promise resolved');
 			}).catch(err => {
@@ -745,6 +770,10 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 			if (hlsRef.current) {
 				hlsRef.current.destroy();
 				hlsRef.current = null;
+			}
+			if (playbackStartTimeoutRef.current) {
+				clearTimeout(playbackStartTimeoutRef.current);
+				playbackStartTimeoutRef.current = null;
 			}
 		};
 	}, [mediaUrl, isLoading, mimeType, playMethod, seekInTranscode]);
@@ -768,10 +797,18 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 		}
 	}, []);
 
-	// Handle playback health issues
+	// Handle playback health issues — if the health monitor detects stalled
+	// playback (no progress for extended period), fall back to transcoding.
 	const handleUnhealthy = useCallback(async () => {
 		console.log('[Player] Playback unhealthy, falling back to transcode');
-	}, []);
+		if (!hasTriedTranscode && playMethod !== 'Transcode') {
+			const video = videoRef.current;
+			if (video) {
+				console.warn('[Player] Health monitor triggering transcode fallback');
+				video.dispatchEvent(new Event('error'));
+			}
+		}
+	}, [hasTriedTranscode, playMethod]);
 
 	const cancelNextEpisodeCountdown = useCallback(() => {
 		if (nextEpisodeTimerRef.current) {
@@ -1017,6 +1054,7 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 
 					setMediaUrl(result.url);
 					setPlayMethod(result.playMethod);
+					setMimeType(result.mimeType || 'video/mp4');
 					playSessionRef.current = result.playSessionId;
 					return;
 				}
