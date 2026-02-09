@@ -106,15 +106,6 @@ const SUBTITLE_POSITION_OPTIONS = [
 	{value: 'absolute', label: 'Absolute', offset: 0}
 ];
 
-const SUBTITLE_BACKGROUND_OPTIONS = [
-	{value: 0, label: 'None'},
-	{value: 25, label: 'Light (25%)'},
-	{value: 50, label: 'Medium (50%)'},
-	{value: 75, label: 'Dark (75%)'},
-	{value: 90, label: 'Very Dark (90%)'},
-	{value: 100, label: 'Solid Black'}
-];
-
 const SUBTITLE_COLOR_OPTIONS = [
 	{value: '#ffffff', label: 'White'},
 	{value: '#ffff00', label: 'Yellow'},
@@ -142,26 +133,6 @@ const SUBTITLE_BACKGROUND_COLOR_OPTIONS = [
 	{value: '#808080', label: 'Grey'},
 	{value: '#404040', label: 'Dark Grey'},
 	{value: '#000080', label: 'Navy'}
-];
-
-const SUBTITLE_OPACITY_OPTIONS = [
-	{value: 100, label: '100%'},
-	{value: 90, label: '90%'},
-	{value: 80, label: '80%'},
-	{value: 70, label: '70%'},
-	{value: 60, label: '60%'},
-	{value: 50, label: '50%'},
-	{value: 25, label: '25%'}
-];
-
-const SUBTITLE_ABSOLUTE_POSITION_OPTIONS = [
-	{value: 95, label: '95% (Bottom)'},
-	{value: 90, label: '90%'},
-	{value: 85, label: '85%'},
-	{value: 80, label: '80%'},
-	{value: 70, label: '70%'},
-	{value: 50, label: '50% (Middle)'},
-	{value: 20, label: '20% (Top)'}
 ];
 
 const SEEK_STEP_OPTIONS = [
