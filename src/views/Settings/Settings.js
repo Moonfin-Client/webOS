@@ -106,15 +106,6 @@ const SUBTITLE_POSITION_OPTIONS = [
 	{value: 'absolute', label: 'Absolute', offset: 0}
 ];
 
-const SUBTITLE_BACKGROUND_OPTIONS = [
-	{value: 0, label: 'None'},
-	{value: 25, label: 'Light (25%)'},
-	{value: 50, label: 'Medium (50%)'},
-	{value: 75, label: 'Dark (75%)'},
-	{value: 90, label: 'Very Dark (90%)'},
-	{value: 100, label: 'Solid Black'}
-];
-
 const SUBTITLE_COLOR_OPTIONS = [
 	{value: '#ffffff', label: 'White'},
 	{value: '#ffff00', label: 'Yellow'},
@@ -142,26 +133,6 @@ const SUBTITLE_BACKGROUND_COLOR_OPTIONS = [
 	{value: '#808080', label: 'Grey'},
 	{value: '#404040', label: 'Dark Grey'},
 	{value: '#000080', label: 'Navy'}
-];
-
-const SUBTITLE_OPACITY_OPTIONS = [
-	{value: 100, label: '100%'},
-	{value: 90, label: '90%'},
-	{value: 80, label: '80%'},
-	{value: 70, label: '70%'},
-	{value: 60, label: '60%'},
-	{value: 50, label: '50%'},
-	{value: 25, label: '25%'}
-];
-
-const SUBTITLE_ABSOLUTE_POSITION_OPTIONS = [
-	{value: 95, label: '95% (Bottom)'},
-	{value: 90, label: '90%'},
-	{value: 85, label: '85%'},
-	{value: 80, label: '80%'},
-	{value: 70, label: '70%'},
-	{value: 50, label: '50% (Middle)'},
-	{value: 20, label: '20% (Top)'}
 ];
 
 const SEEK_STEP_OPTIONS = [
@@ -477,25 +448,6 @@ const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
 		updateSetting('subtitlePosition', SUBTITLE_POSITION_OPTIONS[nextIndex].value);
 	}, [settings.subtitlePosition, updateSetting]);
 
-	const cycleSubtitleOpacity = useCallback(() => {
-		const currentIndex = SUBTITLE_OPACITY_OPTIONS.findIndex(o => o.value === settings.subtitleOpacity);
-		const nextIndex = (currentIndex + 1) % SUBTITLE_OPACITY_OPTIONS.length;
-		updateSetting('subtitleOpacity', SUBTITLE_OPACITY_OPTIONS[nextIndex].value);
-	}, [settings.subtitleOpacity, updateSetting]);
-
-	const cycleSubtitleAbsolutePosition = useCallback(() => {
-		const currentIndex = SUBTITLE_ABSOLUTE_POSITION_OPTIONS.findIndex(o => o.value === settings.subtitlePositionAbsolute);
-		const nextIndex = (currentIndex + 1) % SUBTITLE_ABSOLUTE_POSITION_OPTIONS.length;
-		updateSetting('subtitlePositionAbsolute', SUBTITLE_ABSOLUTE_POSITION_OPTIONS[nextIndex].value);
-	}, [settings.subtitlePositionAbsolute, updateSetting]);
-
-	const cycleSubtitleBackground = useCallback(() => {
-		const currentIndex = SUBTITLE_BACKGROUND_OPTIONS.findIndex(o => o.value === settings.subtitleBackground);
-		const index = currentIndex === -1 ? 3 : currentIndex;
-		const nextIndex = (index + 1) % SUBTITLE_BACKGROUND_OPTIONS.length;
-		updateSetting('subtitleBackground', SUBTITLE_BACKGROUND_OPTIONS[nextIndex].value);
-	}, [settings.subtitleBackground, updateSetting]);
-
 	const cycleSubtitleColor = useCallback(() => {
 		const currentIndex = SUBTITLE_COLOR_OPTIONS.findIndex(o => o.value === settings.subtitleColor);
 		const index = currentIndex === -1 ? 0 : currentIndex;
@@ -534,6 +486,26 @@ const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
 		const nextIndex = (currentIndex + 1) % UI_COLOR_OPTIONS.length;
 		updateSetting('uiColor', UI_COLOR_OPTIONS[nextIndex].value);
 	}, [settings.uiColor, updateSetting]);
+
+	const handleSliderPositionAbsolute = useCallback((e) => {
+		updateSetting('subtitlePositionAbsolute', e.value);
+	}, [updateSetting]);
+
+	const handleSliderOpacity = useCallback((e) => {
+		updateSetting('subtitleOpacity', e.value);
+	}, [updateSetting]);
+
+	const handleSliderShadowOpacity = useCallback((e) => {
+		updateSetting('subtitleShadowOpacity', e.value);
+	}, [updateSetting]);
+
+	const handleSliderShadowBlur = useCallback((e) => {
+		updateSetting('subtitleShadowBlur', e.value);
+	}, [updateSetting]);
+
+	const handleSliderBackground = useCallback((e) => {
+		updateSetting('subtitleBackground', e.value);
+	}, [updateSetting]);
 
 	const openHomeRowsModal = useCallback(() => {
 		setTempHomeRows([...(settings.homeRows || DEFAULT_HOME_ROWS)].sort((a, b) => a.order - b.order));
@@ -671,31 +643,6 @@ const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
 		}
 	}, [jellyseerrUrl, localEmail, localPassword, user, jellyseerr]);
 
-	const handleMoonfinConnect = useCallback(async () => {
-		if (!serverUrl || !accessToken) {
-			setMoonfinStatus('Not connected to a Jellyfin server');
-			return;
-		}
-
-		setMoonfinConnecting(true);
-		setMoonfinStatus('Checking Moonfin plugin...');
-
-		try {
-			const result = await jellyseerr.configureWithMoonfin(serverUrl, accessToken);
-			if (result.authenticated) {
-				setMoonfinStatus('Connected via Moonfin plugin!');
-				setMoonfinLoginMode(false);
-			} else {
-				setMoonfinStatus('Moonfin plugin found but no session. Please log in.');
-				setMoonfinLoginMode(true);
-			}
-		} catch (err) {
-			setMoonfinStatus(`Moonfin connection failed: ${err.message}`);
-		} finally {
-			setMoonfinConnecting(false);
-		}
-	}, [serverUrl, accessToken, jellyseerr]);
-
 	const handleMoonfinLogin = useCallback(async () => {
 		if (!moonfinUsername || !moonfinPassword) {
 			setMoonfinStatus('Please enter username and password');
@@ -773,21 +720,6 @@ const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
 	const getSubtitlePositionLabel = () => {
 		const option = SUBTITLE_POSITION_OPTIONS.find(o => o.value === settings.subtitlePosition);
 		return option?.label || 'Bottom';
-	};
-
-	const getSubtitleOpacityLabel = () => {
-		const option = SUBTITLE_OPACITY_OPTIONS.find(o => o.value === settings.subtitleOpacity);
-		return option?.label || '100%';
-	};
-
-	const getSubtitleAbsolutePositionLabel = () => {
-		const option = SUBTITLE_ABSOLUTE_POSITION_OPTIONS.find(o => o.value === settings.subtitlePositionAbsolute);
-		return option?.label || '90%';
-	};
-
-	const getSubtitleBackgroundLabel = () => {
-		const option = SUBTITLE_BACKGROUND_OPTIONS.find(o => o.value === settings.subtitleBackground);
-		return option?.label || 'Dark (75%)';
 	};
 
 	const getSubtitleColorLabel = () => {
@@ -920,7 +852,7 @@ const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
 							max={100}
 							step={5}
 							value={settings.subtitlePositionAbsolute}
-							onChange={(e) => updateSetting('subtitlePositionAbsolute', e.value)}
+							onChange={handleSliderPositionAbsolute}
 							className={css.settingsSlider}
 							tooltip={false}
 							spotlightId="setting-subtitlePositionAbsolute"
@@ -937,7 +869,7 @@ const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
 						max={100}
 						step={5}
 						value={settings.subtitleOpacity}
-						onChange={(e) => updateSetting('subtitleOpacity', e.value)}
+						onChange={handleSliderOpacity}
 						className={css.settingsSlider}
 						tooltip={false}
 						spotlightId="setting-subtitleOpacity"
@@ -962,7 +894,7 @@ const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
 						max={100}
 						step={5}
 						value={settings.subtitleShadowOpacity}
-						onChange={(e) => updateSetting('subtitleShadowOpacity', e.value)}
+						onChange={handleSliderShadowOpacity}
 						className={css.settingsSlider}
 						tooltip={false}
 						spotlightId="setting-subtitleShadowOpacity"
@@ -978,7 +910,7 @@ const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
 						max={1}
 						step={0.1}
 						value={settings.subtitleShadowBlur || 0.1}
-						onChange={(e) => updateSetting('subtitleShadowBlur', e.value)}
+						onChange={handleSliderShadowBlur}
 						className={css.settingsSlider}
 						tooltip={false}
 						spotlightId="setting-subtitleShadowBlur"
@@ -1000,7 +932,7 @@ const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
 						max={100}
 						step={5}
 						value={settings.subtitleBackground}
-						onChange={(e) => updateSetting('subtitleBackground', e.value)}
+						onChange={handleSliderBackground}
 						className={css.settingsSlider}
 						tooltip={false}
 						spotlightId="setting-subtitleBackground"

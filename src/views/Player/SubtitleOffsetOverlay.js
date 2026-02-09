@@ -14,6 +14,8 @@ const OffsetContainer = SpotlightContainerDecorator({
 	preserveId: true
 }, 'div');
 
+const stopPropagation = (e) => e.stopPropagation();
+
 const SubtitleOffsetOverlay = ({visible, currentOffset, onClose, onOffsetChange}) => {
 	const handleIncrease = useCallback(() => {
 		onOffsetChange(Math.round((currentOffset + 0.1) * 10) / 10);
@@ -56,7 +58,7 @@ const SubtitleOffsetOverlay = ({visible, currentOffset, onClose, onOffsetChange}
 		<div className={css.trackModal} onClick={onClose}>
 			<OffsetContainer
 				className={`${css.modalContent} ${css.offsetModal}`}
-				onClick={(e) => e.stopPropagation()}
+				onClick={stopPropagation}
 				spotlightId="offset-modal"
 			>
 				<h2 className={css.modalTitle}>Subtitle Offset</h2>

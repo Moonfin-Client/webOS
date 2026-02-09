@@ -1135,6 +1135,26 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 		});
 	}, [showControls]);
 
+	const handleSubtitleKeyDown = useCallback((e) => {
+		if (e.keyCode === 39) { // Right -> Appearance
+			e.preventDefault();
+			e.stopPropagation();
+			Spotlight.focus('btn-subtitle-appearance');
+		} else if (e.keyCode === 37) { // Left -> Offset
+			e.preventDefault();
+			e.stopPropagation();
+			Spotlight.focus('btn-subtitle-offset');
+		}
+	}, []);
+
+	const handleOpenSubtitleOffset = useCallback(() => {
+		openModal('subtitleOffset');
+	}, [openModal]);
+
+	const handleOpenSubtitleSettings = useCallback(() => {
+		openModal('subtitleSettings');
+	}, [openModal]);
+
 	// Track selection - using data attributes to avoid arrow functions in JSX
 	const handleSelectAudio = useCallback(async (e) => {
 		const index = parseInt(e.currentTarget.dataset.index, 10);
@@ -1715,17 +1735,7 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 								data-index={-1}
 								data-selected={selectedSubtitleIndex === -1 ? 'true' : undefined}
 								onClick={handleSelectSubtitle}
-								onKeyDown={(e) => {
-									if (e.keyCode === 39) { // Right -> Appearance
-										e.preventDefault();
-										e.stopPropagation();
-										Spotlight.focus('btn-subtitle-appearance');
-									} else if (e.keyCode === 37) { // Left -> Offset
-										e.preventDefault();
-										e.stopPropagation();
-										Spotlight.focus('btn-subtitle-offset');
-									}
-								}}
+								onKeyDown={handleSubtitleKeyDown}
 							>
 								<span className={css.trackName}>Off</span>
 							</SpottableButton>
@@ -1736,17 +1746,7 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 									data-index={stream.index}
 									data-selected={stream.index === selectedSubtitleIndex ? 'true' : undefined}
 									onClick={handleSelectSubtitle}
-									onKeyDown={(e) => {
-										if (e.keyCode === 39) { // Right -> Appearance
-											e.preventDefault();
-											e.stopPropagation();
-											Spotlight.focus('btn-subtitle-appearance');
-										} else if (e.keyCode === 37) { // Left -> Offset
-											e.preventDefault();
-											e.stopPropagation();
-											Spotlight.focus('btn-subtitle-offset');
-										}
-									}}
+									onKeyDown={handleSubtitleKeyDown}
 								>
 									<span className={css.trackName}>{stream.displayTitle}</span>
 									{stream.isForced && <span className={css.trackInfo}>Forced</span>}
@@ -1754,8 +1754,8 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 							))}
 						</div>
 						<p className={css.modalFooter}>
-							<SpottableButton spotlightId="btn-subtitle-offset" className={css.actionBtn} onClick={() => openModal('subtitleOffset')}>Offset</SpottableButton>
-							<SpottableButton spotlightId="btn-subtitle-appearance" className={css.actionBtn} onClick={() => openModal('subtitleSettings')} style={{marginLeft: 15}}>Appearance</SpottableButton>
+							<SpottableButton spotlightId="btn-subtitle-offset" className={css.actionBtn} onClick={handleOpenSubtitleOffset}>Offset</SpottableButton>
+							<SpottableButton spotlightId="btn-subtitle-appearance" className={css.actionBtn} onClick={handleOpenSubtitleSettings} style={{marginLeft: 15}}>Appearance</SpottableButton>
 						</p>
 						<p className={css.modalFooter} style={{marginTop: 5, fontSize: 14, opacity: 0.5}}>Press BACK to close</p>
 					</ModalContainer>
