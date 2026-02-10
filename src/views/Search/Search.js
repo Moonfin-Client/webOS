@@ -27,7 +27,7 @@ const SearchIcon = () => (
 	</svg>
 );
 
-const Search = ({onSelectItem, onSelectPerson, onBack}) => {
+const Search = ({onSelectItem, onSelectPerson}) => {
 	const {api, serverUrl, hasMultipleServers} = useAuth();
 	const {settings} = useSettings();
 	const unifiedMode = settings.unifiedLibraryMode && hasMultipleServers;
@@ -163,13 +163,8 @@ const Search = ({onSelectItem, onSelectPerson, onBack}) => {
 			}
 		} else if (e.keyCode === 38) {
 			e.preventDefault();
-		} else if (e.keyCode === 461 || e.keyCode === 8) {
-			if (!query) {
-				e.preventDefault();
-				onBack?.();
-			}
 		}
-	}, [visibleRows.length, query, onBack]);
+	}, [visibleRows.length]);
 
 	const handleRowKeyDown = useCallback((e) => {
 		const rowIndex = parseInt(e.currentTarget.dataset.rowIndex, 10);
@@ -187,11 +182,8 @@ const Search = ({onSelectItem, onSelectPerson, onBack}) => {
 			if (rowIndex < visibleRows.length - 1) {
 				Spotlight.focus(`search-row-${rowIndex + 1}`);
 			}
-		} else if (e.keyCode === 461 || e.keyCode === 8) {
-			e.preventDefault();
-			onBack?.();
 		}
-	}, [visibleRows.length, onBack]);
+	}, [visibleRows.length]);
 
 	const handleClearSearch = useCallback(() => {
 		setQuery('');

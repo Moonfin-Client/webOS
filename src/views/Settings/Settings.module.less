@@ -377,8 +377,11 @@
 
 .homeRowControls {
 	display: flex;
-	gap: 8px;
 	margin-left: 16px;
+
+	> * + * {
+		margin-left: 8px;
+	}
 }
 
 .moveButton {
@@ -389,9 +392,12 @@
 .popupButtons {
 	display: flex;
 	justify-content: flex-end;
-	gap: 12px;
 	padding-top: 16px;
 	border-top: 1px solid #333;
+
+	> * + * {
+		margin-left: 12px;
+	}
 }
 
 .primaryButton {
@@ -470,8 +476,11 @@
 .serverList {
 	display: flex;
 	flex-direction: column;
-	gap: 8px;
 	margin-bottom: 16px;
+
+	> * + * {
+		margin-top: 8px;
+	}
 }
 
 .serverItem {
@@ -540,8 +549,11 @@
 .serverItemActions {
 	display: flex;
 	align-items: center;
-	gap: 8px;
 	margin-left: 16px;
+
+	> * + * {
+		margin-left: 8px;
+	}
 }
 
 .activeLabel {
