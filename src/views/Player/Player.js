@@ -1166,20 +1166,44 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 		// if the new audio track also fails at the decoder level.
 		setHasTriedTranscode(false);
 
-		// For both Transcode and DirectPlay, re-fetch playback info when switching audio.
-		// This ensures unsupported codecs (e.g. DTS on webOS 5+) trigger a transcode
-		// instead of silently failing while the UI shows the wrong track.
 		try {
-			const result = await playback.changeAudioStream(index);
+			// DirectPlay: try native audioTracks API for instant switch without reload
+			if (playMethod !== playback.PlayMethod.Transcode && videoRef.current?.audioTracks?.length > 1) {
+				const audioTrackList = videoRef.current.audioTracks;
+				const audioStreamIndices = audioStreams.map(s => s.index);
+				const trackPosition = audioStreamIndices.indexOf(index);
+
+				if (trackPosition >= 0 && trackPosition < audioTrackList.length) {
+					for (let i = 0; i < audioTrackList.length; i++) {
+						audioTrackList[i].enabled = (i === trackPosition);
+					}
+					console.log('[Player] Switched audio natively via audioTracks API');
+					return;
+				}
+			}
+
+			// Fallback: re-request playback info with current position preserved
+			const currentPositionTicks = videoRef.current
+				? Math.floor(videoRef.current.currentTime * 10000000)
+				: positionRef.current || 0;
+
+			const result = await playback.changeAudioStream(index, currentPositionTicks);
 			if (result) {
-				setMediaUrl(result.url);
-				setPlayMethod(result.playMethod);
+				positionRef.current = currentPositionTicks;
+				let newUrl = result.url;
+				// Cache-buster for DirectPlay so the video element reloads
+				if (result.playMethod === playback.PlayMethod.DirectPlay) {
+					const separator = newUrl.includes('?') ? '&' : '?';
+					newUrl = `${newUrl}${separator}_audioSwitch=${Date.now()}`;
+				}
+				setMediaUrl(newUrl);
+				if (result.playMethod) setPlayMethod(result.playMethod);
 				setMimeType(result.mimeType || 'video/mp4');
 			}
 		} catch (err) {
 			console.error('[Player] Failed to change audio:', err);
 		}
-	}, [closeModal]);
+	}, [playMethod, closeModal, audioStreams]);
 
 	const handleSelectSubtitle = useCallback(async (e) => {
 		const index = parseInt(e.currentTarget.dataset.index, 10);
