@@ -187,6 +187,7 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 	const [hasTriedTranscode, setHasTriedTranscode] = useState(false);
 	const [focusRow, setFocusRow] = useState('top');
 	const [isAudioMode, setIsAudioMode] = useState(false);
+	const [isDolbyVision, setIsDolbyVision] = useState(false);
 
 	// Audio playlist tracking
 	const audioPlaylistIndex = useMemo(() => {
@@ -195,6 +196,15 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 	}, [audioPlaylist, item]);
 	const hasNextTrack = audioPlaylist && audioPlaylistIndex >= 0 && audioPlaylistIndex < audioPlaylist.length - 1;
 	const hasPrevTrack = audioPlaylist && audioPlaylistIndex > 0;
+
+	// Detect Dolby Vision from a mediaSource's video stream VideoRangeType.
+	// DV content must bypass hls.js (MSE) to preserve RPU metadata.
+	// The native <video> element feeds the full bitstream to the hardware DV decoder.
+	const detectDolbyVision = useCallback((mediaSource) => {
+		const videoStream = mediaSource?.MediaStreams?.find(s => s.Type === 'Video');
+		const rangeType = (videoStream?.VideoRangeType || '').toUpperCase();
+		return rangeType.includes('DOVI') || rangeType === 'DOLBYVISION';
+	}, []);
 
 	const videoRef = useRef(null);
 	const hlsRef = useRef(null);
@@ -371,6 +381,7 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 				setMimeType(result.mimeType || 'video/mp4');
 				setPlayMethod(result.playMethod);
 				setMediaSourceId(result.mediaSourceId);
+				setIsDolbyVision(detectDolbyVision(result.mediaSource));
 				playSessionRef.current = result.playSessionId;
 
 				positionRef.current = startPosition;
@@ -598,6 +609,7 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 				setMediaUrl(result.url);
 				setPlayMethod(result.playMethod);
 				setMimeType(result.mimeType || 'video/mp4');
+				setIsDolbyVision(detectDolbyVision(result.mediaSource));
 				playSessionRef.current = result.playSessionId;
 
 				console.log('[Player] seekInTranscode: new stream loaded at', seekPositionTicks / 10000000, 'seconds');
@@ -660,6 +672,12 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 
 		const isHls = mediaUrl.includes('.m3u8') || mimeType === 'application/x-mpegURL';
 
+		// Dolby Vision content must use the native <video> HLS player, not hls.js.
+		// hls.js uses MSE (Media Source Extensions) which strips DV RPU NALUs during
+		// demuxing, causing the TV to fall back to the HDR10 base layer. The native
+		// player feeds the full bitstream to the hardware decoder, preserving DV metadata.
+		const useNativeHls = isHls && isDolbyVision;
+
 		if (hlsRef.current) {
 			console.log('[Player] Destroying existing HLS instance');
 			hlsRef.current.destroy();
@@ -667,7 +685,7 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 		}
 
 		const setSourceAndPlay = async () => {
-			if (isHls) {
+			if (isHls && !useNativeHls) {
 				if (Hls.isSupported()) {
 					console.log('[Player] Using hls.js for HLS playback');
 
@@ -766,6 +784,10 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 				}
 			}
 
+			if (useNativeHls) {
+				console.log('[Player] Using native HLS for Dolby Vision — bypassing hls.js to preserve DV RPU metadata');
+			}
+
 			console.log('[Player] Setting video source now');
 			video.src = mediaUrl;
 			video.load();
@@ -813,7 +835,7 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 				playbackStartTimeoutRef.current = null;
 			}
 		};
-	}, [mediaUrl, isLoading, mimeType, playMethod, seekInTranscode]);
+	}, [mediaUrl, isLoading, mimeType, playMethod, isDolbyVision, seekInTranscode]);
 
 	const showControls = useCallback(() => {
 		setControlsVisible(true);
@@ -1120,6 +1142,7 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 					setMediaUrl(result.url);
 					setPlayMethod(result.playMethod);
 					setMimeType(result.mimeType || 'video/mp4');
+					setIsDolbyVision(detectDolbyVision(result.mediaSource));
 					playSessionRef.current = result.playSessionId;
 					return;
 				}
@@ -1264,6 +1287,7 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 				setMediaUrl(newUrl);
 				if (result.playMethod) setPlayMethod(result.playMethod);
 				setMimeType(result.mimeType || 'video/mp4');
+				setIsDolbyVision(detectDolbyVision(result.mediaSource));
 			}
 		} catch (err) {
 			console.error('[Player] Failed to change audio:', err);
