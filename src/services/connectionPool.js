@@ -465,11 +465,72 @@ export const getGenreItemsFromAllServers = async (params) => {
 	};
 };
 
+/**
+ * Get all libraries from all servers including hidden ones
+ * @returns {Promise<Array>} All libraries (including hidden) tagged with server info
+ */
+export const getAllLibrariesFromAllServers = async () => {
+	return executeAll(
+		async (api) => {
+			const result = await api.getAllLibraries();
+			return result.Items || [];
+		},
+		{
+			sortBy: (a, b) => {
+				if (a._serverName !== b._serverName) {
+					return a._serverName.localeCompare(b._serverName);
+				}
+				return (a.Name || '').localeCompare(b.Name || '');
+			}
+		}
+	);
+};
+
+/**
+ * Get user configuration from all servers
+ * @returns {Promise<Array>} Array of {serverUrl, userId, accessToken, serverName, configuration} per server
+ */
+export const getUserConfigFromAllServers = async () => {
+	const servers = await multiServerManager.getAllServersArray();
+	const results = [];
+	for (const server of servers) {
+		try {
+			const api = createApiForServer(server.url, server.accessToken, server.userId);
+			const userData = await api.getUserConfiguration();
+			results.push({
+				serverUrl: server.url,
+				userId: server.userId,
+				accessToken: server.accessToken,
+				serverName: server.name,
+				configuration: userData.Configuration
+			});
+		} catch (e) {
+			console.error(`[ConnectionPool] Failed to get config from ${server.name}:`, e);
+		}
+	}
+	return results;
+};
+
+/**
+ * Update user configuration on a specific server
+ * @param {string} serverUrl - Server URL
+ * @param {string} accessToken - Auth token
+ * @param {string} userId - User ID
+ * @param {Object} config - Updated configuration object
+ */
+export const updateUserConfigOnServer = async (serverUrl, accessToken, userId, config) => {
+	const api = createApiForServer(serverUrl, accessToken, userId);
+	return api.updateUserConfiguration(config);
+};
+
 const connectionPool = {
 	executeAll,
 	getResumeItemsFromAllServers,
 	getNextUpFromAllServers,
 	getLibrariesFromAllServers,
+	getAllLibrariesFromAllServers,
+	getUserConfigFromAllServers,
+	updateUserConfigOnServer,
 	getLatestItemsFromAllServers,
 	getRandomItemsFromAllServers,
 	searchAllServers,

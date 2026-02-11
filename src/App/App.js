@@ -95,32 +95,33 @@ const AppContent = (props) => {
 	const detailsItemStackRef = useRef([]);
 	const jellyseerrItemStackRef = useRef([]);
 
-	useEffect(() => {
-		const fetchLibraries = async () => {
-			if (isAuthenticated && api && user) {
-				try {
-					let libs;
-					if (unifiedMode) {
-						libs = await connectionPool.getLibrariesFromAllServers();
-						libs = libs.map(lib => ({
-							...lib,
-							Name: `${lib.Name} (${lib._serverName})`
-						}));
-					} else {
-						const result = await api.getLibraries();
-						libs = result.Items || [];
-					}
-					const filtered = libs.filter(lib => !EXCLUDED_COLLECTION_TYPES.includes(lib.CollectionType?.toLowerCase()));
-					setLibraries(filtered);
-				} catch (err) {
-					console.error('Failed to fetch libraries:', err);
+	const fetchLibraries = useCallback(async () => {
+		if (isAuthenticated && api && user) {
+			try {
+				let libs;
+				if (unifiedMode) {
+					libs = await connectionPool.getLibrariesFromAllServers();
+					libs = libs.map(lib => ({
+						...lib,
+						Name: `${lib.Name} (${lib._serverName})`
+					}));
+				} else {
+					const result = await api.getLibraries();
+					libs = result.Items || [];
 				}
-			} else {
-				setLibraries([]);
+				const filtered = libs.filter(lib => !EXCLUDED_COLLECTION_TYPES.includes(lib.CollectionType?.toLowerCase()));
+				setLibraries(filtered);
+			} catch (err) {
+				console.error('Failed to fetch libraries:', err);
 			}
-		};
-		fetchLibraries();
+		} else {
+			setLibraries([]);
+		}
 	}, [isAuthenticated, api, user, unifiedMode]);
+
+	useEffect(() => {
+		fetchLibraries();
+	}, [fetchLibraries]);
 
 	const {updateInfo, formattedNotes, dismiss: dismissUpdate} = useVersionCheck(isAuthenticated ? 3000 : null);
 
@@ -580,7 +581,7 @@ const AppContent = (props) => {
 					</Panel>
 					<Panel>
 						{panelIndex === PANELS.SETTINGS && (
-							<Settings onBack={handleBack} onLogout={handleSwitchUser} onAddServer={handleAddServer} onAddUser={handleAddUser} />
+							<Settings onBack={handleBack} onLogout={handleSwitchUser} onAddServer={handleAddServer} onAddUser={handleAddUser} onLibrariesChanged={fetchLibraries} />
 						)}
 					</Panel>
 					<Panel>

@@ -11,6 +11,7 @@ import {useJellyseerr} from '../../context/JellyseerrContext';
 import {useDeviceInfo} from '../../hooks/useDeviceInfo';
 import JellyseerrIcon from '../../components/icons/JellyseerrIcon';
 import serverLogger from '../../services/serverLogger';
+import connectionPool from '../../services/connectionPool';
 
 import css from './Settings.module.less';
 
@@ -174,9 +175,10 @@ const AUTH_METHODS = {
 	LOCAL: 'local'
 };
 
-const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
+const Settings = ({onBack, onLogout, onAddServer, onAddUser, onLibrariesChanged}) => {
 	const {
 		user,
+		api,
 		serverUrl,
 		serverName,
 		logout,
@@ -201,6 +203,14 @@ const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
 	// Server management modals
 	const [showConfirmRemoveModal, setShowConfirmRemoveModal] = useState(false);
 	const [serverToRemove, setServerToRemove] = useState(null);
+
+	// Library visibility
+	const [showLibraryModal, setShowLibraryModal] = useState(false);
+	const [allLibraries, setAllLibraries] = useState([]);
+	const [hiddenLibraries, setHiddenLibraries] = useState([]);
+	const [libraryLoading, setLibraryLoading] = useState(false);
+	const [librarySaving, setLibrarySaving] = useState(false);
+	const [serverConfigs, setServerConfigs] = useState([]);
 
 	const [jellyseerrUrl, setJellyseerrUrl] = useState(jellyseerr.serverUrl || '');
 	const [jellyseerrStatus, setJellyseerrStatus] = useState('');
@@ -571,6 +581,113 @@ const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
 		if (rowId) moveHomeRowDown(rowId);
 	}, [moveHomeRowDown]);
 
+	// Library visibility handlers
+	const openLibraryModal = useCallback(async () => {
+		setShowLibraryModal(true);
+		setLibraryLoading(true);
+		try {
+			const isUnified = settings.unifiedLibraryMode && hasMultipleServers;
+			if (isUnified) {
+				const [allLibs, configs] = await Promise.all([
+					connectionPool.getAllLibrariesFromAllServers(),
+					connectionPool.getUserConfigFromAllServers()
+				]);
+				const libs = allLibs.filter(lib => lib.CollectionType);
+				setAllLibraries(libs);
+				setServerConfigs(configs);
+				const allExcludes = configs.reduce((acc, cfg) => {
+					return acc.concat(cfg.configuration?.MyMediaExcludes || []);
+				}, []);
+				setHiddenLibraries([...new Set(allExcludes)]);
+			} else {
+				const [viewsResult, userData] = await Promise.all([
+					api.getAllLibraries(),
+					api.getUserConfiguration()
+				]);
+				const libs = (viewsResult.Items || []).filter(lib => lib.CollectionType);
+				setAllLibraries(libs);
+				setHiddenLibraries([...(userData.Configuration?.MyMediaExcludes || [])]);
+			}
+		} catch (err) {
+			console.error('Failed to load libraries:', err);
+		} finally {
+			setLibraryLoading(false);
+		}
+	}, [api, settings.unifiedLibraryMode, hasMultipleServers]);
+
+	const closeLibraryModal = useCallback(() => {
+		setShowLibraryModal(false);
+		setAllLibraries([]);
+		setHiddenLibraries([]);
+		setServerConfigs([]);
+	}, []);
+
+	const toggleLibraryVisibility = useCallback((libraryId) => {
+		setHiddenLibraries(prev => {
+			if (prev.includes(libraryId)) {
+				return prev.filter(id => id !== libraryId);
+			}
+			return [...prev, libraryId];
+		});
+	}, []);
+
+	const handleLibraryToggleClick = useCallback((e) => {
+		const libId = e.currentTarget.dataset.libraryId;
+		if (libId) toggleLibraryVisibility(libId);
+	}, [toggleLibraryVisibility]);
+
+	const saveLibraryVisibility = useCallback(async () => {
+		setLibrarySaving(true);
+		try {
+			const isUnified = settings.unifiedLibraryMode && hasMultipleServers;
+			if (isUnified) {
+				// Group hidden library IDs by their server
+				const serverExcludes = {};
+				for (const lib of allLibraries) {
+					const key = lib._serverUrl;
+					if (!serverExcludes[key]) {
+						serverExcludes[key] = [];
+					}
+					if (hiddenLibraries.includes(lib.Id)) {
+						serverExcludes[key].push(lib.Id);
+					}
+				}
+				// Save to each server
+				const savePromises = serverConfigs.map(cfg => {
+					const excludes = serverExcludes[cfg.serverUrl] || [];
+					const updatedConfig = {
+						...cfg.configuration,
+						MyMediaExcludes: excludes
+					};
+					return connectionPool.updateUserConfigOnServer(
+						cfg.serverUrl,
+						cfg.accessToken,
+						cfg.userId,
+						updatedConfig
+					);
+				});
+				await Promise.all(savePromises);
+			} else {
+				const userData = await api.getUserConfiguration();
+				const updatedConfig = {
+					...userData.Configuration,
+					MyMediaExcludes: hiddenLibraries
+				};
+				await api.updateUserConfiguration(updatedConfig);
+			}
+			setShowLibraryModal(false);
+			setAllLibraries([]);
+			setHiddenLibraries([]);
+			setServerConfigs([]);
+			onLibrariesChanged?.();
+			window.dispatchEvent(new window.Event('moonfin:browseRefresh'));
+		} catch (err) {
+			console.error('Failed to save library visibility:', err);
+		} finally {
+			setLibrarySaving(false);
+		}
+	}, [api, hiddenLibraries, allLibraries, serverConfigs, settings.unifiedLibraryMode, hasMultipleServers, onLibrariesChanged]);
+
 	const handleSelectJellyfinAuth = useCallback(() => {
 		setAuthMethod(AUTH_METHODS.JELLYFIN);
 		setJellyseerrStatus('');
@@ -809,6 +926,12 @@ const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
 				{renderToggleItem('Merge Continue Watching & Next Up', 'Combine into a single row', 'mergeContinueWatchingNextUp')}
 				{renderSettingItem('Configure Home Rows', 'Customize which rows appear on home screen',
 					'Edit...', openHomeRowsModal, 'setting-homeRows'
+				)}
+			</div>
+			<div className={css.settingsGroup}>
+				<h2>Libraries</h2>
+				{renderSettingItem('Hide Libraries', 'Choose which libraries to hide (syncs across all Jellyfin clients)',
+					'Edit...', openLibraryModal, 'setting-hideLibraries'
 				)}
 			</div>
 			<div className={css.settingsGroup}>
@@ -1601,6 +1724,65 @@ const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
 		);
 	};
 
+	const isUnifiedModal = settings.unifiedLibraryMode && hasMultipleServers;
+
+	const renderLibraryModal = () => (
+		<Popup
+			open={showLibraryModal}
+			onClose={closeLibraryModal}
+			position="center"
+			scrimType="translucent"
+			noAutoDismiss
+		>
+			<div className={css.popupContent}>
+				<h2 className={css.popupTitle}>Hide Libraries</h2>
+				<p className={css.popupDescription}>
+					Hidden libraries are removed from all Jellyfin clients. This is a server-level setting.
+				</p>
+				{libraryLoading ? (
+					<div className={css.libraryListLoading}>Loading libraries...</div>
+				) : (
+					<div className={css.homeRowsList}>
+						{allLibraries.map(lib => {
+							const isHidden = hiddenLibraries.includes(lib.Id);
+							return (
+								<div key={`${lib._serverUrl || 'local'}-${lib.Id}`} className={css.homeRowItem}>
+									<Button
+										className={css.homeRowToggle}
+										onClick={handleLibraryToggleClick}
+										data-library-id={lib.Id}
+										size="small"
+									>
+										<span className={css.checkbox}>{isHidden ? '☐' : '☑'}</span>
+										<span className={css.homeRowName}>
+											{lib.Name}{isUnifiedModal && lib._serverName ? ` (${lib._serverName})` : ''}
+										</span>
+									</Button>
+								</div>
+							);
+						})}
+					</div>
+				)}
+				<div className={css.popupButtons}>
+					<Button
+						onClick={closeLibraryModal}
+						size="small"
+					>
+						Cancel
+					</Button>
+					<Button
+						onClick={saveLibraryVisibility}
+						size="small"
+						className={css.primaryButton}
+						disabled={librarySaving}
+					>
+						{librarySaving ? 'Saving...' : 'Save'}
+					</Button>
+				</div>
+			</div>
+		</Popup>
+	);
+
 	const renderPanel = () => {
 		switch (activeCategory) {
 			case 'general': return renderGeneralPanel();
@@ -1644,6 +1826,7 @@ const Settings = ({onBack, onLogout, onAddServer, onAddUser}) => {
 			</ContentContainer>
 
 			{renderHomeRowsModal()}
+			{renderLibraryModal()}
 			{renderConfirmRemoveModal()}
 		</div>
 	);

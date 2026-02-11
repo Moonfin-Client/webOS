@@ -328,6 +328,8 @@
 	padding: 24px;
 	min-width: 500px;
 	max-width: 600px;
+	background: #1a1a1a;
+	border-radius: 12px;
 }
 
 .popupTitle {
@@ -349,6 +351,13 @@
 	overflow-y: auto;
 }
 
+.libraryListLoading {
+	padding: 40px 0;
+	text-align: center;
+	color: rgba(255, 255, 255, 0.5);
+	font-size: 20px;
+}
+
 .homeRowItem {
 	display: flex;
 	align-items: center;
@@ -362,6 +371,13 @@
 	justify-content: flex-start !important;
 	text-align: left;
 	min-width: 280px;
+
+	&:focus {
+		.checkbox,
+		.homeRowName {
+			color: #000;
+		}
+	}
 }
 
 .checkbox {
