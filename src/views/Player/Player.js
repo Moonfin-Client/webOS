@@ -564,7 +564,7 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 
 			cleanupVideoElement(videoElement);
 		};
-	}, [item, resume, selectedQuality, settings.maxBitrate, settings.preferTranscode, settings.forceDirectPlay, settings.subtitleMode, settings.skipIntro, initialAudioIndex, initialSubtitleIndex]);
+	}, [item, resume, selectedQuality, settings.maxBitrate, settings.preferTranscode, settings.forceDirectPlay, settings.subtitleMode, settings.skipIntro, initialAudioIndex, initialSubtitleIndex, detectDolbyVision]);
 
 	useEffect(() => {
 		if (mediaUrl) {
@@ -620,7 +620,7 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 		} finally {
 			seekingTranscodeRef.current = false;
 		}
-	}, [item, selectedQuality, settings.maxBitrate]);
+	}, [item, selectedQuality, settings.maxBitrate, detectDolbyVision]);
 
 	// Seek relative to current position with debounced transcode re-requests.
 	// updateSeekPosition: also update the seekbar UI during scrubbing.
@@ -1153,7 +1153,7 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 		}
 
 		setError(errorMessage);
-	}, [hasTriedTranscode, playMethod, item, selectedQuality, settings.maxBitrate]);
+	}, [hasTriedTranscode, playMethod, item, selectedQuality, settings.maxBitrate, detectDolbyVision]);
 
 	const handleImageError = useCallback((e) => {
 		e.target.style.display = 'none';
@@ -1292,7 +1292,7 @@ const Player = ({item, resume, initialAudioIndex, initialSubtitleIndex, onEnded,
 		} catch (err) {
 			console.error('[Player] Failed to change audio:', err);
 		}
-	}, [playMethod, closeModal, audioStreams]);
+	}, [playMethod, closeModal, audioStreams, detectDolbyVision]);
 
 	const handleSelectSubtitle = useCallback(async (e) => {
 		const index = parseInt(e.currentTarget.dataset.index, 10);
