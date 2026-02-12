@@ -591,7 +591,7 @@ const AppContent = (props) => {
 					</Panel>
 					<Panel>
 						{panelIndex === PANELS.SEARCH && (
-							<Search onSelectItem={handleSelectItem} onSelectPerson={handleSelectPerson} />
+							<Search onSelectItem={handleSelectItem} onSelectPerson={handleSelectPerson} onSelectJellyseerrItem={handleSelectJellyseerrItem} />
 						)}
 					</Panel>
 					<Panel>

@@ -27,7 +27,7 @@ const SearchIcon = () => (
 	</svg>
 );
 
-const Search = ({onSelectItem, onSelectPerson}) => {
+const Search = ({onSelectItem, onSelectPerson, onSelectJellyseerrItem}) => {
 	const {api, serverUrl, hasMultipleServers} = useAuth();
 	const {settings} = useSettings();
 	const unifiedMode = settings.unifiedLibraryMode && hasMultipleServers;
@@ -220,12 +220,9 @@ const Search = ({onSelectItem, onSelectPerson}) => {
 		if (isJellyseerr) {
 			const jellyseerrItem = results.jellyseerr.find(item => String(item.id) === itemId);
 			if (jellyseerrItem) {
-				onSelectItem?.({
-					...jellyseerrItem,
-					isJellyseerr: true,
-					Id: jellyseerrItem.id,
-					Name: jellyseerrItem.title || jellyseerrItem.name,
-					Type: jellyseerrItem.mediaType === 'movie' ? 'Movie' : 'Series'
+				onSelectJellyseerrItem?.({
+					mediaId: jellyseerrItem.id,
+					mediaType: jellyseerrItem.mediaType || (jellyseerrItem.title ? 'movie' : 'tv')
 				});
 			}
 		} else {
@@ -239,7 +236,7 @@ const Search = ({onSelectItem, onSelectPerson}) => {
 				}
 			}
 		}
-	}, [results, onSelectItem, onSelectPerson]);
+	}, [results, onSelectItem, onSelectPerson, onSelectJellyseerrItem]);
 
 	const handleRowFocus = useCallback((rowId, totalCount) => {
 		return (e) => {
