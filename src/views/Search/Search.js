@@ -27,7 +27,7 @@ const SearchIcon = () => (
 	</svg>
 );
 
-const Search = ({onSelectItem, onSelectPerson}) => {
+const Search = ({onSelectItem, onSelectPerson, onSelectJellyseerrItem}) => {
 	const {api, serverUrl, hasMultipleServers} = useAuth();
 	const {settings} = useSettings();
 	const unifiedMode = settings.unifiedLibraryMode && hasMultipleServers;
@@ -148,7 +148,7 @@ const Search = ({onSelectItem, onSelectPerson}) => {
 				try {
 					const jellyseerrResponse = await jellyseerrApi.search(searchQuery);
 					const filteredResults = (jellyseerrResponse.results || [])
-						.filter(item => item.mediaType !== 'person')
+						.filter(item => (item.mediaType || item.media_type) !== 'person')
 						.slice(0, 20);
 					setResults(prev => ({...prev, jellyseerr: filteredResults}));
 				} catch (err) {
@@ -208,7 +208,7 @@ const Search = ({onSelectItem, onSelectPerson}) => {
 
 	const handleClearSearch = useCallback(() => {
 		setQuery('');
-		setResults({movies: [], shows: [], episodes: [], people: [], jellyseerr: []});
+		setResults({movies: [], shows: [], episodes: [], people: [], albums: [], artists: [], songs: [], jellyseerr: []});
 	}, []);
 
 	const handleCardClick = useCallback((e) => {
@@ -220,12 +220,9 @@ const Search = ({onSelectItem, onSelectPerson}) => {
 		if (isJellyseerr) {
 			const jellyseerrItem = results.jellyseerr.find(item => String(item.id) === itemId);
 			if (jellyseerrItem) {
-				onSelectItem?.({
-					...jellyseerrItem,
-					isJellyseerr: true,
-					Id: jellyseerrItem.id,
-					Name: jellyseerrItem.title || jellyseerrItem.name,
-					Type: jellyseerrItem.mediaType === 'movie' ? 'Movie' : 'Series'
+				onSelectJellyseerrItem?.({
+					mediaId: jellyseerrItem.id,
+					mediaType: jellyseerrItem.mediaType || jellyseerrItem.media_type || (jellyseerrItem.title ? 'movie' : 'tv')
 				});
 			}
 		} else {
@@ -239,7 +236,7 @@ const Search = ({onSelectItem, onSelectPerson}) => {
 				}
 			}
 		}
-	}, [results, onSelectItem, onSelectPerson]);
+	}, [results, onSelectItem, onSelectPerson, onSelectJellyseerrItem]);
 
 	const handleRowFocus = useCallback((rowId, totalCount) => {
 		return (e) => {

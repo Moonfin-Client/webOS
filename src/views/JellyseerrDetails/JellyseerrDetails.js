@@ -121,7 +121,11 @@ const formatDate = (dateStr) => {
 
 const formatCurrency = (amount) => {
 	if (!amount || amount <= 0) return null;
-	return new Intl.NumberFormat('en-US', {style: 'currency', currency: 'USD', maximumFractionDigits: 0}).format(amount);
+	try {
+		return new Intl.NumberFormat('en-US', {style: 'currency', currency: 'USD', maximumFractionDigits: 0}).format(amount);
+	} catch {
+		return `$${Math.round(amount).toLocaleString()}`;
+	}
 };
 
 const formatRuntime = (minutes) => {
@@ -1063,7 +1067,7 @@ const JellyseerrDetails = ({mediaType, mediaId, onClose, onSelectItem, onSelectP
 		const facts = [];
 
 		// TMDB Score
-		const voteAverage = details.voteAverage;
+		const voteAverage = Number(details.voteAverage);
 		if (voteAverage && voteAverage > 0) {
 			facts.push({label: 'TMDB Score', value: `${Math.round(voteAverage * 10)}%`});
 		}
@@ -1150,7 +1154,7 @@ const JellyseerrDetails = ({mediaType, mediaId, onClose, onSelectItem, onSelectP
 		? jellyseerrApi.getImageUrl(details.posterPath, 'w500')
 		: null;
 	const backdropUrl = details.backdropPath
-		? jellyseerrApi.getImageUrl(details.backdropPath, 'original')
+		? jellyseerrApi.getImageUrl(details.backdropPath, 'w1280')
 		: null;
 	const title = details.title || details.name;
 	const year = details.releaseDate
@@ -1159,7 +1163,7 @@ const JellyseerrDetails = ({mediaType, mediaId, onClose, onSelectItem, onSelectP
 			? new Date(details.firstAirDate).getFullYear()
 			: null;
 	const isAvailable = hdStatus === STATUS.AVAILABLE || hdStatus === STATUS.PARTIALLY_AVAILABLE;
-	const keywords = details.keywords || [];
+	const keywords = Array.isArray(details.keywords) ? details.keywords : [];
 
 	return (
 		<div className={css.container}>
@@ -1241,7 +1245,7 @@ const JellyseerrDetails = ({mediaType, mediaId, onClose, onSelectItem, onSelectP
 						{/* Metadata Row */}
 						<div className={css.metadataRow}>
 							{details.voteAverage > 0 && (
-								<span className={css.metadataItem}>★ {details.voteAverage.toFixed(1)}</span>
+								<span className={css.metadataItem}>★ {Number(details.voteAverage).toFixed(1)}</span>
 							)}
 							{details.runtime && (
 								<span className={css.metadataItem}>{formatRuntime(details.runtime)}</span>
