@@ -1,4 +1,4 @@
-import {useState, useCallback, useEffect, lazy, Suspense, useRef} from 'react';
+import {useState, useCallback, useEffect, lazy, Suspense, useRef, Component} from 'react';
 import ThemeDecorator from '@enact/sandstone/ThemeDecorator';
 import {Panels, Panel} from '@enact/sandstone/Panels';
 
@@ -50,6 +50,39 @@ const PanelLoader = () => (
 		<LoadingSpinner />
 	</div>
 );
+
+class PanelErrorBoundary extends Component {
+	constructor(props) {
+		super(props);
+		this.state = {hasError: false, error: null};
+	}
+	static getDerivedStateFromError(error) {
+		return {hasError: true, error};
+	}
+	componentDidCatch(error, info) {
+		console.error('[PanelErrorBoundary] Caught rendering error:', error, info?.componentStack);
+	}
+	render() {
+		if (this.state.hasError) {
+			return (
+				<div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#fff', background: '#111827', padding: '40px'}}>
+					<p style={{fontSize: '24px', marginBottom: '16px'}}>Something went wrong</p>
+					<p style={{fontSize: '16px', color: '#9ca3af', marginBottom: '24px'}}>{this.state.error?.message || 'An unexpected error occurred'}</p>
+					<button
+						onClick={() => {
+							this.setState({hasError: false, error: null});
+							this.props.onBack?.();
+						}}
+						style={{padding: '12px 32px', fontSize: '18px', borderRadius: '8px', border: 'none', background: '#6366f1', color: '#fff', cursor: 'pointer'}}
+					>
+						Go Back
+					</button>
+				</div>
+			);
+		}
+		return this.props.children;
+	}
+}
 
 const PANELS = {
 	LOGIN: 0,
@@ -647,16 +680,18 @@ const AppContent = (props) => {
 					</Panel>
 					<Panel>
 						{panelIndex === PANELS.JELLYSEERR_DETAILS && (
-							<JellyseerrDetails
-								mediaType={jellyseerrItem?.mediaType}
-								mediaId={jellyseerrItem?.mediaId}
-								onSelectItem={handleSelectJellyseerrItem}
-								onSelectPerson={handleSelectJellyseerrPerson}
-								onSelectKeyword={handleSelectJellyseerrKeyword}
-							onClose={handleBack}
-							onBack={handleBack}
-							backHandlerRef={backHandlerRef}
-						/>
+							<PanelErrorBoundary onBack={handleBack}>
+								<JellyseerrDetails
+									mediaType={jellyseerrItem?.mediaType}
+									mediaId={jellyseerrItem?.mediaId}
+									onSelectItem={handleSelectJellyseerrItem}
+									onSelectPerson={handleSelectJellyseerrPerson}
+									onSelectKeyword={handleSelectJellyseerrKeyword}
+									onClose={handleBack}
+									onBack={handleBack}
+									backHandlerRef={backHandlerRef}
+								/>
+							</PanelErrorBoundary>
 						)}
 					</Panel>
 					<Panel>

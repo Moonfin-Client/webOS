@@ -627,7 +627,7 @@ export const getMediaStatus = async (mediaType, tmdbId) => {
 
 export const getImageUrl = (path, size = 'w500') => {
 	if (!path) return null;
-	return `http://image.tmdb.org/t/p/${size}${path}`;
+	return `https://image.tmdb.org/t/p/${size}${path}`;
 };
 
 export const proxyImage = async (imageUrl) => {

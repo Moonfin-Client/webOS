@@ -148,7 +148,7 @@ const Search = ({onSelectItem, onSelectPerson, onSelectJellyseerrItem}) => {
 				try {
 					const jellyseerrResponse = await jellyseerrApi.search(searchQuery);
 					const filteredResults = (jellyseerrResponse.results || [])
-						.filter(item => item.mediaType !== 'person')
+						.filter(item => (item.mediaType || item.media_type) !== 'person')
 						.slice(0, 20);
 					setResults(prev => ({...prev, jellyseerr: filteredResults}));
 				} catch (err) {
@@ -208,7 +208,7 @@ const Search = ({onSelectItem, onSelectPerson, onSelectJellyseerrItem}) => {
 
 	const handleClearSearch = useCallback(() => {
 		setQuery('');
-		setResults({movies: [], shows: [], episodes: [], people: [], jellyseerr: []});
+		setResults({movies: [], shows: [], episodes: [], people: [], albums: [], artists: [], songs: [], jellyseerr: []});
 	}, []);
 
 	const handleCardClick = useCallback((e) => {
@@ -222,7 +222,7 @@ const Search = ({onSelectItem, onSelectPerson, onSelectJellyseerrItem}) => {
 			if (jellyseerrItem) {
 				onSelectJellyseerrItem?.({
 					mediaId: jellyseerrItem.id,
-					mediaType: jellyseerrItem.mediaType || (jellyseerrItem.title ? 'movie' : 'tv')
+					mediaType: jellyseerrItem.mediaType || jellyseerrItem.media_type || (jellyseerrItem.title ? 'movie' : 'tv')
 				});
 			}
 		} else {
