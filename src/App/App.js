@@ -195,6 +195,7 @@ const AppContent = (props) => {
 			if (isAuthenticated) {
 				setPanelIndex(PANELS.BROWSE);
 			}
+			window.webOSSystem.activate();
 		};
 
 		window.addEventListener('beforeunload', handleBeforeUnload);
