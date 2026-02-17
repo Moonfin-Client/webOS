@@ -6,6 +6,7 @@ import {useAuth} from '../../context/AuthContext';
 import {useSettings} from '../../context/SettingsContext';
 import {useJellyseerr} from '../../context/JellyseerrContext';
 import JellyseerrIcon from '../icons/JellyseerrIcon';
+import SeerrIcon from '../icons/SeerrIcon';
 
 import css from './NavBar.module.less';
 
@@ -38,7 +39,7 @@ const NavBar = ({
 }) => {
 	const {user, serverUrl} = useAuth();
 	const {settings} = useSettings();
-	const {isEnabled: jellyseerrEnabled} = useJellyseerr();
+	const {isEnabled: jellyseerrEnabled, isMoonfin, variant, displayName} = useJellyseerr();
 	const [clock, setClock] = useState('');
 	const [librariesExpanded, setLibrariesExpanded] = useState(false);
 	const librariesTimeoutRef = useRef(null);
@@ -268,8 +269,11 @@ const NavBar = ({
 							className={`${css.navBtn} ${css.navBtnIcon} ${css.expandableBtn}`}
 							onClick={onDiscover}
 						>
-							<JellyseerrIcon className={css.navIcon} />
-							<span className={css.expandLabel}>Jellyseerr</span>
+							{isMoonfin && variant === 'seerr'
+								? <SeerrIcon className={css.navIcon} />
+								: <JellyseerrIcon className={css.navIcon} />
+							}
+							<span className={css.expandLabel}>{displayName}</span>
 						</SpottableButton>
 					)}
 

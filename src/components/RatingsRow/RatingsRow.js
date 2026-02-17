@@ -1,8 +1,10 @@
 import {useState, useEffect, useRef} from 'react';
 import {fetchRatings, buildDisplayRatings, getContentType, getTmdbId} from '../../services/mdblistApi';
+import {useSettings} from '../../context/SettingsContext';
 import css from './RatingsRow.module.less';
 
 const RatingsRow = ({item, serverUrl, compact = false}) => {
+	const {settings} = useSettings();
 	const [displayRatings, setDisplayRatings] = useState([]);
 	const mountedRef = useRef(true);
 	const itemIdRef = useRef(null);
@@ -26,18 +28,17 @@ const RatingsRow = ({item, serverUrl, compact = false}) => {
 			return;
 		}
 
-		// Track which item we're loading for
 		const currentItemId = item.Id;
 		itemIdRef.current = currentItemId;
 
 		fetchRatings(serverUrl, item).then(ratings => {
-			// Only update if still the same item and mounted
 			if (mountedRef.current && itemIdRef.current === currentItemId) {
-				const display = buildDisplayRatings(ratings, serverUrl);
+				const sources = settings.mdblistRatingSources || ['imdb', 'tmdb', 'tomatoes', 'metacritic'];
+				const display = buildDisplayRatings(ratings, serverUrl, sources);
 				setDisplayRatings(display);
 			}
 		});
-	}, [item, serverUrl]);
+	}, [item, serverUrl, settings.mdblistRatingSources]);
 
 	if (displayRatings.length === 0) return null;
 

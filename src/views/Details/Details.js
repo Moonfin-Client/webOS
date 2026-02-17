@@ -921,7 +921,7 @@ const handleSectionKeyDown = useCallback((ev) => {
 									)}
 									{birthPlace && <span className={css.infoItem}>{birthPlace}</span>}
 								</div>
-								{settings.useMoonfinPlugin && <RatingsRow item={item} serverUrl={effectiveServerUrl} />}
+								{settings.useMoonfinPlugin && settings.mdblistEnabled !== false && <RatingsRow item={item} serverUrl={effectiveServerUrl} />}
 								{item.Overview && <p className={css.overview}>{item.Overview}</p>}
 							</div>
 						</div>
@@ -972,7 +972,7 @@ const handleSectionKeyDown = useCallback((ev) => {
 								<span className={css.seasonDetailCount}>
 									{episodes.length} Episode{episodes.length !== 1 ? 's' : ''}
 								</span>
-								{settings.useMoonfinPlugin && <RatingsRow item={item} serverUrl={effectiveServerUrl} />}
+								{settings.useMoonfinPlugin && settings.mdblistEnabled !== false && <RatingsRow item={item} serverUrl={effectiveServerUrl} />}
 							</div>
 						</div>
 
@@ -1089,7 +1089,7 @@ const handleSectionKeyDown = useCallback((ev) => {
 								{genres.length > 0 && (
 									<span className={css.seasonDetailCount}>{genres.join(', ')}</span>
 								)}
-								{settings.useMoonfinPlugin && <RatingsRow item={item} serverUrl={effectiveServerUrl} />}
+								{settings.useMoonfinPlugin && settings.mdblistEnabled !== false && <RatingsRow item={item} serverUrl={effectiveServerUrl} />}
 							</div>
 						</div>
 
@@ -1194,7 +1194,7 @@ const handleSectionKeyDown = useCallback((ev) => {
 							</div>
 							<div className={css.personInfo}>
 								<h1 className={css.title}>{item.Name}</h1>
-								{settings.useMoonfinPlugin && <RatingsRow item={item} serverUrl={effectiveServerUrl} />}
+								{settings.useMoonfinPlugin && settings.mdblistEnabled !== false && <RatingsRow item={item} serverUrl={effectiveServerUrl} />}
 								{item.Overview && <p className={css.overview}>{item.Overview}</p>}
 								<HorizontalContainer className={css.actionButtons} spotlightId="details-action-buttons">
 									{artistAlbums.length > 0 && (
@@ -1288,7 +1288,7 @@ const handleSectionKeyDown = useCallback((ev) => {
 										{year && <span className={css.infoItem}>{year}</span>}
 										{runtime && <span className={css.infoItem}>{runtime}</span>}
 									</div>
-									{settings.useMoonfinPlugin && <RatingsRow item={item} serverUrl={effectiveServerUrl} />}
+									{settings.useMoonfinPlugin && settings.mdblistEnabled !== false && <RatingsRow item={item} serverUrl={effectiveServerUrl} />}
 								</div>
 								{item.Overview && <p className={css.overview}>{item.Overview}</p>}
 							</div>
@@ -1396,8 +1396,7 @@ const handleSectionKeyDown = useCallback((ev) => {
 								)}
 							</div>
 
-							{/* MDBList Ratings */}
-							{settings.useMoonfinPlugin && <RatingsRow item={item} serverUrl={effectiveServerUrl} />}
+							{settings.useMoonfinPlugin && settings.mdblistEnabled !== false && <RatingsRow item={item} serverUrl={effectiveServerUrl} />}
 
 							{/* Tagline */}
 							{tagline && <p className={css.tagline}>&ldquo;{tagline}&rdquo;</p>}

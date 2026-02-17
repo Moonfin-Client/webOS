@@ -1024,7 +1024,7 @@ const Browse = ({
 											<span key={i} className={css.metaItem}>{g}</span>
 										))}
 									</div>
-									{settings.useMoonfinPlugin && (
+									{settings.useMoonfinPlugin && settings.mdblistEnabled !== false && (
 										<RatingsRow item={currentFeatured} serverUrl={getItemServerUrl(currentFeatured)} compact />
 									)}
 									<p className={css.featuredOverview}>
@@ -1083,7 +1083,7 @@ const Browse = ({
 									<span key={i} className={css.infoBadge}>{g}</span>
 								))}
 							</div>
-							{settings.useMoonfinPlugin && (
+							{settings.useMoonfinPlugin && settings.mdblistEnabled !== false && (
 								<RatingsRow item={focusedItem} serverUrl={getItemServerUrl(focusedItem)} compact />
 							)}
 							<p className={css.detailSummary}>

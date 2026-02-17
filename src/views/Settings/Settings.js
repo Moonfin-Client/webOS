@@ -10,6 +10,7 @@ import {useSettings, DEFAULT_HOME_ROWS} from '../../context/SettingsContext';
 import {useJellyseerr} from '../../context/JellyseerrContext';
 import {useDeviceInfo} from '../../hooks/useDeviceInfo';
 import JellyseerrIcon from '../../components/icons/JellyseerrIcon';
+import SeerrIcon from '../../components/icons/SeerrIcon';
 import serverLogger from '../../services/serverLogger';
 import connectionPool from '../../services/connectionPool';
 
@@ -46,10 +47,31 @@ const IconAbout = () => (
 	</svg>
 );
 
-const CATEGORIES = [
+const IconPlugin = () => (
+	<svg viewBox="0 0 24 24" fill="currentColor">
+		<path d="M20.5 11H19V7c0-1.1-.9-2-2-2h-4V3.5C13 2.12 11.88 1 10.5 1S8 2.12 8 3.5V5H4c-1.1 0-1.99.9-1.99 2v3.8H3.5c1.49 0 2.7 1.21 2.7 2.7s-1.21 2.7-2.7 2.7H2V20c0 1.1.9 2 2 2h3.8v-1.5c0-1.49 1.21-2.7 2.7-2.7s2.7 1.21 2.7 2.7V22H17c1.1 0 2-.9 2-2v-4h1.5c1.38 0 2.5-1.12 2.5-2.5S21.88 11 20.5 11z" />
+	</svg>
+);
+
+const MDBLIST_SOURCE_OPTIONS = [
+	{value: 'imdb', label: 'IMDb', icon: 'imdb.svg'},
+	{value: 'tmdb', label: 'TMDb', icon: 'tmdb.svg'},
+	{value: 'trakt', label: 'Trakt', icon: 'trakt.svg'},
+	{value: 'tomatoes', label: 'Rotten Tomatoes (Critics)', icon: 'rt-fresh.svg'},
+	{value: 'popcorn', label: 'Rotten Tomatoes (Audience)', icon: 'rt-audience-up.svg'},
+	{value: 'metacritic', label: 'Metacritic', icon: 'metacritic.svg'},
+	{value: 'metacriticuser', label: 'Metacritic User', icon: 'metacritic-user.svg'},
+	{value: 'letterboxd', label: 'Letterboxd', icon: 'letterboxd.svg'},
+	{value: 'rogerebert', label: 'Roger Ebert', icon: 'rogerebert.svg'},
+	{value: 'myanimelist', label: 'MyAnimeList', icon: 'mal.svg'},
+	{value: 'anilist', label: 'AniList', icon: 'anilist.svg'}
+];
+
+const BASE_CATEGORIES = [
 	{id: 'general', label: 'General', Icon: IconGeneral},
 	{id: 'playback', label: 'Playback', Icon: IconPlayback},
 	{id: 'display', label: 'Display', Icon: IconDisplay},
+	{id: 'plugin', label: 'Plugin', Icon: IconPlugin},
 	{id: 'jellyseerr', label: 'Jellyseerr', Icon: JellyseerrIcon},
 	{id: 'about', label: 'About', Icon: IconAbout}
 ];
@@ -162,15 +184,8 @@ const UI_COLOR_OPTIONS = [
 	{value: 'brown', label: 'Brown', rgb: '50, 35, 25'}
 ];
 
-const AUTH_METHODS = {
-	NONE: 'none',
-	JELLYFIN: 'jellyfin',
-	LOCAL: 'local'
-};
-
 const Settings = ({onBack, onLibrariesChanged}) => {
 	const {
-		user,
 		api,
 		serverUrl,
 		accessToken,
@@ -179,6 +194,19 @@ const Settings = ({onBack, onLibrariesChanged}) => {
 	const {settings, updateSetting} = useSettings();
 	const {capabilities} = useDeviceInfo();
 	const jellyseerr = useJellyseerr();
+	const isSeerr = jellyseerr.isMoonfin && jellyseerr.variant === 'seerr';
+	const seerrLabel = isSeerr ? (jellyseerr.displayName || 'Seerr') : 'Jellyseerr';
+
+	const categories = BASE_CATEGORIES.map(cat => {
+		if (cat.id === 'jellyseerr') {
+			return {
+				...cat,
+				label: seerrLabel,
+				Icon: isSeerr ? SeerrIcon : JellyseerrIcon
+			};
+		}
+		return cat;
+	});
 
 	const [activeCategory, setActiveCategory] = useState('general');
 	const [showHomeRowsModal, setShowHomeRowsModal] = useState(false);
@@ -191,16 +219,6 @@ const Settings = ({onBack, onLibrariesChanged}) => {
 	const [libraryLoading, setLibraryLoading] = useState(false);
 	const [librarySaving, setLibrarySaving] = useState(false);
 	const [serverConfigs, setServerConfigs] = useState([]);
-
-	const [jellyseerrUrl, setJellyseerrUrl] = useState(jellyseerr.serverUrl || '');
-	const [jellyseerrStatus, setJellyseerrStatus] = useState('');
-	const [authMethod, setAuthMethod] = useState(AUTH_METHODS.NONE);
-	const [isAuthenticating, setIsAuthenticating] = useState(false);
-
-	const [jellyfinPassword, setJellyfinPassword] = useState('');
-
-	const [localEmail, setLocalEmail] = useState('');
-	const [localPassword, setLocalPassword] = useState('');
 
 	const [serverVersion, setServerVersion] = useState(null);
 
@@ -255,22 +273,6 @@ const Settings = ({onBack, onLibrariesChanged}) => {
 		}
 	}, []);
 
-	const handleJellyseerrUrlChange = useCallback((e) => {
-		setJellyseerrUrl(e.target.value);
-	}, []);
-
-	const handleJellyfinPasswordChange = useCallback((e) => {
-		setJellyfinPassword(e.target.value);
-	}, []);
-
-	const handleLocalEmailChange = useCallback((e) => {
-		setLocalEmail(e.target.value);
-	}, []);
-
-	const handleLocalPasswordChange = useCallback((e) => {
-		setLocalPassword(e.target.value);
-	}, []);
-
 	const handleSidebarKeyDown = useCallback((e) => {
 		if (e.keyCode === 37) {
 			e.preventDefault();
@@ -296,6 +298,14 @@ const Settings = ({onBack, onLibrariesChanged}) => {
 			serverLogger.setEnabled(!settings[key]);
 		}
 	}, [settings, updateSetting]);
+
+	const toggleMdblistSource = useCallback((source) => {
+		const current = settings.mdblistRatingSources || [];
+		const updated = current.includes(source)
+			? current.filter(s => s !== source)
+			: [...current, source];
+		updateSetting('mdblistRatingSources', updated);
+	}, [settings.mdblistRatingSources, updateSetting]);
 
 	const handleMoonfinToggle = useCallback(async () => {
 		const enabling = !settings.useMoonfinPlugin;
@@ -611,78 +621,6 @@ const Settings = ({onBack, onLibrariesChanged}) => {
 		}
 	}, [api, hiddenLibraries, allLibraries, serverConfigs, settings.unifiedLibraryMode, hasMultipleServers, onLibrariesChanged]);
 
-	const handleSelectJellyfinAuth = useCallback(() => {
-		setAuthMethod(AUTH_METHODS.JELLYFIN);
-		setJellyseerrStatus('');
-	}, []);
-
-	const handleSelectLocalAuth = useCallback(() => {
-		setAuthMethod(AUTH_METHODS.LOCAL);
-		setJellyseerrStatus('');
-	}, []);
-
-	const handleBackToAuthSelection = useCallback(() => {
-		setAuthMethod(AUTH_METHODS.NONE);
-		setJellyseerrStatus('');
-	}, []);
-
-	const handleJellyfinAuth = useCallback(async () => {
-		if (!jellyseerrUrl) {
-			setJellyseerrStatus('Please enter a Jellyseerr URL first');
-			return;
-		}
-		if (!jellyfinPassword) {
-			setJellyseerrStatus('Please enter your Jellyfin password');
-			return;
-		}
-		if (!user?.Name || !serverUrl) {
-			setJellyseerrStatus('Jellyfin authentication not found');
-			return;
-		}
-
-		setIsAuthenticating(true);
-		setJellyseerrStatus('Authenticating with Jellyfin...');
-
-		try {
-			await jellyseerr.configure(jellyseerrUrl, user.Id);
-			await jellyseerr.loginWithJellyfin(user.Name, jellyfinPassword, serverUrl);
-			setJellyseerrStatus('Connected successfully!');
-			setJellyfinPassword('');
-			setAuthMethod(AUTH_METHODS.NONE);
-		} catch (err) {
-			setJellyseerrStatus(`Authentication failed: ${err.message}`);
-		} finally {
-			setIsAuthenticating(false);
-		}
-	}, [jellyseerrUrl, jellyfinPassword, user, serverUrl, jellyseerr]);
-
-	const handleLocalAuth = useCallback(async () => {
-		if (!jellyseerrUrl) {
-			setJellyseerrStatus('Please enter a Jellyseerr URL first');
-			return;
-		}
-		if (!localEmail || !localPassword) {
-			setJellyseerrStatus('Please enter email and password');
-			return;
-		}
-
-		setIsAuthenticating(true);
-		setJellyseerrStatus('Logging in...');
-
-		try {
-			await jellyseerr.configure(jellyseerrUrl, user?.Id);
-			await jellyseerr.login(localEmail, localPassword);
-			setJellyseerrStatus('Connected successfully!');
-			setLocalEmail('');
-			setLocalPassword('');
-			setAuthMethod(AUTH_METHODS.NONE);
-		} catch (err) {
-			setJellyseerrStatus(`Login failed: ${err.message}`);
-		} finally {
-			setIsAuthenticating(false);
-		}
-	}, [jellyseerrUrl, localEmail, localPassword, user, jellyseerr]);
-
 	const handleMoonfinLogin = useCallback(async () => {
 		if (!moonfinUsername || !moonfinPassword) {
 			setMoonfinStatus('Please enter username and password');
@@ -715,12 +653,6 @@ const Settings = ({onBack, onLibrariesChanged}) => {
 
 	const handleJellyseerrDisconnect = useCallback(() => {
 		jellyseerr.disable();
-		setJellyseerrUrl('');
-		setJellyfinPassword('');
-		setLocalEmail('');
-		setLocalPassword('');
-		setJellyseerrStatus('');
-		setAuthMethod(AUTH_METHODS.NONE);
 		setMoonfinStatus('');
 		setMoonfinLoginMode(false);
 		setMoonfinUsername('');
@@ -1033,271 +965,235 @@ const Settings = ({onBack, onLibrariesChanged}) => {
 		</div>
 	);
 
-	const renderJellyseerrPanel = () => (
-		<div className={css.panel}>
-			<h1>Jellyseerr Settings</h1>
+	const renderPluginPanel = () => {
+		const info = jellyseerr.pluginInfo;
+		const isConnected = settings.useMoonfinPlugin && info;
 
-			<div className={css.settingsGroup}>
-				<h2>Connection Method</h2>
-				{renderSettingItem(
-					'Use Moonfin Plugin',
-					'Route Jellyseerr through the Moonfin server plugin instead of direct API connection',
-					settings.useMoonfinPlugin ? 'On' : 'Off',
-					handleMoonfinToggle,
-					'setting-useMoonfinPlugin'
-				)}
-			</div>
+		return (
+			<div className={css.panel}>
+				<h1>Plugin Settings</h1>
 
-			{settings.useMoonfinPlugin ? (
-				/* Moonfin plugin mode */
-				<>
+				<div className={css.settingsGroup}>
+					<h2>Moonfin Plugin</h2>
+					{renderSettingItem(
+						'Enable Plugin',
+						'Connect to the Moonfin server plugin for ratings, settings sync, and Jellyseerr/Seerr proxy',
+						settings.useMoonfinPlugin ? 'On' : 'Off',
+						handleMoonfinToggle,
+						'setting-useMoonfinPlugin'
+					)}
+
+					{settings.useMoonfinPlugin && moonfinStatus && (
+						<div className={css.statusMessage}>{moonfinStatus}</div>
+					)}
+
+					{settings.useMoonfinPlugin && moonfinLoginMode && (
+						<>
+							<div className={css.inputGroup}>
+								<label>{seerrLabel} Username</label>
+								<SpottableInput
+									type="text"
+									placeholder={`Enter ${seerrLabel} username`}
+									value={moonfinUsername}
+									onChange={handleMoonfinUsernameChange}
+									className={css.input}
+									spotlightId="moonfin-username"
+								/>
+							</div>
+							<div className={css.inputGroup}>
+								<label>{seerrLabel} Password</label>
+								<SpottableInput
+									type="password"
+									placeholder={`Enter ${seerrLabel} password`}
+									value={moonfinPassword}
+									onChange={handleMoonfinPasswordChange}
+									className={css.input}
+									spotlightId="moonfin-password"
+								/>
+							</div>
+							<SpottableButton
+								className={css.actionButton}
+								onClick={handleMoonfinLogin}
+								disabled={moonfinConnecting}
+								spotlightId="moonfin-login-submit"
+							>
+								{moonfinConnecting ? 'Logging in...' : 'Log In'}
+							</SpottableButton>
+						</>
+					)}
+				</div>
+
+				{isConnected && (
 					<div className={css.settingsGroup}>
-						<h2>Moonfin Plugin</h2>
-						{jellyseerr.isEnabled && jellyseerr.isAuthenticated && jellyseerr.isMoonfin ? (
-							<>
-								<div className={css.infoItem}>
-									<span className={css.infoLabel}>Status</span>
-									<span className={css.infoValue}>Connected via Moonfin</span>
-								</div>
-								{jellyseerr.serverUrl && (
-									<div className={css.infoItem}>
-										<span className={css.infoLabel}>Jellyseerr URL</span>
-										<span className={css.infoValue}>{jellyseerr.serverUrl}</span>
-									</div>
-								)}
-								{jellyseerr.user && (
-									<div className={css.infoItem}>
-										<span className={css.infoLabel}>User</span>
-										<span className={css.infoValue}>
-											{jellyseerr.user.displayName || 'Moonfin User'}
-										</span>
-									</div>
-								)}
-								<SpottableButton
-									className={css.actionButton}
-									onClick={handleJellyseerrDisconnect}
-									spotlightId="jellyseerr-disconnect"
-								>
-									Disconnect
-								</SpottableButton>
-							</>
-						) : (
-							<>
-								<p className={css.authHint}>
-									Connect to Jellyseerr through the Moonfin server plugin.
-									The plugin must be installed on your Jellyfin server.
-								</p>
-
-								{moonfinStatus && (
-									<div className={css.statusMessage}>{moonfinStatus}</div>
-								)}
-
-								{moonfinLoginMode && (
-									<>
-										<div className={css.inputGroup}>
-											<label>Jellyseerr Username</label>
-											<SpottableInput
-												type="text"
-												placeholder="Enter Jellyseerr username"
-												value={moonfinUsername}
-												onChange={handleMoonfinUsernameChange}
-												className={css.input}
-												spotlightId="moonfin-username"
-											/>
-										</div>
-										<div className={css.inputGroup}>
-											<label>Jellyseerr Password</label>
-											<SpottableInput
-												type="password"
-												placeholder="Enter Jellyseerr password"
-												value={moonfinPassword}
-												onChange={handleMoonfinPasswordChange}
-												className={css.input}
-												spotlightId="moonfin-password"
-											/>
-										</div>
-										<SpottableButton
-											className={css.actionButton}
-											onClick={handleMoonfinLogin}
-											disabled={moonfinConnecting}
-											spotlightId="moonfin-login-submit"
-										>
-											{moonfinConnecting ? 'Logging in...' : 'Log In'}
-										</SpottableButton>
-									</>
-								)}
-							</>
+						<h2>Plugin Status</h2>
+						<SpottableDiv className={css.infoItem} tabIndex={0}>
+							<span className={css.infoLabel}>Plugin Version</span>
+							<span className={css.infoValue}>{info.version || 'Unknown'}</span>
+						</SpottableDiv>
+						<SpottableDiv className={css.infoItem} tabIndex={0}>
+							<span className={css.infoLabel}>Settings Sync</span>
+							<span className={css.infoValue}>{info.settingsSyncEnabled ? 'Available' : 'Not Available'}</span>
+						</SpottableDiv>
+						<SpottableDiv className={css.infoItem} tabIndex={0}>
+							<span className={css.infoLabel}>{seerrLabel}</span>
+							<span className={css.infoValue}>
+								{info.jellyseerrEnabled ? 'Enabled by Admin' : 'Disabled by Admin'}
+							</span>
+						</SpottableDiv>
+						<SpottableDiv className={css.infoItem} tabIndex={0}>
+							<span className={css.infoLabel}>MDBList Ratings</span>
+							<span className={css.infoValue}>
+								{info.mdblistAvailable ? 'Available' : settings.mdblistApiKey ? 'User Key' : 'Not Configured'}
+							</span>
+						</SpottableDiv>
+						<SpottableDiv className={css.infoItem} tabIndex={0}>
+							<span className={css.infoLabel}>TMDB Ratings</span>
+							<span className={css.infoValue}>
+								{info.tmdbAvailable ? 'Available' : settings.tmdbApiKey ? 'User Key' : 'Not Configured'}
+							</span>
+						</SpottableDiv>
+						{isSeerr && (
+							<SpottableDiv className={css.infoItem} tabIndex={0}>
+								<span className={css.infoLabel}>Detected Variant</span>
+								<span className={css.infoValue}>{seerrLabel} (Seerr v3+)</span>
+							</SpottableDiv>
 						)}
 					</div>
-				</>
-			) : (
-				/* Direct connection mode */
-				<>
+				)}
+
+				{isConnected && (
 					<div className={css.settingsGroup}>
-						<h2>Connection</h2>
-						{jellyseerr.isEnabled && jellyseerr.isAuthenticated && !jellyseerr.isMoonfin ? (
-							<>
-								<div className={css.infoItem}>
-									<span className={css.infoLabel}>Status</span>
-									<span className={css.infoValue}>Connected</span>
-								</div>
-								<div className={css.infoItem}>
-									<span className={css.infoLabel}>Server</span>
-									<span className={css.infoValue}>{jellyseerr.serverUrl}</span>
-								</div>
-								{jellyseerr.user && (
-									<div className={css.infoItem}>
-										<span className={css.infoLabel}>User</span>
-										<span className={css.infoValue}>
-											{jellyseerr.user.displayName || jellyseerr.user.username || jellyseerr.user.email}
-										</span>
-									</div>
-								)}
-								<SpottableButton
-									className={css.actionButton}
-									onClick={handleJellyseerrDisconnect}
-									spotlightId="jellyseerr-disconnect"
-								>
-									Disconnect
-								</SpottableButton>
-							</>
-						) : (
+						<h2>MDBList Ratings</h2>
+						{renderToggleItem('Enable Ratings', 'Show MDBList ratings on media details and featured bar', 'mdblistEnabled')}
+
+						{settings.mdblistEnabled && (
 							<>
 								<div className={css.inputGroup}>
-									<label>Jellyseerr URL</label>
+									<label>Personal API Key {info.mdblistAvailable ? '(optional)' : '(required)'}</label>
 									<SpottableInput
-										type="url"
-										placeholder="http://192.168.1.100:5055"
-										value={jellyseerrUrl}
-										onChange={handleJellyseerrUrlChange}
+										type="text"
+										placeholder={info.mdblistAvailable ? 'Leave blank to use server key' : 'Enter your MDBList API key'}
+										value={settings.mdblistApiKey || ''}
+										onChange={(e) => updateSetting('mdblistApiKey', e.target ? e.target.value : e.value || '')}
 										className={css.input}
-										spotlightId="jellyseerr-url"
+										spotlightId="setting-mdblist-api-key"
 									/>
 								</div>
-
-								{jellyseerrStatus && (
-									<div className={css.statusMessage}>{jellyseerrStatus}</div>
-								)}
+								<h3 className={css.subHeader}>Rating Sources</h3>
+							{MDBLIST_SOURCE_OPTIONS.map(source => (
+								<SpottableDiv
+									key={source.value}
+									className={css.settingItem}
+									onClick={() => toggleMdblistSource(source.value)}
+									spotlightId={`setting-mdblist-${source.value}`}
+								>
+									<div className={css.settingLabel}>
+										<div className={css.settingTitle}>
+											<img
+												src={`${serverUrl}/Moonfin/Assets/${source.icon}`}
+												alt={source.label}
+												className={css.sourceIcon}
+											/>
+											{source.label}
+										</div>
+									</div>
+									<div className={css.settingValue}>
+										{(settings.mdblistRatingSources || []).includes(source.value) ? 'On' : 'Off'}
+									</div>
+								</SpottableDiv>
+							))}
 							</>
 						)}
 					</div>
+				)}
 
-					{!jellyseerr.isAuthenticated && (
-						<div className={css.settingsGroup}>
-							<h2>Authentication</h2>
-							<p className={css.authDescription}>
-								Choose how to authenticate with Jellyseerr
-							</p>
+				{isConnected && (
+					<div className={css.settingsGroup}>
+						<h2>TMDB</h2>
+						{renderToggleItem('Episode Ratings', 'Show TMDB ratings on individual episodes', 'tmdbEpisodeRatingsEnabled')}
+						{settings.tmdbEpisodeRatingsEnabled && (
+							<div className={css.inputGroup}>
+								<label>Personal API Key {info.tmdbAvailable ? '(optional)' : '(required)'}</label>
+								<SpottableInput
+									type="text"
+									placeholder={info.tmdbAvailable ? 'Leave blank to use server key' : 'Enter your TMDB API key'}
+									value={settings.tmdbApiKey || ''}
+									onChange={(e) => updateSetting('tmdbApiKey', e.target ? e.target.value : e.value || '')}
+									className={css.input}
+									spotlightId="setting-tmdb-api-key"
+								/>
+							</div>
+						)}
+					</div>
+				)}
 
-							{authMethod === AUTH_METHODS.NONE && (
-								<div className={css.authButtons}>
-									<SpottableButton
-										className={css.authMethodButton}
-										onClick={handleSelectJellyfinAuth}
-										spotlightId="auth-jellyfin-select"
-									>
-										Login with Jellyfin Account
-									</SpottableButton>
-									<SpottableButton
-										className={css.authMethodButton}
-										onClick={handleSelectLocalAuth}
-										spotlightId="auth-local-select"
-									>
-										Login with Local Account
-									</SpottableButton>
+				{!settings.useMoonfinPlugin && (
+					<div className={css.settingsGroup}>
+						<p className={css.authHint}>
+							Enable the Moonfin plugin to access ratings, settings sync,
+							and {seerrLabel} proxy features. The plugin must be installed
+							on your Jellyfin server.
+						</p>
+					</div>
+				)}
+			</div>
+		);
+	};
+
+	const renderJellyseerrPanel = () => {
+		return (
+		<div className={css.panel}>
+			<h1>{seerrLabel} Settings</h1>
+
+			{settings.useMoonfinPlugin ? (
+				<div className={css.settingsGroup}>
+					<h2>{seerrLabel} via Plugin</h2>
+					{jellyseerr.isEnabled && jellyseerr.isAuthenticated && jellyseerr.isMoonfin ? (
+						<>
+							<div className={css.infoItem}>
+								<span className={css.infoLabel}>Status</span>
+								<span className={css.infoValue}>Connected via Moonfin</span>
+							</div>
+							{jellyseerr.serverUrl && (
+								<div className={css.infoItem}>
+									<span className={css.infoLabel}>{seerrLabel} URL</span>
+									<span className={css.infoValue}>{jellyseerr.serverUrl}</span>
 								</div>
 							)}
-
-							{authMethod === AUTH_METHODS.JELLYFIN && (
-								<div className={css.authForm}>
-									<div className={css.authFormHeader}>
-										<span>Jellyfin Authentication</span>
-										<SpottableButton
-											className={css.backLink}
-											onClick={handleBackToAuthSelection}
-											spotlightId="auth-back"
-										>
-											← Back
-										</SpottableButton>
-									</div>
-									<p className={css.authHint}>
-										Sign in using your Jellyfin credentials ({user?.Name})
-									</p>
-									<div className={css.inputGroup}>
-										<label>Jellyfin Password</label>
-										<SpottableInput
-											type="password"
-											placeholder="Enter your Jellyfin password"
-											value={jellyfinPassword}
-											onChange={handleJellyfinPasswordChange}
-											className={css.input}
-											spotlightId="jellyfin-password"
-										/>
-									</div>
-									<SpottableButton
-										className={css.actionButton}
-										onClick={handleJellyfinAuth}
-										disabled={isAuthenticating}
-										spotlightId="jellyfin-auth-submit"
-									>
-										{isAuthenticating ? 'Connecting...' : 'Connect'}
-									</SpottableButton>
+							{jellyseerr.user && (
+								<div className={css.infoItem}>
+									<span className={css.infoLabel}>User</span>
+									<span className={css.infoValue}>
+										{jellyseerr.user.displayName || 'Moonfin User'}
+									</span>
 								</div>
 							)}
-
-							{authMethod === AUTH_METHODS.LOCAL && (
-								<div className={css.authForm}>
-									<div className={css.authFormHeader}>
-										<span>Local Account</span>
-										<SpottableButton
-											className={css.backLink}
-											onClick={handleBackToAuthSelection}
-											spotlightId="auth-back-local"
-										>
-											← Back
-										</SpottableButton>
-									</div>
-									<p className={css.authHint}>
-										Sign in with your Jellyseerr email and password
-									</p>
-									<div className={css.inputGroup}>
-										<label>Email</label>
-										<SpottableInput
-											type="email"
-											placeholder="email@example.com"
-											value={localEmail}
-											onChange={handleLocalEmailChange}
-											className={css.input}
-											spotlightId="local-email"
-										/>
-									</div>
-									<div className={css.inputGroup}>
-										<label>Password</label>
-										<SpottableInput
-											type="password"
-											placeholder="Enter your password"
-											value={localPassword}
-											onChange={handleLocalPasswordChange}
-											className={css.input}
-											spotlightId="local-password"
-										/>
-									</div>
-									<SpottableButton
-										className={css.actionButton}
-										onClick={handleLocalAuth}
-										disabled={isAuthenticating}
-										spotlightId="local-auth-submit"
-									>
-										{isAuthenticating ? 'Logging in...' : 'Login'}
-									</SpottableButton>
-								</div>
-							)}
-						</div>
+							<SpottableButton
+								className={css.actionButton}
+								onClick={handleJellyseerrDisconnect}
+								spotlightId="jellyseerr-disconnect"
+							>
+								Disconnect
+							</SpottableButton>
+						</>
+					) : (
+						<p className={css.authHint}>
+							{seerrLabel} is managed through the Moonfin plugin.
+							Enable and configure the plugin in the Plugin settings tab.
+						</p>
 					)}
-				</>
+				</div>
+			) : (
+				<div className={css.settingsGroup}>
+					<p className={css.authHint}>
+						Enable the Moonfin plugin to access {seerrLabel}.
+						The plugin must be installed on your Jellyfin server.
+					</p>
+				</div>
 			)}
 		</div>
-	);
+		);
+	};
 
 	const renderAboutPanel = () => (
 		<div className={css.panel}>
@@ -1546,6 +1442,7 @@ const Settings = ({onBack, onLibrariesChanged}) => {
 			case 'general': return renderGeneralPanel();
 			case 'playback': return renderPlaybackPanel();
 			case 'display': return renderDisplayPanel();
+			case 'plugin': return renderPluginPanel();
 			case 'jellyseerr': return renderJellyseerrPanel();
 			case 'about': return renderAboutPanel();
 			default: return renderGeneralPanel();
@@ -1559,7 +1456,7 @@ const Settings = ({onBack, onLibrariesChanged}) => {
 				onKeyDown={handleSidebarKeyDown}
 				spotlightId="settings-sidebar"
 			>
-				{CATEGORIES.map(cat => (
+				{categories.map(cat => (
 					<SpottableDiv
 						key={cat.id}
 						className={`${css.category} ${activeCategory === cat.id ? css.active : ''}`}

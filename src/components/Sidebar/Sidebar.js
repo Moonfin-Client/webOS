@@ -6,6 +6,7 @@ import {useAuth} from '../../context/AuthContext';
 import {useSettings} from '../../context/SettingsContext';
 import {useJellyseerr} from '../../context/JellyseerrContext';
 import JellyseerrIcon from '../icons/JellyseerrIcon';
+import SeerrIcon from '../icons/SeerrIcon';
 
 import css from './Sidebar.module.less';
 
@@ -34,7 +35,7 @@ const Sidebar = ({
 }) => {
 	const {user, serverUrl} = useAuth();
 	const {settings} = useSettings();
-	const {isEnabled: jellyseerrEnabled} = useJellyseerr();
+	const {isEnabled: jellyseerrEnabled, isMoonfin, variant, displayName} = useJellyseerr();
 	const [clock, setClock] = useState('');
 	const [isHovered, setIsHovered] = useState(false);
 	const [isFocused, setIsFocused] = useState(false);
@@ -263,8 +264,11 @@ const Sidebar = ({
 						className={css.sidebarItem}
 						onClick={onDiscover}
 					>
-						<JellyseerrIcon className={css.sidebarIcon} />
-						<span className={css.sidebarLabel}>Jellyseerr</span>
+						{isMoonfin && variant === 'seerr'
+							? <SeerrIcon className={css.sidebarIcon} />
+							: <JellyseerrIcon className={css.sidebarIcon} />
+						}
+						<span className={css.sidebarLabel}>{displayName}</span>
 					</SpottableButton>
 				)}
 

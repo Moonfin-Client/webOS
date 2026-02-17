@@ -1,5 +1,6 @@
 import {createContext, useContext, useState, useEffect, useCallback} from 'react';
 import {getFromStorage, saveToStorage} from '../services/storage';
+import {getMoonfinSettings, saveMoonfinSettings} from '../services/jellyseerrApi';
 
 const DEFAULT_HOME_ROWS = [
 	{id: 'resume', name: 'Continue Watching', enabled: true, order: 0},
@@ -48,11 +49,24 @@ const defaultSettings = {
 	showFeaturedBar: true,
 	unifiedLibraryMode: false,
 	useMoonfinPlugin: false,
+	mdblistEnabled: true,
+	mdblistRatingSources: ['imdb', 'tmdb', 'tomatoes', 'metacritic'],
+	mdblistApiKey: '',
+	tmdbEpisodeRatingsEnabled: true,
+	tmdbApiKey: '',
 	autoLogin: true,
 	navbarPosition: 'top'
 };
 
 export {DEFAULT_HOME_ROWS};
+
+// Settings keys that the Moonfin plugin syncs across clients
+const SYNCABLE_KEYS = [
+	'showShuffleButton', 'shuffleContentType', 'showGenresButton',
+	'showFavoritesButton', 'showLibrariesInToolbar', 'mergeContinueWatchingNextUp',
+	'mdblistEnabled', 'mdblistApiKey', 'mdblistRatingSources',
+	'tmdbApiKey', 'tmdbEpisodeRatingsEnabled', 'navbarPosition'
+];
 
 const SettingsContext = createContext(null);
 
@@ -90,13 +104,61 @@ export function SettingsProvider({children}) {
 		saveToStorage('settings', defaultSettings);
 	}, []);
 
+	const syncFromServer = useCallback(async (serverUrl, token) => {
+		try {
+			const serverSettings = await getMoonfinSettings(serverUrl, token);
+			if (!serverSettings) {
+				console.log('[Settings] No server settings found, pushing local');
+				const toSync = {};
+				for (const key of SYNCABLE_KEYS) {
+					if (settings[key] !== undefined) {
+						toSync[key] = settings[key];
+					}
+				}
+				await saveMoonfinSettings(toSync, serverUrl, token).catch(() => {});
+				return;
+			}
+
+			const normalized = {};
+			for (const key of Object.keys(serverSettings)) {
+				const k = key.charAt(0).toLowerCase() + key.slice(1);
+				normalized[k] = serverSettings[key];
+			}
+
+			const merged = {};
+			let changed = false;
+			for (const key of SYNCABLE_KEYS) {
+				if (normalized[key] !== undefined) {
+					merged[key] = normalized[key];
+					if (JSON.stringify(merged[key]) !== JSON.stringify(settings[key])) {
+						changed = true;
+					}
+				}
+			}
+
+			if (changed) {
+				setSettings(prev => {
+					const updated = {...prev, ...merged};
+					saveToStorage('settings', updated);
+					return updated;
+				});
+				console.log('[Settings] Synced from server:', Object.keys(merged).join(', '));
+			} else {
+				console.log('[Settings] Server settings match local');
+			}
+		} catch (e) {
+			console.warn('[Settings] Server sync failed:', e.message);
+		}
+	}, [settings]);
+
 	return (
 		<SettingsContext.Provider value={{
 			settings,
 			loaded,
 			updateSetting,
 			updateSettings,
-			resetSettings
+			resetSettings,
+			syncFromServer
 		}}>
 			{children}
 		</SettingsContext.Provider>
