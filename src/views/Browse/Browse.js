@@ -276,7 +276,7 @@ const Browse = ({
 		Spotlight.focus(`row-${targetIndex}`);
 		const targetRow = document.querySelector(`[data-row-index="${targetIndex}"]`);
 		if (targetRow) {
-			targetRow.scrollIntoView({block: 'center'});
+			targetRow.scrollIntoView({block: 'start'});
 		}
 	}, [filteredRows.length]);
 
@@ -306,7 +306,7 @@ const Browse = ({
 
 					const targetRow = document.querySelector(`[data-row-index="${targetRowIndex}"]`);
 					if (targetRow) {
-						targetRow.scrollIntoView({block: 'center'});
+						targetRow.scrollIntoView({block: 'start'});
 					}
 					lastFocusState = null;
 				}
@@ -840,6 +840,12 @@ const Browse = ({
 				const contentRows = document.querySelector('[data-element="content-rows"]');
 				if (contentRows) contentRows.scrollTop = 0;
 				Spotlight.focus('row-0');
+				setTimeout(() => {
+					const firstRow = document.querySelector('[data-row-index="0"]');
+					if (firstRow) {
+						firstRow.scrollIntoView({block: 'start', behavior: 'auto'});
+					}
+				}, 50);
 			}, TRANSITION_DELAY_MS);
 		}
 	}, [handleFeaturedPrev, handleFeaturedNext]);
