@@ -257,7 +257,7 @@ const Browse = ({
 		if (fromRowIndex === 0) {
 			if (settings.showFeaturedBar !== false) {
 				Spotlight.focus('featured-banner');
-			} else {
+			} else if (settings.navbarPosition !== 'left') {
 				Spotlight.focus('navbar-home');
 			}
 			return;
@@ -268,7 +268,7 @@ const Browse = ({
 		if (targetRow) {
 			targetRow.scrollIntoView({block: 'start'});
 		}
-	}, [settings.showFeaturedBar]);
+	}, [settings.showFeaturedBar, settings.navbarPosition]);
 
 	const handleNavigateDown = useCallback((fromRowIndex) => {
 		const targetIndex = fromRowIndex + 1;
@@ -823,7 +823,11 @@ const Browse = ({
 		if (e.keyCode === 37) {
 			e.preventDefault();
 			e.stopPropagation();
-			handleFeaturedPrev();
+			if (settings.navbarPosition === 'left') {
+				Spotlight.focus('navbar');
+			} else {
+				handleFeaturedPrev();
+			}
 		} else if (e.keyCode === 39) {
 			e.preventDefault();
 			e.stopPropagation();
@@ -831,7 +835,9 @@ const Browse = ({
 		} else if (e.keyCode === 38) {
 			e.preventDefault();
 			e.stopPropagation();
-			Spotlight.focus('navbar-home');
+			if (settings.navbarPosition !== 'left') {
+				Spotlight.focus('navbar-home');
+			}
 		} else if (e.keyCode === 40) {
 			e.preventDefault();
 			e.stopPropagation();
@@ -848,7 +854,7 @@ const Browse = ({
 				}, 50);
 			}, TRANSITION_DELAY_MS);
 		}
-	}, [handleFeaturedPrev, handleFeaturedNext]);
+	}, [handleFeaturedPrev, handleFeaturedNext, settings.navbarPosition]);
 
 	const handleRowFocus = useCallback((rowIndex) => {
 		if (browseMode !== 'rows') {
@@ -956,7 +962,7 @@ const Browse = ({
 				<div className={css.globalBackdropOverlay} />
 			</div>
 
-			<div className={css.mainContent} ref={mainContentRef}>
+			<div className={`${css.mainContent} ${settings.navbarPosition === 'left' ? css.sidebarOffset : ''}`} ref={mainContentRef}>
 				{currentFeatured && settings.showFeaturedBar !== false && (
 					<div
 						className={`${css.featuredBanner} ${browseMode === 'rows' ? css.featuredHidden : ''}`}
@@ -978,15 +984,17 @@ const Browse = ({
 
 							{featuredItems.length > 1 && (
 								<>
-									<SpottableButton
-										className={`${css.carouselNav} ${css.carouselNavLeft}`}
-										onClick={handleCarouselPrevClick}
-										style={uiButtonStyle}
-									>
-										<svg viewBox="0 0 24 24" width="32" height="32">
-											<path fill="currentColor" d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
-										</svg>
-									</SpottableButton>
+									{settings.navbarPosition !== 'left' && (
+										<SpottableButton
+											className={`${css.carouselNav} ${css.carouselNavLeft}`}
+											onClick={handleCarouselPrevClick}
+											style={uiButtonStyle}
+										>
+											<svg viewBox="0 0 24 24" width="32" height="32">
+												<path fill="currentColor" d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+											</svg>
+										</SpottableButton>
+									)}
 									<SpottableButton
 										className={`${css.carouselNav} ${css.carouselNavRight}`}
 										onClick={handleCarouselNextClick}

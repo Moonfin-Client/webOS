@@ -48,7 +48,8 @@ const defaultSettings = {
 	showFeaturedBar: true,
 	unifiedLibraryMode: false,
 	useMoonfinPlugin: false,
-	autoLogin: true
+	autoLogin: true,
+	navbarPosition: 'top'
 };
 
 export {DEFAULT_HOME_ROWS};

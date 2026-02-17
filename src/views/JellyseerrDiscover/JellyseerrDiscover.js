@@ -604,7 +604,7 @@ const JellyseerrDiscover = ({onSelectItem, onSelectGenre, onSelectNetwork, onSel
 			{isLoading ? (
 				<LoadingSpinner />
 			) : (
-				<div className={css.mainContent}>
+				<div className={`${css.mainContent} ${settings.navbarPosition === 'left' ? css.sidebarOffset : ''}`}>
 					{/* Detail section for focused item - always present for consistent split view */}
 					<div className={css.detailSection}>
 						{focusedItem && (focusedItem.title || focusedItem.name) ? (

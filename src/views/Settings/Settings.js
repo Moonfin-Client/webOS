@@ -837,6 +837,11 @@ const Settings = ({onBack, onLibrariesChanged}) => {
 			)}
 			<div className={css.settingsGroup}>
 				<h2>Navigation Bar</h2>
+				{renderSettingItem('Navigation Style', 'Position of navigation: top bar or left sidebar',
+					settings.navbarPosition === 'left' ? 'Left Sidebar' : 'Top Bar',
+					() => updateSetting('navbarPosition', settings.navbarPosition === 'left' ? 'top' : 'left'),
+					'setting-navbarPosition'
+				)}
 				{renderToggleItem('Show Shuffle Button', 'Show shuffle button in navigation bar', 'showShuffleButton')}
 				{settings.showShuffleButton && renderSettingItem('Shuffle Content Type', 'Type of content to shuffle',
 					getShuffleContentTypeLabel(), cycleShuffleContentType, 'setting-shuffleContentType'
