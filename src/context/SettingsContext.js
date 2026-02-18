@@ -55,7 +55,12 @@ const defaultSettings = {
 	tmdbEpisodeRatingsEnabled: true,
 	tmdbApiKey: '',
 	autoLogin: true,
-	navbarPosition: 'top'
+	navbarPosition: 'top',
+	screensaverEnabled: true,
+	screensaverTimeout: 90,
+	screensaverDimmingLevel: 50,
+	screensaverShowClock: true,
+	screensaverMode: 'library'
 };
 
 export {DEFAULT_HOME_ROWS};

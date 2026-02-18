@@ -631,3 +631,57 @@
 	--slider-active-bg-color: #00a4dc;
 	--slider-knob-bg-color: #fff;
 }
+
+.optionList {
+	margin-bottom: 16px;
+	max-height: 400px;
+	overflow-y: auto;
+	scrollbar-width: none;
+
+	&::-webkit-scrollbar {
+		display: none;
+	}
+}
+
+.optionItem {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 16px 20px;
+	margin-bottom: 4px;
+	border-radius: 8px;
+	border: 2px solid transparent;
+	background: #252525;
+	cursor: pointer;
+	transition: all 0.15s ease;
+
+	&:focus {
+		background: #00a4dc;
+		border-color: #00a4dc;
+		transform: scale(1.02);
+
+		.optionLabel {
+			color: #000;
+		}
+
+		.optionCheck {
+			color: #000;
+		}
+	}
+}
+
+.optionItemSelected {
+	border-color: #00a4dc;
+}
+
+.optionLabel {
+	font-size: 20px;
+	color: #fff;
+	font-weight: 400;
+}
+
+.optionCheck {
+	font-size: 22px;
+	color: #00a4dc;
+	font-weight: 600;
+}

@@ -184,6 +184,45 @@ const UI_COLOR_OPTIONS = [
 	{value: 'brown', label: 'Brown', rgb: '50, 35, 25'}
 ];
 
+const SCREENSAVER_MODE_OPTIONS = [
+	{value: 'library', label: 'Library Backdrops'},
+	{value: 'logo', label: 'Moonfin Logo'}
+];
+
+const SCREENSAVER_TIMEOUT_OPTIONS = [
+	{value: 30, label: '30 seconds'},
+	{value: 60, label: '1 minute'},
+	{value: 90, label: '90 seconds'},
+	{value: 120, label: '2 minutes'},
+	{value: 180, label: '3 minutes'},
+	{value: 300, label: '5 minutes'}
+];
+
+const SCREENSAVER_DIMMING_OPTIONS = [
+	{value: 0, label: 'Off'},
+	{value: 25, label: '25%'},
+	{value: 50, label: '50%'},
+	{value: 75, label: '75%'},
+	{value: 100, label: '100%'}
+];
+
+const CLOCK_DISPLAY_OPTIONS = [
+	{value: '12-hour', label: '12-Hour'},
+	{value: '24-hour', label: '24-Hour'}
+];
+
+const NAV_POSITION_OPTIONS = [
+	{value: 'top', label: 'Top Bar'},
+	{value: 'left', label: 'Left Sidebar'}
+];
+
+const OptionDialogContainer = SpotlightContainerDecorator({enterTo: 'default-element', restrict: 'self-only'}, 'div');
+
+const getLabel = (options, value, fallback) => {
+	const option = options.find(o => o.value === value);
+	return option?.label || fallback;
+};
+
 const Settings = ({onBack, onLibrariesChanged}) => {
 	const {
 		api,
@@ -227,6 +266,7 @@ const Settings = ({onBack, onLibrariesChanged}) => {
 	const [moonfinLoginMode, setMoonfinLoginMode] = useState(false);
 	const [moonfinUsername, setMoonfinUsername] = useState('');
 	const [moonfinPassword, setMoonfinPassword] = useState('');
+	const [optionDialog, setOptionDialog] = useState(null);
 
 	useEffect(() => {
 		Spotlight.focus('sidebar-general');
@@ -241,13 +281,25 @@ const Settings = ({onBack, onLibrariesChanged}) => {
 				}
 				e.preventDefault();
 				e.stopPropagation();
+				if (optionDialog) {
+					setOptionDialog(null);
+					return;
+				}
+				if (showHomeRowsModal) {
+					setShowHomeRowsModal(false);
+					return;
+				}
+				if (showLibraryModal) {
+					setShowLibraryModal(false);
+					return;
+				}
 				onBack?.();
 			}
 		};
 
 		window.addEventListener('keydown', handleKeyDown, true);
 		return () => window.removeEventListener('keydown', handleKeyDown, true);
-	}, [onBack]);
+	}, [onBack, optionDialog, showHomeRowsModal, showLibraryModal]);
 
 	useEffect(() => {
 		if (serverUrl && accessToken) {
@@ -343,92 +395,20 @@ const Settings = ({onBack, onLibrariesChanged}) => {
 		}
 	}, [settings.useMoonfinPlugin, updateSetting, serverUrl, accessToken, jellyseerr]);
 
-	const cycleBitrate = useCallback(() => {
-		const currentIndex = BITRATE_OPTIONS.findIndex(o => o.value === settings.maxBitrate);
-		const nextIndex = (currentIndex + 1) % BITRATE_OPTIONS.length;
-		updateSetting('maxBitrate', BITRATE_OPTIONS[nextIndex].value);
-	}, [settings.maxBitrate, updateSetting]);
+	const openOptionDialog = useCallback((title, options, settingKey) => {
+		setOptionDialog({title, options, settingKey});
+	}, []);
 
-	const cycleFeaturedContentType = useCallback(() => {
-		const currentIndex = CONTENT_TYPE_OPTIONS.findIndex(o => o.value === settings.featuredContentType);
-		const nextIndex = (currentIndex + 1) % CONTENT_TYPE_OPTIONS.length;
-		updateSetting('featuredContentType', CONTENT_TYPE_OPTIONS[nextIndex].value);
-	}, [settings.featuredContentType, updateSetting]);
+	const closeOptionDialog = useCallback(() => {
+		setOptionDialog(null);
+	}, []);
 
-	const cycleShuffleContentType = useCallback(() => {
-		const currentIndex = CONTENT_TYPE_OPTIONS.findIndex(o => o.value === settings.shuffleContentType);
-		const nextIndex = (currentIndex + 1) % CONTENT_TYPE_OPTIONS.length;
-		updateSetting('shuffleContentType', CONTENT_TYPE_OPTIONS[nextIndex].value);
-	}, [settings.shuffleContentType, updateSetting]);
-
-	const cycleFeaturedItemCount = useCallback(() => {
-		const currentIndex = FEATURED_ITEM_COUNT_OPTIONS.findIndex(o => o.value === settings.featuredItemCount);
-		const nextIndex = (currentIndex + 1) % FEATURED_ITEM_COUNT_OPTIONS.length;
-		updateSetting('featuredItemCount', FEATURED_ITEM_COUNT_OPTIONS[nextIndex].value);
-	}, [settings.featuredItemCount, updateSetting]);
-
-	const cycleBackdropBlurHome = useCallback(() => {
-		const currentIndex = BLUR_OPTIONS.findIndex(o => o.value === settings.backdropBlurHome);
-		const nextIndex = (currentIndex + 1) % BLUR_OPTIONS.length;
-		updateSetting('backdropBlurHome', BLUR_OPTIONS[nextIndex].value);
-	}, [settings.backdropBlurHome, updateSetting]);
-
-	const cycleBackdropBlurDetail = useCallback(() => {
-		const currentIndex = BLUR_OPTIONS.findIndex(o => o.value === settings.backdropBlurDetail);
-		const nextIndex = (currentIndex + 1) % BLUR_OPTIONS.length;
-		updateSetting('backdropBlurDetail', BLUR_OPTIONS[nextIndex].value);
-	}, [settings.backdropBlurDetail, updateSetting]);
-
-	const cycleSubtitleSize = useCallback(() => {
-		const currentIndex = SUBTITLE_SIZE_OPTIONS.findIndex(o => o.value === settings.subtitleSize);
-		const nextIndex = (currentIndex + 1) % SUBTITLE_SIZE_OPTIONS.length;
-		updateSetting('subtitleSize', SUBTITLE_SIZE_OPTIONS[nextIndex].value);
-	}, [settings.subtitleSize, updateSetting]);
-
-	const cycleSubtitlePosition = useCallback(() => {
-		const currentIndex = SUBTITLE_POSITION_OPTIONS.findIndex(o => o.value === settings.subtitlePosition);
-		const nextIndex = (currentIndex + 1) % SUBTITLE_POSITION_OPTIONS.length;
-		updateSetting('subtitlePosition', SUBTITLE_POSITION_OPTIONS[nextIndex].value);
-	}, [settings.subtitlePosition, updateSetting]);
-
-	const cycleSubtitleColor = useCallback(() => {
-		const currentIndex = SUBTITLE_COLOR_OPTIONS.findIndex(o => o.value === settings.subtitleColor);
-		const index = currentIndex === -1 ? 0 : currentIndex;
-		const nextIndex = (index + 1) % SUBTITLE_COLOR_OPTIONS.length;
-		updateSetting('subtitleColor', SUBTITLE_COLOR_OPTIONS[nextIndex].value);
-	}, [settings.subtitleColor, updateSetting]);
-
-	const cycleSubtitleShadowColor = useCallback(() => {
-		const currentIndex = SUBTITLE_SHADOW_COLOR_OPTIONS.findIndex(o => o.value === settings.subtitleShadowColor);
-		const index = currentIndex === -1 ? 0 : currentIndex;
-		const nextIndex = (index + 1) % SUBTITLE_SHADOW_COLOR_OPTIONS.length;
-		updateSetting('subtitleShadowColor', SUBTITLE_SHADOW_COLOR_OPTIONS[nextIndex].value);
-	}, [settings.subtitleShadowColor, updateSetting]);
-
-	const cycleSubtitleBackgroundColor = useCallback(() => {
-		const currentIndex = SUBTITLE_BACKGROUND_COLOR_OPTIONS.findIndex(o => o.value === settings.subtitleBackgroundColor);
-		const index = currentIndex === -1 ? 0 : currentIndex;
-		const nextIndex = (index + 1) % SUBTITLE_BACKGROUND_COLOR_OPTIONS.length;
-		updateSetting('subtitleBackgroundColor', SUBTITLE_BACKGROUND_COLOR_OPTIONS[nextIndex].value);
-	}, [settings.subtitleBackgroundColor, updateSetting]);
-
-	const cycleSeekStep = useCallback(() => {
-		const currentIndex = SEEK_STEP_OPTIONS.findIndex(o => o.value === settings.seekStep);
-		const nextIndex = (currentIndex + 1) % SEEK_STEP_OPTIONS.length;
-		updateSetting('seekStep', SEEK_STEP_OPTIONS[nextIndex].value);
-	}, [settings.seekStep, updateSetting]);
-
-	const cycleUiOpacity = useCallback(() => {
-		const currentIndex = UI_OPACITY_OPTIONS.findIndex(o => o.value === settings.uiOpacity);
-		const nextIndex = (currentIndex + 1) % UI_OPACITY_OPTIONS.length;
-		updateSetting('uiOpacity', UI_OPACITY_OPTIONS[nextIndex].value);
-	}, [settings.uiOpacity, updateSetting]);
-
-	const cycleUiColor = useCallback(() => {
-		const currentIndex = UI_COLOR_OPTIONS.findIndex(o => o.value === settings.uiColor);
-		const nextIndex = (currentIndex + 1) % UI_COLOR_OPTIONS.length;
-		updateSetting('uiColor', UI_COLOR_OPTIONS[nextIndex].value);
-	}, [settings.uiColor, updateSetting]);
+	const handleOptionSelect = useCallback((value) => {
+		if (optionDialog) {
+			updateSetting(optionDialog.settingKey, value);
+		}
+		setOptionDialog(null);
+	}, [optionDialog, updateSetting]);
 
 	const handleSliderPositionAbsolute = useCallback((e) => {
 		updateSetting('subtitlePositionAbsolute', e.value);
@@ -659,71 +639,6 @@ const Settings = ({onBack, onLibrariesChanged}) => {
 		setMoonfinPassword('');
 	}, [jellyseerr]);
 
-	const getBitrateLabel = () => {
-		const option = BITRATE_OPTIONS.find(o => o.value === settings.maxBitrate);
-		return option?.label || 'Auto';
-	};
-
-	const getFeaturedContentTypeLabel = () => {
-		const option = CONTENT_TYPE_OPTIONS.find(o => o.value === settings.featuredContentType);
-		return option?.label || 'Movies & TV Shows';
-	};
-
-	const getShuffleContentTypeLabel = () => {
-		const option = CONTENT_TYPE_OPTIONS.find(o => o.value === settings.shuffleContentType);
-		return option?.label || 'Movies & TV Shows';
-	};
-
-	const getFeaturedItemCountLabel = () => {
-		const option = FEATURED_ITEM_COUNT_OPTIONS.find(o => o.value === settings.featuredItemCount);
-		return option?.label || '10 items';
-	};
-
-	const getBackdropBlurLabel = (value) => {
-		const option = BLUR_OPTIONS.find(o => o.value === value);
-		return option?.label || 'Medium';
-	};
-
-	const getSubtitleSizeLabel = () => {
-		const option = SUBTITLE_SIZE_OPTIONS.find(o => o.value === settings.subtitleSize);
-		return option?.label || 'Medium';
-	};
-
-	const getSubtitlePositionLabel = () => {
-		const option = SUBTITLE_POSITION_OPTIONS.find(o => o.value === settings.subtitlePosition);
-		return option?.label || 'Bottom';
-	};
-
-	const getSubtitleColorLabel = () => {
-		const option = SUBTITLE_COLOR_OPTIONS.find(o => o.value === settings.subtitleColor);
-		return option?.label || 'White';
-	};
-
-	const getSubtitleShadowColorLabel = () => {
-		const option = SUBTITLE_SHADOW_COLOR_OPTIONS.find(o => o.value === settings.subtitleShadowColor);
-		return option?.label || 'Black';
-	};
-
-	const getSubtitleBackgroundColorLabel = () => {
-		const option = SUBTITLE_BACKGROUND_COLOR_OPTIONS.find(o => o.value === settings.subtitleBackgroundColor);
-		return option?.label || 'Black';
-	};
-
-	const getSeekStepLabel = () => {
-		const option = SEEK_STEP_OPTIONS.find(o => o.value === settings.seekStep);
-		return option?.label || '10 seconds';
-	};
-
-	const getUiOpacityLabel = () => {
-		const option = UI_OPACITY_OPTIONS.find(o => o.value === settings.uiOpacity);
-		return option?.label || '85%';
-	};
-
-	const getUiColorLabel = () => {
-		const option = UI_COLOR_OPTIONS.find(o => o.value === settings.uiColor);
-		return option?.label || 'Dark Gray';
-	};
-
 	const renderSettingItem = (title, description, value, onClick, key) => (
 		<SpottableDiv
 			key={key}
@@ -755,8 +670,8 @@ const Settings = ({onBack, onLibrariesChanged}) => {
 			<div className={css.settingsGroup}>
 				<h2>Application</h2>
 				{renderSettingItem('Clock Display', 'Show clock in the interface',
-					settings.clockDisplay === '12-hour' ? '12-Hour' : '24-Hour',
-					() => updateSetting('clockDisplay', settings.clockDisplay === '12-hour' ? '24-hour' : '12-hour'),
+					getLabel(CLOCK_DISPLAY_OPTIONS, settings.clockDisplay, '24-Hour'),
+					() => openOptionDialog('Clock Display', CLOCK_DISPLAY_OPTIONS, 'clockDisplay'),
 					'setting-clockDisplay'
 				)}
 				{renderToggleItem('Auto Login', 'Automatically sign in on app launch', 'autoLogin')}
@@ -770,13 +685,15 @@ const Settings = ({onBack, onLibrariesChanged}) => {
 			<div className={css.settingsGroup}>
 				<h2>Navigation Bar</h2>
 				{renderSettingItem('Navigation Style', 'Position of navigation: top bar or left sidebar',
-					settings.navbarPosition === 'left' ? 'Left Sidebar' : 'Top Bar',
-					() => updateSetting('navbarPosition', settings.navbarPosition === 'left' ? 'top' : 'left'),
+					getLabel(NAV_POSITION_OPTIONS, settings.navbarPosition, 'Top Bar'),
+					() => openOptionDialog('Navigation Style', NAV_POSITION_OPTIONS, 'navbarPosition'),
 					'setting-navbarPosition'
 				)}
 				{renderToggleItem('Show Shuffle Button', 'Show shuffle button in navigation bar', 'showShuffleButton')}
 				{settings.showShuffleButton && renderSettingItem('Shuffle Content Type', 'Type of content to shuffle',
-					getShuffleContentTypeLabel(), cycleShuffleContentType, 'setting-shuffleContentType'
+					getLabel(CONTENT_TYPE_OPTIONS, settings.shuffleContentType, 'Movies & TV Shows'),
+					() => openOptionDialog('Shuffle Content Type', CONTENT_TYPE_OPTIONS, 'shuffleContentType'),
+					'setting-shuffleContentType'
 				)}
 				{renderToggleItem('Show Genres Button', 'Show genres button in navigation bar', 'showGenresButton')}
 				{renderToggleItem('Show Favorites Button', 'Show favorites button in navigation bar', 'showFavoritesButton')}
@@ -811,19 +728,27 @@ const Settings = ({onBack, onLibrariesChanged}) => {
 				{renderToggleItem('Skip Credits', 'Automatically skip credits', 'skipCredits')}
 				{renderToggleItem('Auto Play Next', 'Automatically play the next episode', 'autoPlay')}
 				{renderSettingItem('Maximum Bitrate', 'Limit streaming quality',
-					getBitrateLabel(), cycleBitrate, 'setting-bitrate'
+					getLabel(BITRATE_OPTIONS, settings.maxBitrate, 'Auto'),
+					() => openOptionDialog('Maximum Bitrate', BITRATE_OPTIONS, 'maxBitrate'),
+					'setting-bitrate'
 				)}
 				{renderSettingItem('Seek Step', 'Seconds to skip when seeking',
-					getSeekStepLabel(), cycleSeekStep, 'setting-seekStep'
+					getLabel(SEEK_STEP_OPTIONS, settings.seekStep, '10 seconds'),
+					() => openOptionDialog('Seek Step', SEEK_STEP_OPTIONS, 'seekStep'),
+					'setting-seekStep'
 				)}
 			</div>
 			<div className={css.settingsGroup}>
 				<h2>Subtitles</h2>
 				{renderSettingItem('Subtitle Size', 'Size of subtitle text',
-					getSubtitleSizeLabel(), cycleSubtitleSize, 'setting-subtitleSize'
+					getLabel(SUBTITLE_SIZE_OPTIONS, settings.subtitleSize, 'Medium'),
+					() => openOptionDialog('Subtitle Size', SUBTITLE_SIZE_OPTIONS, 'subtitleSize'),
+					'setting-subtitleSize'
 				)}
 				{renderSettingItem('Subtitle Position', 'Vertical position of subtitles',
-					getSubtitlePositionLabel(), cycleSubtitlePosition, 'setting-subtitlePosition'
+					getLabel(SUBTITLE_POSITION_OPTIONS, settings.subtitlePosition, 'Bottom'),
+					() => openOptionDialog('Subtitle Position', SUBTITLE_POSITION_OPTIONS, 'subtitlePosition'),
+					'setting-subtitlePosition'
 				)}
 				{settings.subtitlePosition === 'absolute' && (
 					<div className={css.sliderItem}>
@@ -860,13 +785,17 @@ const Settings = ({onBack, onLibrariesChanged}) => {
 					/>
 				</div>
 				{renderSettingItem('Text Color', 'Color of subtitle text',
-					getSubtitleColorLabel(), cycleSubtitleColor, 'setting-subtitleColor'
+					getLabel(SUBTITLE_COLOR_OPTIONS, settings.subtitleColor, 'White'),
+					() => openOptionDialog('Text Color', SUBTITLE_COLOR_OPTIONS, 'subtitleColor'),
+					'setting-subtitleColor'
 				)}
 
 				<div className={css.divider} />
 
 				{renderSettingItem('Shadow Color', 'Color of subtitle shadow',
-					getSubtitleShadowColorLabel(), cycleSubtitleShadowColor, 'setting-subtitleShadowColor'
+					getLabel(SUBTITLE_SHADOW_COLOR_OPTIONS, settings.subtitleShadowColor, 'Black'),
+					() => openOptionDialog('Shadow Color', SUBTITLE_SHADOW_COLOR_OPTIONS, 'subtitleShadowColor'),
+					'setting-subtitleShadowColor'
 				)}
 				<div className={css.sliderItem}>
 					<div className={css.sliderLabel}>
@@ -904,7 +833,9 @@ const Settings = ({onBack, onLibrariesChanged}) => {
 				<div className={css.divider} />
 
 				{renderSettingItem('Background Color', 'Color of subtitle background',
-					getSubtitleBackgroundColorLabel(), cycleSubtitleBackgroundColor, 'setting-subtitleBackgroundColor'
+					getLabel(SUBTITLE_BACKGROUND_COLOR_OPTIONS, settings.subtitleBackgroundColor, 'Black'),
+					() => openOptionDialog('Background Color', SUBTITLE_BACKGROUND_COLOR_OPTIONS, 'subtitleBackgroundColor'),
+					'setting-subtitleBackgroundColor'
 				)}
 				<div className={css.sliderItem}>
 					<div className={css.sliderLabel}>
@@ -937,30 +868,62 @@ const Settings = ({onBack, onLibrariesChanged}) => {
 			<div className={css.settingsGroup}>
 				<h2>Backdrop</h2>
 				{renderSettingItem('Home Backdrop Blur', 'Amount of blur on home screen backdrop',
-					getBackdropBlurLabel(settings.backdropBlurHome), cycleBackdropBlurHome, 'setting-backdropBlurHome'
+					getLabel(BLUR_OPTIONS, settings.backdropBlurHome, 'Medium'),
+					() => openOptionDialog('Home Backdrop Blur', BLUR_OPTIONS, 'backdropBlurHome'),
+					'setting-backdropBlurHome'
 				)}
 				{renderSettingItem('Details Backdrop Blur', 'Amount of blur on details page backdrop',
-					getBackdropBlurLabel(settings.backdropBlurDetail), cycleBackdropBlurDetail, 'setting-backdropBlurDetail'
+					getLabel(BLUR_OPTIONS, settings.backdropBlurDetail, 'Medium'),
+					() => openOptionDialog('Details Backdrop Blur', BLUR_OPTIONS, 'backdropBlurDetail'),
+					'setting-backdropBlurDetail'
 				)}
 			</div>
 			<div className={css.settingsGroup}>
 				<h2>UI Elements</h2>
 				{renderSettingItem('UI Opacity', 'Background opacity of navbar and UI panels',
-					getUiOpacityLabel(), cycleUiOpacity, 'setting-uiOpacity'
+					getLabel(UI_OPACITY_OPTIONS, settings.uiOpacity, '85%'),
+					() => openOptionDialog('UI Opacity', UI_OPACITY_OPTIONS, 'uiOpacity'),
+					'setting-uiOpacity'
 				)}
 				{renderSettingItem('UI Color', 'Background color of navbar and UI panels',
-					getUiColorLabel(), cycleUiColor, 'setting-uiColor'
+					getLabel(UI_COLOR_OPTIONS, settings.uiColor, 'Dark Gray'),
+					() => openOptionDialog('UI Color', UI_COLOR_OPTIONS, 'uiColor'),
+					'setting-uiColor'
 				)}
 			</div>
 			<div className={css.settingsGroup}>
 				<h2>Featured Carousel</h2>
 				{renderToggleItem('Show Featured Bar', 'Display the featured media carousel on home screen', 'showFeaturedBar')}
 				{renderSettingItem('Content Type', 'Type of content to display in featured carousel',
-					getFeaturedContentTypeLabel(), cycleFeaturedContentType, 'setting-featuredContentType'
+					getLabel(CONTENT_TYPE_OPTIONS, settings.featuredContentType, 'Movies & TV Shows'),
+					() => openOptionDialog('Content Type', CONTENT_TYPE_OPTIONS, 'featuredContentType'),
+					'setting-featuredContentType'
 				)}
 				{renderSettingItem('Item Count', 'Number of items in featured carousel',
-					getFeaturedItemCountLabel(), cycleFeaturedItemCount, 'setting-featuredItemCount'
+					getLabel(FEATURED_ITEM_COUNT_OPTIONS, settings.featuredItemCount, '10 items'),
+					() => openOptionDialog('Item Count', FEATURED_ITEM_COUNT_OPTIONS, 'featuredItemCount'),
+					'setting-featuredItemCount'
 				)}
+			</div>
+			<div className={css.settingsGroup}>
+				<h2>Screensaver</h2>
+				{renderToggleItem('Enable Screensaver', 'Reduce brightness after inactivity to prevent screen burn-in', 'screensaverEnabled')}
+				{settings.screensaverEnabled && renderSettingItem('Screensaver Type', 'Choose between library backdrops or bouncing logo',
+					getLabel(SCREENSAVER_MODE_OPTIONS, settings.screensaverMode, 'Library Backdrops'),
+					() => openOptionDialog('Screensaver Type', SCREENSAVER_MODE_OPTIONS, 'screensaverMode'),
+					'setting-screensaverMode'
+				)}
+				{settings.screensaverEnabled && renderSettingItem('Timeout', 'Time of inactivity before screensaver activates',
+					getLabel(SCREENSAVER_TIMEOUT_OPTIONS, settings.screensaverTimeout, '90 seconds'),
+					() => openOptionDialog('Screensaver Timeout', SCREENSAVER_TIMEOUT_OPTIONS, 'screensaverTimeout'),
+					'setting-screensaverTimeout'
+				)}
+				{settings.screensaverEnabled && renderSettingItem('Dimming Level', 'Background dimming intensity during screensaver',
+					getLabel(SCREENSAVER_DIMMING_OPTIONS, settings.screensaverDimmingLevel, '50%'),
+					() => openOptionDialog('Dimming Level', SCREENSAVER_DIMMING_OPTIONS, 'screensaverDimmingLevel'),
+					'setting-screensaverDimmingLevel'
+				)}
+				{settings.screensaverEnabled && renderToggleItem('Show Clock', 'Display a moving clock during screensaver', 'screensaverShowClock')}
 			</div>
 		</div>
 	);
@@ -1437,6 +1400,39 @@ const Settings = ({onBack, onLibrariesChanged}) => {
 		</Popup>
 	);
 
+	const renderOptionDialog = () => {
+		if (!optionDialog) return null;
+		const currentValue = settings[optionDialog.settingKey];
+		return (
+			<Popup
+				open
+				onClose={closeOptionDialog}
+				position="center"
+				scrimType="translucent"
+				noAutoDismiss
+			>
+				<div className={css.popupContent}>
+					<h2 className={css.popupTitle}>{optionDialog.title}</h2>
+					<OptionDialogContainer className={css.optionList}>
+						{optionDialog.options.map((opt, idx) => (
+							<SpottableDiv
+								key={opt.value}
+								className={`${css.optionItem} ${opt.value === currentValue ? css.optionItemSelected : ''}`}
+								onClick={() => handleOptionSelect(opt.value)}
+								spotlightId={`option-${idx}`}
+								spotlightDisabled={false}
+								{...(opt.value === currentValue ? {'data-spotlight-default-element': ''} : {})}
+							>
+								<span className={css.optionLabel}>{opt.label}</span>
+								{opt.value === currentValue && <span className={css.optionCheck}>✓</span>}
+							</SpottableDiv>
+						))}
+					</OptionDialogContainer>
+				</div>
+			</Popup>
+		);
+	};
+
 	const renderPanel = () => {
 		switch (activeCategory) {
 			case 'general': return renderGeneralPanel();
@@ -1481,6 +1477,7 @@ const Settings = ({onBack, onLibrariesChanged}) => {
 
 			{renderHomeRowsModal()}
 			{renderLibraryModal()}
+			{renderOptionDialog()}
 		</div>
 	);
 };

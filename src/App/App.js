@@ -21,6 +21,8 @@ import NavBar from '../components/NavBar';
 import Sidebar from '../components/Sidebar';
 import AccountModal from '../components/AccountModal';
 import LoadingSpinner from '../components/LoadingSpinner';
+import Screensaver from '../components/Screensaver';
+import useInactivityTimer from '../hooks/useInactivityTimer';
 import Login from '../views/Login';
 import Browse from '../views/Browse';
 
@@ -127,6 +129,15 @@ const AppContent = (props) => {
 	}, [fetchLibraries]);
 
 	const {updateInfo, formattedNotes, dismiss: dismissUpdate} = useVersionCheck(isAuthenticated ? 3000 : null);
+
+	const screensaverActive = isAuthenticated &&
+		settings.screensaverEnabled &&
+		panelIndex !== PANELS.LOGIN &&
+		panelIndex !== PANELS.PLAYER;
+	const {isInactive: showScreensaver, dismiss: dismissScreensaver} = useInactivityTimer(
+		settings.screensaverTimeout || 90,
+		screensaverActive
+	);
 
 	// App-wide cleanup function for webOS lifecycle events
 	const performAppCleanup = useCallback(() => {
@@ -750,6 +761,15 @@ const AppContent = (props) => {
 				updateInfo={updateInfo}
 				formattedNotes={formattedNotes}
 				onDismiss={dismissUpdate}
+			/>
+			<Screensaver
+				visible={showScreensaver}
+				mode={settings.screensaverMode || 'library'}
+				dimmingLevel={settings.screensaverDimmingLevel}
+				showClock={settings.screensaverShowClock}
+				clockDisplay={settings.clockDisplay}
+				onDismiss={dismissScreensaver}
+				serverUrl={serverUrl}
 			/>
 		</div>
 	);
