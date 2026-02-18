@@ -620,6 +620,8 @@ const handleSectionKeyDown = useCallback((ev) => {
 	const isAlbum = item.Type === 'MusicAlbum';
 	const isMusicArtist = item.Type === 'MusicArtist';
 	const isAudioTrack = item.Type === 'Audio';
+	const isBook = item.Type === 'Book';
+	const isReadableBook = isBook && item.Path?.toLowerCase().endsWith('.cbz');
 
 	// Poster URL
 	let posterUrl = null;
@@ -755,7 +757,7 @@ const handleSectionKeyDown = useCallback((ev) => {
 
 	const renderActionButtons = (showPlayButtons = true) => (
 		<HorizontalContainer className={css.actionButtons} onKeyDown={handleButtonRowKeyDown} onFocus={handleButtonRowFocus} spotlightId="details-action-buttons">
-			{showPlayButtons && hasPlaybackPosition && (
+			{showPlayButtons && !isBook && hasPlaybackPosition && (
 				<SpottableDiv className={css.btnWrapper} onClick={handleResume} spotlightId="details-primary-btn">
 					<div className={css.btnAction}>
 						<span className={css.btnIcon}>▶</span>
@@ -764,18 +766,22 @@ const handleSectionKeyDown = useCallback((ev) => {
 					<span className={css.btnDetail}>{resumeTimeText}</span>
 				</SpottableDiv>
 			)}
-			{showPlayButtons && (
+			{showPlayButtons && (isBook ? isReadableBook : true) && (
 				<SpottableDiv className={css.btnWrapper} onClick={handlePlay} onFocus={handleButtonRowFocus} spotlightId={hasPlaybackPosition ? undefined : 'details-primary-btn'}>
 					<div className={css.btnAction}>
-						{hasPlaybackPosition ? (
+						{hasPlaybackPosition && !isBook ? (
 							<svg className={css.btnIcon} viewBox="0 -960 960 960">
 								<path d="M480-80q-75 0-140.5-28.5t-114-77q-48.5-48.5-77-114T120-440h80q0 117 81.5 198.5T480-160q117 0 198.5-81.5T760-440q0-117-81.5-198.5T480-720h-6l62 62-56 58-160-160 160-160 56 58-62 62h6q75 0 140.5 28.5t114 77q48.5 48.5 77 114T840-440q0 75-28.5 140.5t-77 114q-48.5 48.5-114 77T480-80Z"/>
+							</svg>
+						) : isBook ? (
+							<svg className={css.btnIcon} viewBox="0 -960 960 960" fill="currentColor">
+								<path d="M560-564v-68q33-14 67.5-21t72.5-7q26 0 51 4t49 10v64q-24-9-48.5-13.5T700-600q-38 0-73 9.5T560-564Zm0 220v-68q33-14 67.5-21t72.5-7q26 0 51 4t49 10v64q-24-9-48.5-13.5T700-380q-38 0-73 9t-67 27Zm0-110v-68q33-14 67.5-21t72.5-7q26 0 51 4t49 10v64q-24-9-48.5-13.5T700-490q-38 0-73 9.5T560-454ZM260-320q47 0 91.5 10.5T440-278v-394q-41-24-87-36t-93-12q-36 0-71.5 7T120-692v396q35-12 69.5-18t70.5-6Zm260 42q44-21 88.5-31.5T700-320q36 0 70.5 6t69.5 18v-396q-33-14-68.5-21t-71.5-7q-47 0-93 12t-87 36v394ZM480-160q-48-38-104-59t-116-21q-42 0-82.5 11T96-204q-19 11-37.5-1T40-238v-462q0-11 5.5-21T62-734q46-24 96-37t102-13q58 0 113.5 15T480-728q51-26 106.5-41T700-784q52 0 102 13t96 37q11 7 16.5 17t5.5 21v462q0 23-18.5 35t-37.5 1q-41-24-81.5-35T700-244q-60 0-116 21t-104 63ZM276-489Z"/>
 							</svg>
 						) : (
 							<span className={css.btnIcon}>▶</span>
 						)}
 					</div>
-					<span className={css.btnLabel}>{hasPlaybackPosition ? 'Restart' : 'Play'}</span>
+					<span className={css.btnLabel}>{isBook ? 'Read' : hasPlaybackPosition ? 'Restart' : 'Play'}</span>
 				</SpottableDiv>
 			)}
 			{(isSeries || isSeason) && (
@@ -1421,7 +1427,6 @@ const handleSectionKeyDown = useCallback((ev) => {
 						</div>
 					</div>
 
-					{/* Action buttons */}
 					{!isBoxSet && renderActionButtons()}
 
 					{/* Metadata */}

@@ -22,6 +22,8 @@ import Sidebar from '../components/Sidebar';
 import AccountModal from '../components/AccountModal';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Screensaver from '../components/Screensaver';
+import PhotoViewer from '../components/PhotoViewer';
+import ComicViewer from '../components/ComicViewer';
 import useInactivityTimer from '../hooks/useInactivityTimer';
 import Login from '../views/Login';
 import Browse from '../views/Browse';
@@ -46,7 +48,6 @@ const JellyseerrPerson = lazy(() => import('../views/JellyseerrPerson'));
 import css from './App.module.less';
 
 const MAX_HISTORY_LENGTH = 10;
-const EXCLUDED_COLLECTION_TYPES = ['books', 'musicvideos', 'homevideos', 'photos'];
 
 const PanelLoader = () => (
 	<div className={css.panelLoader}>
@@ -78,7 +79,7 @@ const PANELS = {
 };
 
 const AppContent = (props) => {
-	const {isAuthenticated, isLoading, logout, serverUrl, serverName, api, user, hasMultipleServers} = useAuth();
+	const {isAuthenticated, isLoading, logout, serverUrl, serverName, api, user, hasMultipleServers, accessToken} = useAuth();
 	const {settings} = useSettings();
 	const unifiedMode = settings.unifiedLibraryMode && hasMultipleServers;
 	const [panelIndex, setPanelIndex] = useState(PANELS.LOGIN);
@@ -99,6 +100,9 @@ const AppContent = (props) => {
 	const backHandlerRef = useRef(null);
 	const detailsItemStackRef = useRef([]);
 	const jellyseerrItemStackRef = useRef([]);
+	const [photoViewerItem, setPhotoViewerItem] = useState(null);
+	const [photoViewerItems, setPhotoViewerItems] = useState([]);
+	const [comicViewerItem, setComicViewerItem] = useState(null);
 
 	const fetchLibraries = useCallback(async () => {
 		if (isAuthenticated && api && user) {
@@ -114,8 +118,8 @@ const AppContent = (props) => {
 					const result = await api.getLibraries();
 					libs = result.Items || [];
 				}
-				const filtered = libs.filter(lib => !EXCLUDED_COLLECTION_TYPES.includes(lib.CollectionType?.toLowerCase()));
-				setLibraries(filtered);
+				libs.sort((a, b) => (a.Name || '').localeCompare(b.Name || ''));
+				setLibraries(libs);
 			} catch (err) {
 				console.error('Failed to fetch libraries:', err);
 			}
@@ -352,6 +356,15 @@ const AppContent = (props) => {
 	}, [api, navigateTo, settings.shuffleContentType, unifiedMode]);
 
 	const handleSelectItem = useCallback((item) => {
+		if (item.Type === 'Photo') {
+			setPhotoViewerItem(item);
+			return;
+		}
+		if (item.Type === 'PhotoAlbum') {
+			setSelectedLibrary(item);
+			navigateTo(PANELS.LIBRARY);
+			return;
+		}
 		if (panelIndex === PANELS.DETAILS && selectedItem) {
 			detailsItemStackRef.current.push(selectedItem);
 			setSelectedItem(item);
@@ -362,8 +375,21 @@ const AppContent = (props) => {
 		}
 	}, [navigateTo, panelIndex, selectedItem]);
 
+	const handleViewPhoto = useCallback((item, siblings) => {
+		setPhotoViewerItem(item);
+		setPhotoViewerItems(siblings || []);
+	}, []);
+
+	const handleClosePhotoViewer = useCallback(() => {
+		setPhotoViewerItem(null);
+		setPhotoViewerItems([]);
+	}, []);
+
+	const handleCloseComicViewer = useCallback(() => {
+		setComicViewerItem(null);
+	}, []);
+
 	const handleSelectLibrary = useCallback((library) => {
-		// Check if this is a Live TV library - redirect to Live TV view
 		if (library.CollectionType === 'livetv') {
 			navigateTo(PANELS.LIVETV);
 			return;
@@ -376,6 +402,10 @@ const AppContent = (props) => {
 	const [isResume, setIsResume] = useState(false);
 
 	const handlePlay = useCallback((item, resume, options) => {
+		if (item.MediaType === 'Book' && item.Path?.toLowerCase().endsWith('.cbz')) {
+			setComicViewerItem(item);
+			return;
+		}
 		setPlayingItem(item);
 		setPlaybackOptions(options || null);
 		setIsResume(!!resume);
@@ -610,6 +640,7 @@ const AppContent = (props) => {
 							<Library
 								library={selectedLibrary}
 								onSelectItem={handleSelectItem}
+								onViewPhoto={handleViewPhoto}
 							backHandlerRef={backHandlerRef}
 						/>
 						)}
@@ -762,6 +793,22 @@ const AppContent = (props) => {
 				formattedNotes={formattedNotes}
 				onDismiss={dismissUpdate}
 			/>
+			{photoViewerItem && (
+				<PhotoViewer
+					item={photoViewerItem}
+					items={photoViewerItems}
+					serverUrl={serverUrl}
+					onClose={handleClosePhotoViewer}
+				/>
+			)}
+			{comicViewerItem && (
+				<ComicViewer
+					item={comicViewerItem}
+					serverUrl={serverUrl}
+					accessToken={accessToken}
+					onClose={handleCloseComicViewer}
+				/>
+			)}
 			<Screensaver
 				visible={showScreensaver}
 				mode={settings.screensaverMode || 'library'}

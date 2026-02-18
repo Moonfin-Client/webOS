@@ -36,7 +36,7 @@ const FILTER_OPTIONS = [
 
 const LETTERS = ['#', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
 
-const Library = ({library, onSelectItem, backHandlerRef}) => {
+const Library = ({library, onSelectItem, onViewPhoto, backHandlerRef}) => {
 const {api, serverUrl} = useAuth();
 
 // Support cross-server libraries
@@ -95,13 +95,21 @@ return 'Series';
 case 'boxsets':
 return 'BoxSet';
 case 'homevideos':
-return 'Video';
+return 'Video,Photo,PhotoAlbum';
+case 'photos':
+return 'Photo,PhotoAlbum';
 case 'music':
 return 'MusicAlbum,MusicArtist';
+case 'musicvideos':
+return 'MusicVideo';
 case 'playlists':
 return 'Playlist';
+case 'books':
+return 'Book';
+case 'trailers':
+return 'Trailer';
 default:
-return 'Movie,Series';
+return '';
 }
 }, [library]);
 
@@ -135,10 +143,14 @@ Limit: 150,
 SortBy: sortField,
 SortOrder: sortOrder,
 Recursive: true,
-IncludeItemTypes: getItemTypeForLibrary(),
 EnableTotalRecordCount: true,
 Fields: 'ProductionYear,ImageTags'
 };
+
+const itemTypes = getItemTypeForLibrary();
+if (itemTypes) {
+params.IncludeItemTypes = itemTypes;
+}
 
 const excludeTypes = getExcludeItemTypes();
 if (excludeTypes) {
@@ -214,14 +226,18 @@ if (itemIndex === undefined) return;
 
 const item = itemsRef.current[parseInt(itemIndex, 10)];
 if (item) {
-onSelectItem?.(item);
-}
-}, [onSelectItem]);
+		if (item.Type === 'Photo' && onViewPhoto) {
+			onViewPhoto(item, itemsRef.current);
+		} else {
+			onSelectItem?.(item);
+		}
+	}
+}, [onSelectItem, onViewPhoto]);
 
 const handleScrollStop = useCallback(() => {
-if (apiFetchIndexRef.current < totalCount && !isLoading && !loadingMoreRef.current) {
-loadItems(apiFetchIndexRef.current, true);
-}
+	if (apiFetchIndexRef.current < totalCount && !isLoading && !loadingMoreRef.current) {
+		loadItems(apiFetchIndexRef.current, true);
+	}
 }, [totalCount, isLoading, loadItems]);
 
 const handleLetterSelect = useCallback((ev) => {

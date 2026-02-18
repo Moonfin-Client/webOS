@@ -1,4 +1,4 @@
-import {memo, useCallback, useState, useEffect, useMemo} from 'react';
+import {memo, useCallback, useState, useEffect} from 'react';
 import Spottable from '@enact/spotlight/Spottable';
 import SpotlightContainerDecorator from '@enact/spotlight/SpotlightContainerDecorator';
 import Spotlight from '@enact/spotlight';
@@ -81,12 +81,7 @@ const Sidebar = ({
 		if (lib) onSelectLibrary?.(lib);
 	}, [libraries, onSelectLibrary]);
 
-	const filteredLibraries = useMemo(() => {
-		return libraries.filter(lib => {
-			const type = lib.CollectionType?.toLowerCase();
-			return !['playlists', 'books', 'musicvideos', 'homevideos', 'photos'].includes(type);
-		});
-	}, [libraries]);
+	const filteredLibraries = libraries;
 
 	const handleSidebarMouseEnter = useCallback(() => {
 		setIsHovered(true);

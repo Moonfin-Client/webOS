@@ -119,12 +119,7 @@ const NavBar = ({
 		if (lib) onSelectLibrary?.(lib);
 	}, [libraries, onSelectLibrary]);
 
-	const filteredLibraries = useMemo(() => {
-		return libraries.filter(lib => {
-			const type = lib.CollectionType?.toLowerCase();
-			return !['playlists', 'books', 'musicvideos', 'homevideos', 'photos'].includes(type);
-		});
-	}, [libraries]);
+	const filteredLibraries = libraries;
 
 	const handleLibrariesButtonClick = useCallback(() => {
 		if (!librariesExpanded && filteredLibraries?.length > 0) {
